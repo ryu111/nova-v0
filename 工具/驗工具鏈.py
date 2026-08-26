@@ -1,5 +1,8 @@
-"""day-one 工具鏈探針薄殼：確認鎖定的 CPython／pytest／Hypothesis／xdist／mutmut 真的在線，
-並以兩個事前固定的錯誤 subject 證明這條工具鏈有牙——守衛突變會被殺、缺測試不會被當成功。"""
+"""day-one 工具鏈探針薄殼。
+
+確認鎖定的 CPython／pytest／Hypothesis／xdist／mutmut 真的在線，並以兩個事前固定的
+錯誤 subject 證明這條工具鏈有牙——守衛突變會被殺、缺測試不會被當成功。
+"""
 
 from __future__ import annotations
 
@@ -30,6 +33,16 @@ source_paths = ["nova/核心"]
 tests_dir = ["驗收/工具鏈"]
 use_git_change_detection = false
 """
+
+
+def 取節(設定: object, *鍵路徑: str) -> dict[str, object]:
+    """沿鍵路徑取出巢狀 TOML 表；任一層不是表就回空表，讓缺節與型別錯一律落入既有 failure code。"""
+    目前: object = 設定
+    for 鍵 in 鍵路徑:
+        if not isinstance(目前, dict):
+            return {}
+        目前 = 目前.get(鍵, {})
+    return 目前 if isinstance(目前, dict) else {}
 
 
 def 讀專案設定() -> dict[str, object]:
@@ -63,9 +76,9 @@ def 檢查鎖定版本() -> str:
     return 通過
 
 
-def 檢查探索設定(設定: dict[str, object]) -> str:
+def 檢查探索設定(設定: object) -> str:
     """確認 pytest 同時 discover 中文與英文的檔名、函式名與類別名，且 pythonpath 含 repo 根。"""
-    節 = 設定.get("tool", {}).get("pytest", {}).get("ini_options", {})  # type: ignore[union-attr]
+    節 = 取節(設定, "tool", "pytest", "ini_options")
     應含 = {
         "python_files": {"測_*.py", "test_*.py"},
         "python_functions": {"測試_*", "test_*"},
@@ -73,18 +86,20 @@ def 檢查探索設定(設定: dict[str, object]) -> str:
         "pythonpath": {"."},
     }
     for 鍵, 值集 in 應含.items():
-        if not 值集 <= set(節.get(鍵, [])):
+        值 = 節.get(鍵)
+        if not isinstance(值, list) or not 值集 <= set(值):
             return f"PYTEST_DISCOVERY_NOT_CONFIGURED:{鍵}"
     return 通過
 
 
-def 檢查突變設定(設定: dict[str, object]) -> str:
+def 檢查突變設定(設定: object) -> str:
     """確認 mutmut 的 tests_dir 與 also_copy 是 list 型別，且 also_copy 真的帶上測試樹。"""
-    節 = 設定.get("tool", {}).get("mutmut", {})  # type: ignore[union-attr]
+    節 = 取節(設定, "tool", "mutmut")
     for 鍵 in ("source_paths", "tests_dir", "also_copy"):
         if not isinstance(節.get(鍵), list):
             return f"MUTMUT_CONFIG_NOT_LIST:{鍵}"
-    if "驗收" not in 節["also_copy"]:
+    複製清單 = 節.get("also_copy")
+    if not isinstance(複製清單, list) or "驗收" not in 複製清單:
         return "MUTATION_TESTS_NOT_COPIED:also_copy"
     return 通過
 
@@ -100,7 +115,12 @@ def 建臨時專案(根: Path, 守衛原始碼: str, 額外設定: str = "") -> 
 
 def 驗指定守衛突變() -> str:
     """負控一：把 `收窄` 換成直接回傳輸入，property test 必須直接紅；活下來就是探針失敗。"""
-    突變原始碼 = '"""事前固定的錯誤 subject。"""\n\n\ndef 收窄(值: int) -> int:\n    """直接回傳輸入。"""\n    return 值\n'
+    突變原始碼 = (
+        '"""事前固定的錯誤 subject：拿掉夾取，直接回傳輸入。"""\n\n\n'
+        "def 收窄(值: int) -> int:\n"
+        '    """直接回傳輸入。"""\n'
+        "    return 值\n"
+    )
     with tempfile.TemporaryDirectory() as 暫存:
         根 = Path(暫存)
         建臨時專案(根, 突變原始碼)
@@ -123,9 +143,10 @@ def 驗拿掉also_copy() -> str:
     with tempfile.TemporaryDirectory() as 暫存:
         根 = Path(暫存)
         建臨時專案(根, 守衛路徑.read_text(encoding="utf-8"))
-        環境 = dict(os.environ, PATH=f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}")
+        工具目錄 = Path(sys.executable).parent
+        環境 = dict(os.environ, PATH=f"{工具目錄}{os.pathsep}{os.environ['PATH']}")
         完成 = subprocess.run(
-            [str(Path(sys.executable).parent / "mutmut"), "run"],
+            [str(工具目錄 / "mutmut"), "run"],
             cwd=根,
             capture_output=True,
             text=True,

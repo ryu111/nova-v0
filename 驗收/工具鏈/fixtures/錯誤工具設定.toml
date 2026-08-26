@@ -1,0 +1,23 @@
+# 事前固定的錯誤 subject：把三個 day-one 工程閘各放寬一處。
+# 拿掉 mypy strict、關掉 Ruff 的 D（docstring）規則、把 McCabe 上限從 10 提到 20。
+# validate_engineering_config 必須對這份設定回 ENGINEERING_GATE_WEAKENED，
+# 且逐一列出三個違反；少報任何一項都代表閘沒有牙。
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "PIE", "RUF", "ANN", "ASYNC", "DTZ", "C90", "PLR"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 20
+
+[tool.ruff.lint.pylint]
+max-args = 6
+max-branches = 12
+max-statements = 60
+
+[tool.mypy]
+warn_unreachable = true
+show_error_codes = true

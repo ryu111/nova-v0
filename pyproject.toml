@@ -11,6 +11,8 @@ dev = [
     "hypothesis",
     "pytest-xdist==3.8.0",
     "mutmut==3.7.0",
+    "ruff==0.16.4",
+    "mypy==2.3.1",
 ]
 
 [tool.uv]
@@ -28,3 +30,39 @@ source_paths = ["nova/核心"]
 tests_dir = ["驗收/工具鏈"]
 also_copy = ["驗收", "nova"]
 use_git_change_detection = false
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+# docs/ 是文件樹，不是六頂層原始碼根（nova 規格 驗收 前端 工具 架構）之一；
+# 這是掃描範圍的裁決，不是「先累積再清」的 baseline ignore。
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+# D400 要求 summary 以 ASCII 句點結尾，與「文件一律繁體中文」直接衝突（中文用「。」）；
+# 保證義務是 D1xx 的「必須有 non-empty docstring」，不是標點形狀。
+ignore = ["D400"]
+# 中文全形標點不是 confusable，是本專案的書寫系統；這是 Ruff 為非拉丁語系設計的入口。
+allowed-confusables = ["，", "。", "、", "：", "；", "／", "（", "）", "「", "」", "－", "％"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "PIE", "RUF", "ANN", "ASYNC", "DTZ", "D", "C90", "PLR"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 6
+max-branches = 12
+max-statements = 60
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.lint.per-file-ignores]
+"\u9a57\u6536/**" = ["D"]
+"**/test_*.py" = ["D"]
+"**/\u6e2c_*.py" = ["D"]
+
+[tool.mypy]
+strict = true
+warn_unreachable = true
+show_error_codes = true

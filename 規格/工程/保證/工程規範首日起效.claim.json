@@ -1,0 +1,139 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "engineering.rules.day-one-enforced",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "格式、lint、docstring 與 strict 型別四個工程閘在第一天就生效：任何一項被放寬，設定契約必須直接拒絕，而不是留待日後補齊。",
+  "sources": [
+    {
+      "source_id": "plan.01.task.2",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-2-建立格式lint-docstring與strict型別閘"
+    },
+    {
+      "source_id": "plan.00.global-constraints",
+      "kind": "PLAN_CONSTRAINT",
+      "locator": "docs/計畫/00-總覽.md#global-constraints"
+    }
+  ],
+  "primitive_catalog": {
+    "catalog_id": "engineering-config.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "engineering-config/1",
+    "operation": "validate",
+    "binding_slot": "engineering-config.repository"
+  },
+  "parameters": {
+    "required_ruff_rules": [
+      "E", "F", "W", "I", "UP", "B", "SIM", "C4", "PIE", "RUF", "ANN", "ASYNC", "DTZ", "D", "C90", "PLR"
+    ],
+    "required_target_version": "py314",
+    "required_line_length": 100,
+    "required_max_complexity": 10,
+    "required_max_args": 6,
+    "required_max_branches": 12,
+    "required_max_statements": 60
+  },
+  "setup": [],
+  "stimulus": [
+    {
+      "primitive": "config.validate_engineering_gate",
+      "arguments": {
+        "config_path": "$SUBJECT_BINDING"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "code",
+      "source": "STIMULUS_RESULT",
+      "path": "code",
+      "type": "STRING"
+    },
+    {
+      "observation_id": "violations",
+      "source": "STIMULUS_RESULT",
+      "path": "violations",
+      "type": "STRING_SET"
+    }
+  ],
+  "judge": {
+    "all_of": [
+      {
+        "predicate_id": "mypy_strict_enabled",
+        "operator": "NOT_CONTAINS",
+        "left": {"observation": "violations"},
+        "right": {"const": "MYPY_STRICT_DISABLED"}
+      },
+      {
+        "predicate_id": "ruff_docstring_rules_enabled",
+        "operator": "NOT_CONTAINS",
+        "left": {"observation": "violations"},
+        "right": {"const": "RUFF_DOCSTRING_RULES_DISABLED"}
+      },
+      {
+        "predicate_id": "complexity_limit_at_10",
+        "operator": "NOT_CONTAINS",
+        "left": {"observation": "violations"},
+        "right": {"const": "COMPLEXITY_LIMIT_RAISED"}
+      },
+      {
+        "predicate_id": "ruff_required_rules_selected",
+        "operator": "NOT_CONTAINS",
+        "left": {"observation": "violations"},
+        "right": {"const": "RUFF_RULES_DISABLED"}
+      },
+      {
+        "predicate_id": "size_limits_at_declared_values",
+        "operator": "DISJOINT",
+        "left": {"observation": "violations"},
+        "right": {"const": ["ARGS_LIMIT_RAISED", "BRANCHES_LIMIT_RAISED", "STATEMENTS_LIMIT_RAISED"]}
+      },
+      {
+        "predicate_id": "gate_verdict_is_ok",
+        "operator": "EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "OK"}
+      }
+    ]
+  },
+  "controls": {
+    "positive": [
+      {
+        "control_id": "repository-config",
+        "subject_binding": "pyproject.toml",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
+    "negative": [
+      {
+        "control_id": "weakened-engineering-config",
+        "faulty_subject": "驗收/工具鏈/fixtures/錯誤工具設定.toml",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "mypy_strict_enabled",
+          "ruff_docstring_rules_enabled",
+          "complexity_limit_at_10",
+          "gate_verdict_is_ok"
+        ]
+      }
+    ]
+  },
+  "run_limits": {
+    "wall_ms": 30000,
+    "max_output_bytes": 262144
+  },
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {
+    "retain": ["code", "violations"],
+    "record_kind": "ENGINEERING_CONFIG_VERDICT"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
+  "cleanup": []
+}
