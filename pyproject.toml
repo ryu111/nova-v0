@@ -36,7 +36,10 @@ target-version = "py314"
 line-length = 100
 # docs/ 是文件樹，不是六頂層原始碼根（nova 規格 驗收 前端 工具 架構）之一；
 # 這是掃描範圍的裁決，不是「先累積再清」的 baseline ignore。
-extend-exclude = ["docs"]
+# 驗收/工具鏈/fixtures 裝的是事前固定的錯誤 subject——它們就是要壞的。
+# 讓 repo 自己的 lint 去管它們會讓 Plan Exit Gate 永遠不可能綠。
+# 2026-08-27 使用者裁定：這是掃描範圍的裁決，不是 baseline ignore。
+extend-exclude = ["docs", "驗收/工具鏈/fixtures"]
 
 [tool.ruff.lint]
 # D400 要求 summary 以 ASCII 句點結尾，與「文件一律繁體中文」直接衝突（中文用「。」）；
@@ -63,6 +66,11 @@ convention = "pep257"
 "**/\u6e2c_*.py" = ["D"]
 
 [tool.mypy]
+# nova／架構 都是 namespace package（沒有 __init__.py，靠 pythonpath=["."] 解析）；
+# 沒有這兩項時 mypy 會把同一個檔看成兩個 module 名而中止檢查。
+mypy_path = "."
+explicit_package_bases = true
+namespace_packages = true
 strict = true
 warn_unreachable = true
 show_error_codes = true

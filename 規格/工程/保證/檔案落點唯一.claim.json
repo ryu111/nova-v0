@@ -1,0 +1,138 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "architecture.file-placement.exactly-one-owner",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "每個 repo 路徑恰命中一條落點規則，且檔案內容與那一層的 predicate 一致；規模超過上限時必須拆責任，不得加 ignore。落點與規模都由 架構/目錄規則.toml 宣告，checker 只執行不解釋。",
+  "sources": [
+    {
+      "source_id": "plan.01.task.3",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-3-建立唯一落點依賴與規模閘"
+    },
+    {
+      "source_id": "plan.00.day-one-placement",
+      "kind": "PLAN_CONSTRAINT",
+      "locator": "docs/計畫/00-總覽.md#66-day-one工程規範與資料夾落點已裁定"
+    }
+  ],
+  "primitive_catalog": {
+    "catalog_id": "architecture-checker.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "engineering-checker/1",
+    "operation": "check_file",
+    "binding_slot": "engineering-checker.repository"
+  },
+  "parameters": {
+    "rules_path": "架構/目錄規則.toml",
+    "module_logical_lines": 400,
+    "class_logical_lines": 250,
+    "function_logical_lines": 60
+  },
+  "setup": [],
+  "stimulus": [
+    {
+      "primitive": "architecture.check_file",
+      "arguments": {
+        "path": "$SUBJECT_CLAIMED_PATH",
+        "source": "$SUBJECT_SOURCE"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "code",
+      "source": "STIMULUS_RESULT",
+      "path": "code",
+      "type": "STRING"
+    }
+  ],
+  "judge": {
+    "all_of": [
+      {
+        "predicate_id": "placement_owner_is_unique",
+        "operator": "NOT_IN",
+        "left": {"observation": "code"},
+        "right": {"const": ["AMBIGUOUS_PLACEMENT", "NO_PLACEMENT_OWNER"]}
+      },
+      {
+        "predicate_id": "placement_matches_content",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "PLACEMENT_LAYER_MISMATCH"}
+      },
+      {
+        "predicate_id": "function_within_size_limit",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "FUNCTION_TOO_LARGE"}
+      },
+      {
+        "predicate_id": "module_and_class_within_size_limit",
+        "operator": "NOT_IN",
+        "left": {"observation": "code"},
+        "right": {"const": ["MODULE_TOO_LARGE", "CLASS_TOO_LARGE"]}
+      },
+      {
+        "predicate_id": "imports_only_go_downward",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "LAYER_DEPENDENCY_VIOLATION"}
+      },
+      {
+        "predicate_id": "no_unverifiable_dynamic_import",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "DYNAMIC_IMPORT_UNVERIFIABLE"}
+      },
+      {
+        "predicate_id": "file_is_declared_in_a_plan",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "UNPLANNED_FILE"}
+      }
+    ]
+  },
+  "controls": {
+    "positive": [
+      {
+        "control_id": "repository-tree",
+        "subject_binding": "REPOSITORY_SCAN",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
+    "negative": [
+      {
+        "control_id": "repository-in-application-layer",
+        "faulty_subject": "驗收/工具鏈/fixtures/錯置_repository.py",
+        "claimed_path": "nova/應用/工作倉庫.py",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": ["placement_matches_content"]
+      },
+      {
+        "control_id": "function-over-sixty-logical-lines",
+        "faulty_subject": "驗收/工具鏈/fixtures/超長函式.py",
+        "claimed_path": "nova/領域/結算.py",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": ["function_within_size_limit"]
+      }
+    ]
+  },
+  "run_limits": {
+    "wall_ms": 60000,
+    "max_output_bytes": 1048576
+  },
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {
+    "retain": ["code", "path", "detail"],
+    "record_kind": "ARCHITECTURE_CHECK_VERDICT"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
+  "cleanup": []
+}

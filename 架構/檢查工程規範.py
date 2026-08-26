@@ -1,0 +1,265 @@
+"""repo 自身的靜態工程規範執法器。
+
+規則全部住在 `架構/目錄規則.toml`；這支只負責機械執行：路徑恰命中一個 owner、
+檔案落點與內容一致、出現在某份 active plan 的 `Create:`／`Modify:` 清單裡、
+沒有超過規模上限、import 只往下走。
+
+【實測，原 docs/陷阱.md 條目，已轉化為機制】舊 nova 的分層依賴掃描器只認
+`ast.Import`／`ast.ImportFrom`。同一條違反分層的邊，寫成 `from 上層 import X`
+立刻紅；改寫成 `importlib.import_module("上層.X")` 就**完全不被掃描器認得，全綠**。
+代價是掃描器報全綠時違規邊仍然存在——比沒有掃描器更糟，因為讀的人會以為已經檢查過。
+
+所以這支不只走 `ast.Import`／`ast.ImportFrom`：literal 的 `importlib.import_module`
+與 `__import__` 解析成普通 dependency edge，非 literal 的 module target 一律回
+`DYNAMIC_IMPORT_UNVERIFIABLE`——抓不到的動態 import 不是「沒有邊」。
+負控見 `架構/test_工程規範.py::test_動態import的同一條違規邊也要被抓到`；
+拿掉 `ast.Call` 那一支會讓它與另一個測試一起轉紅。
+（正解仍然是把共用知識往下搬，不是把違規邊藏好。）
+"""
+
+from __future__ import annotations
+
+import ast
+import fnmatch
+import re
+import sys
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+
+專案根 = Path(__file__).resolve().parent.parent
+規則檔 = 專案根 / "架構" / "目錄規則.toml"
+fixture目錄 = 專案根 / "驗收" / "工具鏈" / "fixtures"
+計畫目錄 = 專案根 / "docs" / "計畫"
+宣稱落點樣式 = re.compile(r"^宣稱落點:\s*(\S+)\s*$", re.MULTILINE)
+計畫條目樣式 = re.compile(r"^- (?:Create|Modify): `([^`]+)`", re.MULTILINE)
+
+通過 = "OK"
+nova路徑最少段數 = 3
+模組路徑最少段數 = 2
+
+
+@dataclass(frozen=True, slots=True)
+class 檢查結果:
+    """一次檢查的 typed 結果；code 為 OK 以外的值時 細節 說明是哪一條打紅的。"""
+
+    code: str
+    路徑: str = ""
+    細節: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class 規則集:
+    """目錄規則.toml 的 in-memory 形狀，checker 的唯一規則來源。"""
+
+    落點: tuple[tuple[str, str], ...]
+    產生物目錄: frozenset[str]
+    層序: dict[str, int]
+    允許IO: frozenset[str]
+    規模上限: dict[str, int]
+    IO模組: frozenset[str]
+
+
+def 載入規則(路徑: Path = 規則檔) -> 規則集:
+    """把目錄規則.toml 讀成 規則集；缺欄位就讓 KeyError 直接炸，不做預設值補洞。"""
+    with 路徑.open("rb") as 檔:
+        原始 = tomllib.load(檔)
+    層 = 原始["nova_layer"]
+    return 規則集(
+        落點=tuple((項["glob"], 項["owner"]) for 項 in 原始["placement"]),
+        產生物目錄=frozenset(原始["generated_dirs"]["list"]),
+        層序={項["name"]: 項["order"] for 項 in 層},
+        允許IO=frozenset(項["name"] for 項 in 層 if 項["allow_io"]),
+        規模上限=原始["size_limits"],
+        IO模組=frozenset(原始["io_modules"]["list"]),
+    )
+
+
+def 計畫已宣告的路徑() -> frozenset[str]:
+    """列舉全部計畫檔的 Create:／Modify: 條目；直接列舉 .md 檔，不從別的型別推導。"""
+    宣告: set[str] = set()
+    for 檔 in sorted(計畫目錄.iterdir()):
+        if 檔.is_file() and 檔.suffix == ".md":
+            宣告 |= set(計畫條目樣式.findall(檔.read_text(encoding="utf-8")))
+    return frozenset(宣告)
+
+
+def 找落點(路徑: str, 規則: 規則集) -> 檢查結果:
+    """路徑必須恰命中一條落點規則；零條是沒有 owner，兩條以上是有兩個變更原因。"""
+    命中 = [owner for glob, owner in 規則.落點 if fnmatch.fnmatch(路徑, glob)]
+    if not 命中:
+        return 檢查結果("NO_PLACEMENT_OWNER", 路徑, "沒有任何落點規則命中")
+    if len(命中) > 1:
+        return 檢查結果("AMBIGUOUS_PLACEMENT", 路徑, f"命中 {len(命中)} 條：{命中}")
+    return 檢查結果(通過, 路徑, 命中[0])
+
+
+def 取nova層(路徑: str, 規則: 規則集) -> str | None:
+    """回傳 nova/<層>/… 的層名；不是 nova 樹下、或層名未宣告時回 None。"""
+    段 = 路徑.split("/")
+    if len(段) < nova路徑最少段數 or 段[0] != "nova":
+        return None
+    return 段[1] if 段[1] in 規則.層序 else None
+
+
+def 收集匯入(樹: ast.Module) -> tuple[list[tuple[str, int]], list[檢查結果]]:
+    """走一遍 AST 取出所有 module target 與立即可判的 import 違規。"""
+    邊: list[tuple[str, int]] = []
+    違規: list[檢查結果] = []
+    頂層 = {id(節點) for 節點 in 樹.body}
+    for 節點 in ast.walk(樹):
+        if isinstance(節點, ast.Import):
+            if id(節點) not in 頂層:
+                違規.append(檢查結果("NON_TOPLEVEL_IMPORT", 細節=str(節點.lineno)))
+            邊 += [(別名.name, 節點.lineno) for 別名 in 節點.names]
+        elif isinstance(節點, ast.ImportFrom):
+            if id(節點) not in 頂層:
+                違規.append(檢查結果("NON_TOPLEVEL_IMPORT", 細節=str(節點.lineno)))
+            if 節點.level:
+                違規.append(檢查結果("RELATIVE_IMPORT", 細節=str(節點.lineno)))
+            if any(別名.name == "*" for 別名 in 節點.names):
+                違規.append(檢查結果("WILDCARD_IMPORT", 細節=str(節點.lineno)))
+            邊.append((節點.module or "", 節點.lineno))
+        elif isinstance(節點, ast.Call):
+            動態 = 解析動態匯入(節點)
+            if 動態 is not None:
+                邊.append(動態) if 動態[0] else 違規.append(
+                    檢查結果("DYNAMIC_IMPORT_UNVERIFIABLE", 細節=str(節點.lineno))
+                )
+    return 邊, 違規
+
+
+def 解析動態匯入(節點: ast.Call) -> tuple[str, int] | None:
+    """把 literal 的 import_module／__import__ 解析成普通 edge；非 literal 回空字串代表無法查核。"""
+    名稱 = ""
+    if isinstance(節點.func, ast.Attribute) and 節點.func.attr == "import_module":
+        名稱 = "importlib.import_module"
+    elif isinstance(節點.func, ast.Name) and 節點.func.id == "__import__":
+        名稱 = "__import__"
+    if not 名稱:
+        return None
+    第一引數 = 節點.args[0] if 節點.args else None
+    if isinstance(第一引數, ast.Constant) and isinstance(第一引數.value, str):
+        return (第一引數.value, 節點.lineno)
+    return ("", 節點.lineno)
+
+
+def 檢查內容落點(路徑: str, 邊: list[tuple[str, int]], 規則: 規則集) -> 檢查結果:
+    """不允許 I/O 的層一旦 import 了 I/O 模組，就是落點與內容不一致。"""
+    層 = 取nova層(路徑, 規則)
+    if 層 is None or 層 in 規則.允許IO:
+        return 檢查結果(通過, 路徑)
+    for 模組, 行 in 邊:
+        if 模組.split(".")[0] in 規則.IO模組:
+            return 檢查結果("PLACEMENT_LAYER_MISMATCH", 路徑, f"{層} 層第 {行} 行 import {模組}")
+    return 檢查結果(通過, 路徑)
+
+
+def 檢查層序(路徑: str, 邊: list[tuple[str, int]], 規則: 規則集) -> 檢查結果:
+    """上層可用下層，下層不得知道上層；啟動是 composition root，只出不進。"""
+    層 = 取nova層(路徑, 規則)
+    if 層 is None:
+        return 檢查結果(通過, 路徑)
+    我序 = 規則.層序[層]
+    for 模組, 行 in 邊:
+        段 = 模組.split(".")
+        if len(段) < 模組路徑最少段數 or 段[0] != "nova" or 段[1] not in 規則.層序:
+            continue
+        if 段[1] == "啟動":
+            return 檢查結果("LAYER_DEPENDENCY_VIOLATION", 路徑, f"第 {行} 行 import 啟動")
+        if 層 != "啟動" and 規則.層序[段[1]] < 我序:
+            return 檢查結果("LAYER_DEPENDENCY_VIOLATION", 路徑, f"第 {行} 行 {層}→{段[1]}")
+    return 檢查結果(通過, 路徑)
+
+
+帶docstring的節點 = ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef
+
+
+def 邏輯行數(節點: 帶docstring的節點, 行們: list[str]) -> int:
+    """數不含空行、純註解行與 docstring 的行；這是規模上限唯一認可的量法。"""
+    起 = 1 if isinstance(節點, ast.Module) else 節點.lineno
+    迄 = (節點.end_lineno or 起) if not isinstance(節點, ast.Module) else len(行們)
+    扣除 = 0
+    if ast.get_docstring(節點, clean=False) is not None and 節點.body:
+        首 = 節點.body[0]
+        扣除 = (首.end_lineno or 首.lineno) - 首.lineno + 1
+    有效 = [行 for 行 in 行們[起 - 1 : 迄] if 行.strip() and not 行.strip().startswith("#")]
+    return len(有效) - 扣除
+
+
+def 檢查規模(路徑: str, 樹: ast.Module, 原始碼: str, 規則: 規則集) -> 檢查結果:
+    """模組 400、類別 250、函式 60 行 logical code；超過不是加 ignore，是拆責任。"""
+    行們 = 原始碼.splitlines()
+    if 邏輯行數(樹, 行們) > 規則.規模上限["module_logical_lines"]:
+        return 檢查結果("MODULE_TOO_LARGE", 路徑, str(邏輯行數(樹, 行們)))
+    for 節點 in ast.walk(樹):
+        if isinstance(節點, ast.ClassDef):
+            數 = 邏輯行數(節點, 行們)
+            if 數 > 規則.規模上限["class_logical_lines"]:
+                return 檢查結果("CLASS_TOO_LARGE", 路徑, f"{節點.name}={數}")
+        elif isinstance(節點, ast.FunctionDef | ast.AsyncFunctionDef):
+            數 = 邏輯行數(節點, 行們)
+            if 數 > 規則.規模上限["function_logical_lines"]:
+                return 檢查結果("FUNCTION_TOO_LARGE", 路徑, f"{節點.name}={數}")
+    return 檢查結果(通過, 路徑)
+
+
+def 檢查檔案(路徑: str, 原始碼: str, 規則: 規則集, *, 查計畫目錄: bool = True) -> 檢查結果:
+    """對單一檔案依序跑落點、內容落點、計畫目錄、匯入與規模五組檢查，回第一個失敗。"""
+    if (落點 := 找落點(路徑, 規則)).code != 通過:
+        return 落點
+    if 路徑.endswith(".py"):
+        樹 = ast.parse(原始碼)
+        邊, 匯入違規 = 收集匯入(樹)
+        for 組 in (檢查內容落點(路徑, 邊, 規則), 檢查層序(路徑, 邊, 規則)):
+            if 組.code != 通過:
+                return 組
+        if 匯入違規:
+            return 檢查結果(匯入違規[0].code, 路徑, 匯入違規[0].細節)
+        if (規模 := 檢查規模(路徑, 樹, 原始碼, 規則)).code != 通過:
+            return 規模
+    if 查計畫目錄 and 路徑 not in 計畫已宣告的路徑():
+        return 檢查結果("UNPLANNED_FILE", 路徑, "未出現在任何計畫的 Create:／Modify: 清單")
+    return 檢查結果(通過, 路徑)
+
+
+def check_fixture(名稱: str, 規則: 規則集 | None = None) -> 檢查結果:
+    """把 fixture 依它自己宣告的「宣稱落點」當成那個位置來檢查；fixture 不查計畫目錄。"""
+    原始碼 = (fixture目錄 / 名稱).read_text(encoding="utf-8")
+    配對 = 宣稱落點樣式.search(原始碼)
+    if 配對 is None:
+        return 檢查結果("FIXTURE_MISSING_CLAIMED_PATH", 名稱)
+    return 檢查檔案(配對.group(1), 原始碼, 規則 or 載入規則(), 查計畫目錄=False)
+
+
+def 掃描repo(規則: 規則集 | None = None) -> list[檢查結果]:
+    """列舉六頂層底下的全部檔案逐一檢查；直接列舉目錄，不從別的型別推導。"""
+    用規則 = 規則 or 載入規則()
+    頂層們 = sorted({glob.split("/")[0] for glob, _ in 用規則.落點})
+    失敗: list[檢查結果] = []
+    for 頂層 in 頂層們:
+        根 = 專案根 / 頂層
+        if not 根.is_dir():
+            continue
+        for 檔 in sorted(根.rglob("*")):
+            if not 檔.is_file() or fixture目錄 in 檔.parents:
+                continue
+            if {段.name for 段 in 檔.parents} & 用規則.產生物目錄:
+                continue
+            相對 = 檔.relative_to(專案根).as_posix()
+            結果 = 檢查檔案(相對, 檔.read_text(encoding="utf-8"), 用規則)
+            if 結果.code != 通過:
+                失敗.append(結果)
+    return 失敗
+
+
+def 主() -> int:
+    """掃描整個 repo，把每個違規印到 stderr 後以 0／1 回報。"""
+    失敗 = 掃描repo()
+    for 結果 in 失敗:
+        print(f"{結果.code}\t{結果.路徑}\t{結果.細節}", file=sys.stderr)
+    return 1 if 失敗 else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(主())

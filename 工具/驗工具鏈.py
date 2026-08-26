@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+from importlib import metadata
 from pathlib import Path
 
 專案根 = Path(__file__).resolve().parent.parent
@@ -60,8 +61,6 @@ def 檢查python版本() -> str:
 
 def 檢查鎖定版本() -> str:
     """確認已安裝的測試工具版本與 uv.lock 的鎖定值一致，缺套件與版本漂移分開報。"""
-    from importlib import metadata
-
     for 名稱, 期望 in 應鎖定的版本.items():
         try:
             實際 = metadata.version(名稱)

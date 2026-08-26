@@ -1,0 +1,175 @@
+# 六頂層、nova 層、import 方向與規模上限的唯一宣告。
+#
+# 這份檔是資料，`架構/檢查工程規範.py` 是它的執法器。改規則只改這裡，不改 checker。
+#
+# 【與 00-總覽.md §6.6 的兩處出入，2026-08-27 使用者裁定以 21 份計畫的實際用法為準】
+#   1. 總覽表寫「設施/」，但 21 份計畫全部寫 `nova/基礎設施/`（159 處，`nova/設施/` 0 處）。
+#      採用「基礎設施」，把「設施」視為總覽表的簡寫。
+#   2. 總覽表只列九層，但計畫實際使用十三個第一層目錄。多出的四個
+#      （約束／維護／內容庫／證據庫）的 predicate 逐字引用各自擁有計畫的 Architecture 段，
+#      不由實作者發明；其「序」是為了讓 import DAG 可判定而推導的，
+#      若之後某份計畫證明排錯，走 RequirementChange 改這裡。
+
+# schema 欄位名依 CLAUDE.md 的 ASCII 例外走；中文只出現在值。
+[[top_level]]
+dir = "nova"
+duty = "可被 production import 的 Python runtime；runtime 邏輯不能放 工具/ 或 架構/。"
+
+[[top_level]]
+dir = "規格"
+duty = "machine-consumed、content-addressed 的宣告式契約／政策／claim；會執行 I/O 或判斷流程的就不是規格。"
+
+[[top_level]]
+dir = "驗收"
+duty = "只經 public boundary 的 black-box tests 與 fixed fixtures；近身白箱 test 跟著 owner package。"
+
+[[top_level]]
+dir = "前端"
+duty = "browser TypeScript、Web Components 與 static assets；server／application code 不因服務 UI 而搬進來。"
+
+[[top_level]]
+dir = "工具"
+duty = "operator／developer 薄入口，只組參數並呼叫 public application／architecture gate。"
+
+[[top_level]]
+dir = "架構"
+duty = "repo 自身的 static policy、AST／path／import checker 與其 tests；production 不得 import。"
+
+# 序越小越上層。上層可用下層（序 >= 自己），下層不得知道上層。
+# 允許IO=false 的層若 import 了 IO模組 清單中的任一模組，即 PLACEMENT_LAYER_MISMATCH。
+
+[[nova_layer]]
+name = "介面"
+order = 1
+predicate = "只做 CLI／HTTP／MCP／Python 等 transport encoding 與 result mapping。"
+basis = "docs/計畫/00-總覽.md#66"
+allow_io = false
+
+[[nova_layer]]
+name = "應用"
+order = 2
+predicate = "只做 use-case choreography、transaction boundary 與 owner port 調度，不產生 domain truth。"
+basis = "docs/計畫/00-總覽.md#66"
+allow_io = false
+
+[[nova_layer]]
+name = "領域"
+order = 3
+predicate = "擁有單一 Work／Pursuit／Execution 垂直生命週期的不變式與 transition request。"
+basis = "docs/計畫/00-總覽.md#66"
+allow_io = false
+
+[[nova_layer]]
+name = "權威"
+order = 4
+predicate = "擁有跨生命週期政策的一支准入／裁定／核銷／效果／知識寫權。"
+basis = "docs/計畫/00-總覽.md#66"
+allow_io = false
+
+[[nova_layer]]
+name = "維護"
+order = 5
+predicate = "分析器只從事件與規格算 immutable signal evidence，沒有任何狀態寫權。"
+basis = "docs/計畫/19-定期整併.md 的 Architecture 段（逐字）"
+allow_io = false
+
+[[nova_layer]]
+name = "狀態機"
+order = 6
+predicate = "domain-neutral MachineSpec compiler／runtime／GraphIR，不知道 nova aggregate。"
+basis = "docs/計畫/00-總覽.md#66"
+allow_io = false
+
+[[nova_layer]]
+name = "約束"
+order = 7
+predicate = "neutral，只載入、驗 scope、編 immutable plan，沒有 ACTIVE 寫口。"
+basis = "docs/計畫/12-可宣告約束與權威閘.md 的 Architecture 段（逐字）"
+allow_io = false
+
+[[nova_layer]]
+name = "介接"
+order = 8
+predicate = "外部 executor／provider／runtime adapter 與其 normalization。"
+basis = "docs/計畫/00-總覽.md#66"
+allow_io = true
+
+[[nova_layer]]
+name = "基礎設施"
+order = 9
+predicate = "DB／filesystem／network／process／CAS 等 port implementation，不做 owner decision。"
+basis = "docs/計畫/00-總覽.md#66 的「設施」；21 份計畫一致寫「基礎設施」"
+allow_io = true
+
+[[nova_layer]]
+name = "內容庫"
+order = 10
+predicate = "ContentRef value object 與 adapter-neutral 的 put／get／verify／pin／gc-candidate port；實作在 nova/基礎設施/內容庫/。"
+basis = "docs/計畫/04-內容證據與分層儲存.md 的 File Structure（逐字）"
+allow_io = false
+
+[[nova_layer]]
+name = "證據庫"
+order = 10
+predicate = "EvidenceRecord／correction link 與 append／get only port；沒有 update／delete API。"
+basis = "docs/計畫/04-內容證據與分層儲存.md 的 File Structure（逐字）"
+allow_io = false
+
+[[nova_layer]]
+name = "核心"
+order = 11
+predicate = "無 I/O、無生命週期權的 leaf value、digest、clock types 與 codec。"
+basis = "docs/計畫/00-總覽.md#66"
+allow_io = false
+
+# 啟動是唯一的 concrete dependency composition root：它可以 import 任何一層，
+# 但任何一層都不得 import 它。序給 99 只是排序用，實際規則由 checker 特判。
+[[nova_layer]]
+name = "啟動"
+order = 99
+predicate = "唯一 concrete dependency composition root。"
+basis = "docs/計畫/00-總覽.md#66"
+allow_io = true
+
+[[placement]]
+glob = "nova/*/**"
+owner = "nova層"
+
+[[placement]]
+glob = "規格/**"
+owner = "規格"
+
+[[placement]]
+glob = "驗收/**"
+owner = "驗收"
+
+[[placement]]
+glob = "前端/**"
+owner = "前端"
+
+[[placement]]
+glob = "工具/**"
+owner = "工具"
+
+[[placement]]
+glob = "架構/**"
+owner = "架構"
+
+[size_limits]
+module_logical_lines = 400
+class_logical_lines = 250
+function_logical_lines = 60
+
+# 這份清單只列 stdlib 的 I/O 入口。它抓的是「這一層根本不該碰外部世界」，
+# 不是「所有 I/O 的全集」——第三方 I/O 套件由 import DAG 的層序規則擋。
+[io_modules]
+list = [
+  "sqlite3", "socket", "subprocess", "shutil", "os", "io", "pathlib",
+  "http", "urllib", "ssl", "ftplib", "smtplib", "asyncio", "selectors",
+  "multiprocessing", "signal", "mmap", "tempfile", "fcntl", "termios",
+]
+
+# 這些目錄裝的是工具產生的中間物，不是 repo 檔案；掃描時整棵略過。
+# 「generated/vendor bytes 不進 nova/」的另一面：它們也不受工程規範管轄。
+[generated_dirs]
+list = ["__pycache__", ".pytest_cache", ".hypothesis", ".mutmut-cache", "mutants", ".venv", "node_modules"]
