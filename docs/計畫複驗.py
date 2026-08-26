@@ -21,6 +21,9 @@
   I3 → 讓 05 宣告依賴 09。
   I4 → 刪掉任一 task 的「**固定負控:**」段。
   I5 → 讓 05 去 Modify 一個由 14 Create 的檔案。
+  I6 → 把兩個 task 併成一個（commit 步會變成兩個）。
+       註：ClaimSpec 上限 2 抓不到 1+1 合併（併完剛好是 2，仍在上限內），
+       所以偵測合併靠的是 commit 步那條——164/164 個 task 都恰好一次 commit。
 
 exit 0 全過；非零＝有不變式不成立，逐條明講。
 """
@@ -144,6 +147,33 @@ def 序位(n):
     return (int(n[:2]), n[2:] or '')
 
 
+def i6_任務口徑(檔, 上限條=2, 上限檔=10):
+    """一個 task 至多 2 條 ClaimSpec、至多 10 個檔。
+
+    第一版只讀每個 task 的**第一個** `**ClaimSpec:**` 區塊，於是「把兩個 task
+    併成一個」完全抓不到——負控用差異法才驗出來（直接看 exit code 會誤判成通過，
+    因為基線本來就有 14 條別的違規）。現在數的是 task 內**所有** ClaimSpec 區塊。
+    """
+    for f in 檔:
+        s = open(f, encoding='utf-8').read()
+        for i, b in enumerate(re.split(r'^### Task ', s, flags=re.M)[1:], 1):
+            名 = f'{編號(f)}-Task{i}'
+            區 = re.findall(r'\*\*ClaimSpec:\*\*(.+?)(?:\n\n|\*\*固定負控)', b, re.S)
+            條 = set()
+            for x in 區:
+                條 |= set(re.findall(r'`([a-z][a-z0-9]*(?:[.\-][a-z0-9\-]+){2,6})`', x))
+            # 沒有具名 id 時退回用區塊數計，否則「一個 task 兩段 ClaimSpec」會漏
+            量 = max(len(條), len(區))
+            if 量 > 上限條:
+                失敗.append(f'I6 一個 task 宣稱 {量} 條 ClaimSpec（上限 {上限條}）：{名}')
+            c = len(re.findall(r'git commit', b))
+            if c != 1:
+                失敗.append(f'I6 一個 task 有 {c} 個 commit 步（應恰好 1）：{名}')
+            檔數 = len(re.findall(r'^\s*-\s*(?:Create|Modify):', b, re.M))
+            if 檔數 > 上限檔:
+                失敗.append(f'I6 一個 task 動 {檔數} 個檔（上限 {上限檔}）：{名}')
+
+
 def i4_任務完整(檔):
     總 = 0
     for f in 檔:
@@ -168,6 +198,7 @@ def main():
     邊 = i2_i3_依賴(檔)
     建數 = i1_i5_檔案所有權(檔, 邊)
     任務數 = i4_任務完整(檔)
+    i6_任務口徑(檔)
     print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個')
     for n in sorted(邊):
         print(f'  {n} ← {邊[n] or "（無前置）"}')
@@ -175,7 +206,7 @@ def main():
         print(f'\n不變式不成立（{len(失敗)}）：')
         for x in 失敗: print(f'  ✗ {x}')
         return 1
-    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向　全部成立')
+    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑　全部成立')
     return 0
 
 
