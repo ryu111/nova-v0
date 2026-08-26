@@ -1,0 +1,571 @@
+{
+ "discipline": "執行器工程（Harness Engineering）",
+ "one_sentence": "把「一次執行」變成一個外部可強制、可歸帳、可終止、崩潰後仍可讀出結局的物件——執行者在裡面做什麼由它自己決定，但它能用多少、能碰到什麼、以什麼結局收場、留下什麼證據，全部由外面決定。",
+ "core_invariant": "每一次被受理的執行，最終恰好收束到封閉列舉中的一個終態；且在「執行者工作區被 rm -rf、監督者程序被 SIGKILL 後重啟」之後，仍能以 run id 讀出同一個終態與同一份帳，成果欄位只存在於 success 變體。【測試】跑一個會寫檔並持續產生回合的假執行者，於 T+2s 對監督者程序下 SIGKILL（不是 SIGTERM），重啟監督者，等待 T+10s；接著 rm -rf 整個工作區與所有暫存目錄；斷言 (a) 以 run id 讀回的 run record 存在且終態 ∈ 封閉列舉（此例應為「執行者崩潰」或「無主回收」，不得為 running），(b) 帳的 token 與成本欄位非零，(c) 對非 success 終態存取成果欄位在型別檢查或執行期明確失敗、而非回傳 None。【負控三則，缺一不可】①把終態寫入從「先追加進耐久 journal 再回傳呼叫端」改成「只在記憶體回傳」→ (a) 轉紅（重啟後讀不到）。②把監督者重啟後的 reconcile（掃描 journal 中沒有終態的 run、回收其成員集合識別、收束成崩潰終態）整段拿掉 → (a) 轉紅（run 永遠停在 running，這正是實務上最常見的殭屍 run）。③把成果欄位提升到共同基底型別、非 success 時填 None → (c) 轉紅。【推論；其中「重啟後無人回收」的病灶有第三方文獻明確指認：「If your process crashes, no one knows. There is no supervisor, no watchdog, no heartbeat mechanism.」https://www.diagrid.io/blog/checkpoints-are-not-durable-execution-why-langgraph-crewai-google-adk-and-others-fall-short-for-production-agent-workflows 】",
+ "glossary": [
+  {
+   "term": "Harness（執行器）",
+   "means": "包住一次執行的外部程式：它決定資源上限、隔離邊界、副作用閘、終態型別與帳，並且這些決定不需要執行者配合就能生效。關鍵字是「外部可強制」。【推論】",
+   "often_confused_with": "與 scaffold（鷹架）混用最嚴重。評測與研究圈的 scaffold 指「模型外面那層讓它能完成任務的程式——prompt、工具、控制邏輯」，強調的是**能力增益**；harness 在同一份文獻裡常被當同義詞使用【查證：「an agent harness (or scaffold) is the system that enables a model to act as an agent: it processes inputs, orchestrates tool calls, and returns results」https://inspect.aisi.org.uk/ 】。但兩者的失敗模式相反：scaffold 做得差＝任務做不完，harness 做得差＝機器被弄壞、錢燒光、輸出消失。本學科建議把 scaffold 歸給 prompt/context 層，harness 只留約束與歸帳。"
+  },
+  {
+   "term": "Run（一次執行）",
+   "means": "harness 的原子單位：一次受理 → 一個終態。它有唯一 id、一份帳、一條事件流、一個成員集合識別。【推論】",
+   "often_confused_with": "與 session / thread / conversation 混用。session 是**狀態的存活期**（可跨多個 run），run 是**一次收束**。長駐 session 下一個 session 可包含 N 個 run；ephemeral 部署下兩者剛好一比一，於是很多實作把它們合成一個欄位，等到要做續跑與計費就拆不開了。續跑（resume）產生的是**新的 run**、共用同一個 session——這條界線劃錯，帳就會被覆蓋而不是累加。【推論】"
+  },
+  {
+   "term": "Turn（回合）",
+   "means": "一次「模型輸出（含工具呼叫）→ 執行工具 → 結果回灌」的完整循環。回合上限是最常見的封頂維度。【推論】",
+   "often_confused_with": "與 step / iteration / message 混用，而三者的計數基準不同：一次模型回應若並行呼叫三個工具，算一回合、三個 step、可能產生四則 message。用 message 數當上限會因為模型的並行工具呼叫習慣改變而漂移。更麻煩的是子執行者的回合算不算進父的回合數——多數實作不算，於是「回合上限」只封住了主迴圈。【推論】"
+  },
+  {
+   "term": "Terminal state（終態）",
+   "means": "一次執行結束時的封閉列舉值，序列化後可跨程序傳遞，且只有 success 變體帶成果欄位。【推論】",
+   "often_confused_with": "與 exit code、exception、bool 混用。三者都不夠：exit code 值域太窄且無法帶帳；exception 在單一程序內等價但跨程序／跨語言時過不了線；bool 直接導致「上限到了」被讀成「失敗，重試」。業界確實分成型別派與例外派兩陣營，且這是實質差異不是風格差異。【推論】"
+  },
+  {
+   "term": "Resume（續跑）／Retry（重跑）／Replay（重播）／Rollback（回捲）",
+   "means": "續跑＝帶著既有 session 狀態接上去繼續，帳累加；重跑＝從零開始的新 run，副作用可能重做一遍；重播＝以錄好的模型回應重現一次執行，用於測試而非生產；回捲＝把已產生的副作用反做。",
+   "often_confused_with": "四個詞在文件裡經常互換，代價是真金白銀。續跑與重跑的預設處置相反：碰到回合上限應該續跑，碰到後端 5xx 才考慮重跑。回捲在 agent 場景幾乎不存在——副作用是開放集合（它可能已經 push、已經發信），所以「補償交易」那套在這裡不成立，只能靠冪等鍵避免重做。【推論】"
+  },
+  {
+   "term": "Checkpoint（檢查點）vs Durable execution（耐久執行）",
+   "means": "檢查點＝把狀態存下來，由呼叫端自己偵測失敗、自己決定何時恢復；耐久執行＝有監督者與心跳，失敗後自動接手跑到完成。",
+   "often_confused_with": "被大量當成同義詞，而差別正是「誰負責偵測失敗」。【查證：「Checkpointing says: 'I saved your state. You take it from here.' Durable execution says: 'Your agent workflows will run to completion. Period.'」以及檢查點方案缺少 supervisor/watchdog/heartbeat、且兩個程序可能同時 resume 同一個 thread_id 而無內建協調——https://www.diagrid.io/blog/checkpoints-are-not-durable-execution-why-langgraph-crewai-google-adk-and-others-fall-short-for-production-agent-workflows 】只有檢查點卻宣稱耐久，實務結果是 run 永遠停在 running。"
+  },
+  {
+   "term": "Interrupt（中斷）",
+   "means": "至少三種互不相容的用法：①軟取消訊號（要它停下來）②HITL 的暫停等人（要它等一下，之後還要繼續）③OS 訊號。",
+   "often_confused_with": "②最容易踩雷，因為它的恢復語意極反直覺：某主流實作明講「the runtime restarts the entire node from the beginning—it does not resume from the exact line where interrupt was called」，因此「Side effects called before interrupt must be idempotent」，且同一節點內多個 interrupt 是**依索引配對**恢復值，不能有條件跳過或非決定性迴圈【查證 https://docs.langchain.com/oss/python/langgraph/interrupts 】。把 ② 讀成 ①（以為是斷點續跑）會導致暫停前的副作用在恢復時再做一次。"
+  },
+  {
+   "term": "Sandbox（沙箱）vs Permission gate（權限閘）vs Guardrail（護欄）",
+   "means": "沙箱＝作業系統對執行中程序強制的邊界；權限閘＝在指令執行前依字串／AST 判斷准不准；護欄＝對模型輸入輸出做內容檢查。三者作用時機與強制者都不同。",
+   "often_confused_with": "權限閘常被當沙箱用（「我有 deny 清單所以安全」），但它不推斷指令的實際效果；沙箱常被當護欄用（「我隔離了所以不怕 injection」），但它擋不住模型被說服，只縮小被說服後做得到的事。三者只能疊加，不能互相取代。【推論；分層立場與業界 defense-in-depth 一致】"
+  },
+  {
+   "term": "Capability（能力）",
+   "means": "本學科裡有三個互不相干的意思：①協定能力宣告（這個後端支不支援中斷／續跑／權威成本）②capability-based security 的憑證式權能（持有 handle 即有權）③容器的 Linux capabilities（CAP_SYS_ADMIN 等）。",
+   "often_confused_with": "三者同名同姓，設計文件裡不加限定詞就會歧義。①的正確作法是**宣告而非版本猜測**——協定層的標準形狀是初始化時交換能力並協商版本，且「若客戶端不支援伺服器回覆的版本，SHOULD 斷線」而不是硬跑【查證 https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle 】。"
+  },
+  {
+   "term": "Budget／Quota／Rate limit／Reservation",
+   "means": "預算＝金額上限（累計型）；配額＝可數資源上限（併發數、深度、pids）；速率限制＝單位時間上限（由後端施加）；預留＝在花費之前先扣下額度，避免併發雙花。",
+   "often_confused_with": "預算與配額被混稱為「limit」，但到限行為必須不同：配額滿應該回一則工具結果讓執行者降級繼續，預算滿應該收束整次執行。預留幾乎總是被漏掉——只做事後累計的預算閘，在 N 個 run 併發時會集體超支，因為每個 run 檢查時看到的都是「還沒到」。【推論】"
+  },
+  {
+   "term": "Transcript／Event log／Audit log／Trace",
+   "means": "transcript＝送給模型與模型回來的內容序列；事件流＝harness 自己的型別化事件（含閘的裁定、上限觸發、壓縮邊界）；稽核日誌＝為了對抗事後否認而存在、需要完整性保護的紀錄；trace＝分散式追蹤的 span 樹。",
+   "often_confused_with": "四者常被寫進同一個檔案就以為做完了。差別在**威脅模型**：transcript 只要能讀；稽核日誌要能證明沒被改過——標準作法是每筆存前一筆的雜湊形成鏈，「a hash chain provides tamper evidence, not absolute immutability, and the trust architecture must protect the chain's anchor and write path」，故需定期把錨點寫到另一個信任域【查證：hash-chain 稽核設計綜述，https://www.c-sharpcorner.com/article/building-tamper-evident-audit-logs-for-ai-agent-actions/ 與 https://arxiv.org/pdf/2607.05518 】。trace 又另有語意約定問題（見未解問題）。"
+  },
+  {
+   "term": "At-least-once／At-most-once／Exactly-once",
+   "means": "重試語意三選一：至少一次（可能重做）、至多一次（可能漏跑）、剛好一次（在有外部副作用時嚴格說不存在，只能用冪等鍵逼近）。",
+   "often_confused_with": "「exactly-once」在行銷語言裡被濫用。實際可達的是「at-least-once 投遞 + 冪等處理」。在 agent 場景還多一層：執行者的副作用是**開放集合**，你無法事先列舉要對哪些操作套冪等鍵。【推論】"
+  },
+  {
+   "term": "Fail-closed／Fail-open／Fail-safe",
+   "means": "元件自己壞掉時：fail-closed＝拒絕放行（功能壞掉、風險不擴大）；fail-open＝照樣放行（功能維持、風險擴大）；fail-safe 是模糊詞，在安全圈常指 fail-closed，在工安圈指「壞掉時回到物理安全狀態」，兩者可能相反。",
+   "often_confused_with": "「fail-safe」應該從設計文件裡刪掉，改用前兩者其一。判準是問一句：這個元件失效時，壞掉的是功能還是保證？秘密注入設定錯時哨符原樣送出——認證失敗但不外洩，壞的是功能，這是正確的 fail-closed 形狀。【推論】"
+  },
+  {
+   "term": "Stall（無進展）vs Hang（掛住）vs Deadline（死線）",
+   "means": "無進展＝還在跑但進展計數不增加；掛住＝阻塞在某個 I/O；死線＝絕對時間上限。",
+   "often_confused_with": "三者常被同一個 timeout 參數蓋掉。但死線一到就該殺，無進展只該告警——把無進展直接當成殺的理由，會誤殺正在跑三十分鐘編譯的合法長工。這也是為什麼活性偵測與上限強制應該是兩個模組（見子系統切法）。【推論】"
+  },
+  {
+   "term": "Estimate（估算）vs Invoice（帳單）",
+   "means": "估算＝客戶端用內建價目表本地算出的金額，用於閘與洞察；帳單＝供應商權威金額，用於計費與財務決策。",
+   "often_confused_with": "兩者同名為 cost 就會被誤用。估算會因改價、認不得新模型、或客戶端建不了模的計費規則而漂移，業界對此有明確紅線：不得拿客戶端估算向終端使用者收費。型別上就該分成兩個名字，不要用同一個欄位。【推論；紅線立場見原整理引用】"
+  },
+  {
+   "term": "Confused deputy（混淆代理）",
+   "means": "有權限的中介（proxy、harness、MCP server）被誘導用自己的權限替攻擊者辦事。",
+   "often_confused_with": "常被歸類為「權限設計問題」而不被視為 harness 的事。但 harness 正是那個 deputy——它持有下游憑證、代執行者發請求。相關的具體反模式是 token passthrough：「MCP servers MUST NOT accept any tokens that were not explicitly issued for the MCP server」，否則會繞過限流、破壞稽核歸屬、並讓被竊 token 把中介變成外流管道【查證 https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices 】。"
+  },
+  {
+   "term": "SSRF（伺服器端請求偽造）",
+   "means": "讓執行環境替攻擊者對內網或雲端 metadata 端點發請求。",
+   "often_confused_with": "常被當成 Web 應用漏洞、與 agent 無關。實際上 agent 讀一個被汙染的 URL 就足以觸發：「URLs targeting http://169.254.169.254/ (AWS/GCP/Azure metadata service) can exfiltrate cloud credentials」，且 DNS rebinding 會製造 TOCTOU 破口，故建議「block private IP ranges」並「use egress proxies」而非自寫 IP 驗證（「Avoid implementing IP validation manually」）【查證 同上】。這條直接落在 harness 的出口仲介上。"
+  },
+  {
+   "term": "Restart intensity（重啟強度上限）",
+   "means": "單位時間內允許的重啟次數；超過即停止自動重啟並向上升級。",
+   "often_confused_with": "與 retry 上限混用。兩者在不同層：retry 管一次 run，restart intensity 管監督者對它子單元的反覆重啟。沒有它就會有重啟風暴。成熟系統的處方是硬性的：「If more than MaxR number of restarts occur in the last MaxT seconds, the supervisor terminates all the child processes and then itself」（預設 intensity=1、period=5）【查證 https://www.erlang.org/doc/system/sup_princ.html 】；服務管理器側的對應物是 StartLimitIntervalSec/StartLimitBurst，超限即進入失敗狀態不再自動重啟【查證 https://man7.org/linux/man-pages/man5/systemd.service.5.html 】。"
+  }
+ ],
+ "subsystems": [
+  {
+   "name": "受理閘（Admission）",
+   "responsibility": "把外部請求正規化成一份完整的執行契約，並在還沒花任何錢之前拒絕不完整或超出容量的請求。",
+   "inputs": "原始請求（任務敘述、工作區來源、工具白名單、上限組、後端 id、秘密參考、冪等性標註、保存期、呼叫端身分）；當前主機容量快照與全域預算餘額。",
+   "outputs": "受理票（run_id、正規化後的執行契約、schema 版本）或拒絕（原因碼＋缺哪個欄位／哪個容量維度不足）。",
+   "owns_state": "無狀態（容量與預算餘額向帳本與看門狗查詢，不自己持有）。",
+   "on_failure": "fail-closed：任何欄位無法正規化、任何依賴查不到，一律拒絕受理。理由是此刻尚未產生任何成本與副作用，拒絕的代價最低；而放行一個沒設上限的 run 之後，後面每一層都無從補救——上限組是所有下游模組的唯一輸入。【推論】",
+   "interface": "受理(原始請求) -> 受理票{run_id, 契約, schema版本} | 拒絕{原因碼, 欄位}\\n契約 = {任務敘述, 工作區來源, 唯讀掛載[], 工具白名單[], 上限組{牆鐘秒, 回合, 金額, 記憶體位元組, 磁碟位元組, pids, 併發, 深度}, 後端id, 秘密參考[], 冪等性: 冪等|非冪等, 保存期天, 呼叫端身分}\\n【不變式測試】送出缺少任一上限維度的請求 → 斷言 exit 為拒絕且原因碼指名該維度。負控：把上限組的必填檢查改成「缺的填預設值」→ 轉紅。",
+   "why_separate": "它是唯一有權說「不開始」的地方，改變理由單一：受理政策或請求 schema 變動。併進監督者會讓「政策」與「機制」糾纏——監督者將被迫理解業務欄位；併進配接器則會讓每個後端各寫一份驗證，於是驗證強度取決於用哪個後端。【推論】",
+   "depends_on": [
+    "帳本",
+    "活性看門狗",
+    "版本與相容閘"
+   ]
+  },
+  {
+   "name": "版本與相容閘（Compatibility Gate）",
+   "responsibility": "在三個介面上把版本問題轉成明確的相容或拒絕，不留猜測空間：後端協定版本、run record schema 版本、模型識別碼。",
+   "inputs": "我方支援的協定版本集合與 schema 版本；對方回報的版本；待讀取的歷史 run record 位元組。",
+   "outputs": "協商結果（選定版本＋能力集合）、或不相容（列出雙方支援集合）；歷史記錄的升版轉換結果或明確拒讀。",
+   "owns_state": "無狀態（版本對映表是不可變設定）。",
+   "on_failure": "fail-closed。讀到比自己新的 schema 版本一律拒讀而非盡力解析——盡力解析會把「欄位語意改了」讀成「欄位遺失」，於是舊程式對新資料算出看似合理的錯帳。協定層的成熟處方同樣是拒絕而非硬跑：不支援對方回覆的版本時 SHOULD 斷線【查證 https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle 】。",
+   "interface": "協商(後端id, 我方版本集合) -> {選定版本, 能力集合} | 不相容{我方[], 對方[]}\\n讀取記錄(bytes) -> RunRecord | 拒讀{記錄版本, 我方最高版本}\\n升版(RunRecord, 目標版本) -> RunRecord | 無轉換路徑\\n【不變式測試】造一筆 schema_version = 我方最高版本+1 的 run record → 斷言讀取回傳拒讀且訊息含兩個版本號。負控：把版本檢查拿掉、直接用當前 schema 反序列化 → 轉紅（會成功讀出並靜默丟失新欄位）。",
+   "why_separate": "它的改變理由是「外界的版本變了」，與任何內部功能無關；而它必須被所有跨越時間或跨越程序的邊界共用（配接器、journal、成品庫、恢復協調器）。散在各處的版本判斷會出現「三個地方三種寬鬆度」，而最寬鬆的那個決定系統的實際行為。【推論】",
+   "depends_on": []
+  },
+  {
+   "name": "後端配接器與一致性套件（Backend Adapter）",
+   "responsibility": "把任意執行者實作（模型 API、CLI、託管 runtime）收斂成同一個事件串流＋終態＋帳的協定，並顯式宣告自己缺哪些能力。",
+   "inputs": "執行契約、環境控制代碼、協商後的能力集合。",
+   "outputs": "型別化事件迭代器；每個能力欄位的支援與否；帳的原始用量事件。",
+   "owns_state": "單次連線的協定狀態（session 參考、序號）；不持有耐久狀態。",
+   "on_failure": "分兩種：連線／協定層失敗 fail-closed（收束成「後端失敗」終態並分類是否可重試）；能力缺失則是**顯式降級**——缺成本回報時必須填 unsupported 標記而非 None 或 0，因為 0 會被預算閘讀成「還沒花錢」。【推論】",
+   "interface": "protocol 後端:\\n  能力() -> {串流: bool, 可中斷: bool, 可續跑: bool, 成本: 無|估算|權威, 子執行者帳: 含|不含|不支援}\\n  啟動(契約, 環境控制代碼) -> Iterator[事件]\\n  中斷(執行代碼) -> 中斷回執 | 不支援\\n  續跑(session參考, 新上限組) -> Iterator[事件] | 不支援\\n【不變式測試】一致性套件對兩個形狀差異極大的假後端各跑一次（一個吐 JSON 串流、一個一次性回傳整包），斷言終態值域屬同一封閉列舉、帳記錄鍵集合完全相同。負控①：讓其中一個後端的成本欄位留空 → 轉紅。負控②：讓它宣告「成本: 不支援」但仍留空 → 應轉綠；再把能力宣告機制拿掉 → 轉紅（證明測試靠的是宣告而非放水）。",
+   "why_separate": "改變理由是「多了一種執行者」。不獨立的話，上限強制、終態型別、帳的形狀會在每個後端各寫一次，於是每個後端的漏洞都不同、而測試只覆蓋最常用的那個。【推論】",
+   "depends_on": [
+    "版本與相容閘",
+    "事件記錄器"
+   ]
+  },
+  {
+   "name": "隔離環境供備器（Sandbox Provisioner）",
+   "responsibility": "建立一次執行的檔案系統與資源邊界，並交出一個可被回收的成員集合識別。",
+   "inputs": "隔離規格（強度、可讀集合、可寫集合、記憶體／磁碟／pids 上限、網路模式）。",
+   "outputs": "環境控制代碼（工作區路徑、唯讀掛載清單、成員集合識別、出口 socket 路徑）；拆除報告（殘留程序數、殘留檔案數）。",
+   "owns_state": "已供備環境的登記表（含成員集合識別），必須耐久——監督者重啟後靠它回收孤兒。",
+   "on_failure": "fail-closed：供備失敗即不啟動執行者。理由是隔離是所有其他保證的地板：沒有成員集合就沒有可靠終止，沒有唯讀掛載就沒有竄改稽核。降級成「先跑再說」會讓失敗從一次 run 擴散到整台主機。【推論】",
+   "interface": "供備(隔離規格) -> 環境控制代碼 | 失敗{維度}\\n拆除(環境控制代碼) -> 拆除報告{殘留程序[], 殘留位元組}\\n隔離規格.資源 = {記憶體位元組 → memory.max, 磁碟位元組, pids → pids.max, 網路: 無|僅socket}\\n【不變式測試】掛載一個含 .env 與 *.pem 的來源目錄，斷言執行者側看不到這些路徑（唯讀只防寫不防讀，必須在供備時就過濾）。負控：把排除清單拿掉 → 轉紅。\\n【第二不變式】設 memory.max 後跑一個持續配置記憶體的假執行者 → 斷言終態為「記憶體上限」而非「執行者崩潰」。負控：把 memory.oom.group 拿掉 → 只有部分子程序被殺、終態退化成崩潰，轉紅。",
+   "why_separate": "改變理由是「隔離技術換了」（程序級沙箱 → 容器 → 使用者態核心 → microVM），而這個換法的代價差距是量級級的，必須能單獨選型與單獨量測。核心原語本身已成熟且語意明確：cgroup.kill「causes the cgroup and all descendant cgroups to be killed…via SIGKILL」且「deal with concurrent forks appropriately」；memory.oom.group 讓「all tasks…are killed together or not at all」；cgroup.events 的 populated 提供「1 if the cgroup or its descendants contains any live processes」的可 poll 事件【查證 https://docs.kernel.org/admin-guide/cgroup-v2.html 】——harness 的責任是選型與宣告，不是重寫沙箱。【推論】",
+   "depends_on": [
+    "出口仲介"
+   ]
+  },
+  {
+   "name": "出口仲介（Egress Broker）",
+   "responsibility": "作為執行環境唯一的對外通道，執行網域白名單、內網位址封鎖與全流量稽核落檔。",
+   "inputs": "run_id、網域白名單、注入規則參考、來自環境的 socket 連線。",
+   "outputs": "對外連線或拒絕；每次執行的稽核摘要（請求數、放行、拒絕、注入次數）。",
+   "owns_state": "每個 run 的有效規則集（隨 run 生滅）；稽核落檔（耐久）。",
+   "on_failure": "fail-closed：規則載入失敗或仲介不可用時一律拒絕連線。理由與秘密遮罩同構——設定錯時壞掉的是功能不是保證。fail-open 在這裡等於「攻陷後可連任意主機」，而這正是它唯一存在的理由。【推論】",
+   "interface": "開通(run_id, 白名單[], 注入規則參考[]) -> socket路徑\\n關閉(run_id) -> 稽核摘要\\n內部政策：拒絕 10.0.0.0/8、172.16.0.0/12、192.168.0.0/16、127.0.0.0/8、169.254.0.0/16、fc00::/7、fe80::/10；重導向逐跳套用同一驗證；DNS 結果在檢查與使用之間釘住。\\n【不變式測試】假執行者嘗試連 http://169.254.169.254/latest/meta-data/ 與一個白名單外網域 → 斷言兩者皆被拒且稽核落檔各有一筆拒絕紀錄。負控①：拿掉私有網段封鎖 → 第一格轉紅。負控②：把重導向改成自動跟隨且不重驗 → 造一個白名單網域 302 到內網位址的假伺服器 → 轉紅。【查證：私有網段清單、重導向逐跳驗證、DNS TOCTOU 釘住、以及「Avoid implementing IP validation manually」與「use an egress proxy」的處方，https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices 】",
+   "why_separate": "改變理由是「網路政策變了」。它必須跑在隔離邊界**之外**，否則被攻陷的執行者可以改它的規則——這個部署位置的要求本身就決定了它不能併進任何跑在沙箱內的模組。【推論】",
+   "depends_on": [
+    "秘密仲介",
+    "事件記錄器"
+   ]
+  },
+  {
+   "name": "秘密仲介（Secret Broker）",
+   "responsibility": "管理哨符與真值的對映、生命週期與注入授權，使真值只存在於邊界外的注入點。",
+   "inputs": "run_id、秘密參考清單、注入目標主機清單；來自出口仲介的解析請求。",
+   "outputs": "配發給執行環境的哨符對映；對合法主機的真值解析結果。",
+   "owns_state": "哨符↔秘密參考↔允許主機的對映（隨 run 生滅，收束即撤銷）；真值本身不持有，向外部保管庫取。",
+   "on_failure": "fail-closed，且形狀要精確：解析失敗時哨符**原樣送出**——下游認證失敗，但真值不外洩。理由是它是系統中唯一接觸明文的元件，任何 fail-open 形式（例如「解析不到就送環境變數裡的值」）會讓它變成外洩管道。【推論】",
+   "interface": "配發(run_id, 秘密參考[]) -> {參考: 哨符}   # 哨符為每 run 一次性高熵字串\\n解析(哨符, 目標主機) -> 真值 | 拒絕{原因: 主機不在允許清單|哨符已撤銷}\\n撤銷(run_id) -> None\\n【不變式測試】以高熵字串當假秘密跑一次執行，五處掃描零命中：子程序環境、工作區全部檔案（遞迴）、送給後端的請求體、事件流、耐久記錄；同時斷言出口仲介側確實看到真值被注入。負控①：把秘密直接放進子程序 env → 第一處轉紅。負控②：拿掉注入、保留哨符 → 「注入點看到真值」轉紅（證明測試不是靠功能壞掉而通過）。負控③：run 收束後重放同一哨符 → 應被拒；把撤銷拿掉 → 轉紅。",
+   "why_separate": "與出口仲介耦合但改變理由不同：出口仲介變的是「哪些主機可達」，秘密仲介變的是「哪些憑證存在、怎麼輪替、誰能解析」。更關鍵的是它是唯一持有明文的元件——爆炸半徑必須能被單獨稽核、單獨換掉（換成硬體保管庫或雲端 KMS）而不動網路政策。這也是下游憑證受眾驗證的落點：中介不得轉手不是發給自己的 token【查證 https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices 】。",
+   "depends_on": []
+  },
+  {
+   "name": "程序監督者（Process Supervisor）",
+   "responsibility": "把執行者啟動成一個核心維護的可回收成員集合，並提供兩段式終止與「已清空」的可驗證斷言。",
+   "inputs": "argv、環境、環境控制代碼、grace 秒、kill_after 秒。",
+   "outputs": "成員集合識別；終止方式（軟收／硬殺／已消失）；殘留斷言結果。",
+   "owns_state": "成員集合識別必須落檔（耐久），因為監督者自己可能重啟；其餘為程序內狀態。",
+   "on_failure": "沒有 fail-open 選項可談：它壞掉時必須有 OS 原語兜底（對成員集合直接下 cgroup.kill／job object terminate），並把該次終止標記為「硬殺收場」當可疑訊號。理由是殘留程序會污染下一次執行（佔 port、鎖檔），而污染是跨 run 傳染的——單一 run 的失敗不該有跨 run 的後果。【推論】",
+   "interface": "啟動(argv, 環境, 環境控制代碼) -> 成員集合識別\\n成員數(識別) -> int      # 讀 cgroup.events 的 populated，不遍歷 PID 樹\\n終止(識別, grace秒, kill_after秒) -> 軟收 | 硬殺 | 已消失\\n斷言已空(識別) -> True | 殘留{pid[]}\\n凍結(識別) / 解凍(識別)    # 人工介入期間停住不燒 CPU\\n【不變式測試】假執行者 (a) 忽略 SIGTERM，(b) 用 setsid 生一個睡 300 秒的孫程序。以 wall=1s、grace=1s、kill_after=1s 跑；斷言 T+4s 時成員數為 0 且孫程序 PID 不存在。負控①：把終止改成 kill(main_pid) 或遍歷 parent PID 的樹狀殺 → 轉紅（孫程序存活）。負控②：拿掉 kill_after 只送軟訊號 → 轉紅（主程序也存活）。負控③：把成員數改成 argv 字串比對 → 在測試裡另起一個同名無關程序 → 轉紅（誤殺或誤判）。",
+   "why_separate": "改變理由是「OS 回收原語變了」（cgroup v2 / job object / 容器 API）。它必須與「知道該停了」的模組分開：一個是判斷、一個是能力。合在一起時，任何判斷邏輯的 bug 都會變成回收能力的 bug，而回收能力是最不能有 bug 的那一格。【推論】",
+   "depends_on": [
+    "隔離環境供備器"
+   ]
+  },
+  {
+   "name": "資源上限強制器（Quota Enforcer）",
+   "responsibility": "在每個花費點之前，用純函式判定八個維度中是否有任一維度已達上限，並指名是哪一個。",
+   "inputs": "用量快照（牆鐘、回合、累計金額、峰值記憶體、磁碟、pids、當前併發、當前深度）與上限組。",
+   "outputs": "放行；或攔截（維度、觀測值、上限值、建議處置：收束整次執行／回灌拒絕給執行者）。",
+   "owns_state": "無狀態（快照由帳本與供備器提供）。刻意設計成純函式以便窮舉測試。",
+   "on_failure": "fail-closed：取不到用量快照時視為超限並攔截。理由是低估是**單向**的危險——漏算只會讓你以為還沒到上限，而所有實際的超支事故都來自這個方向。【推論】",
+   "interface": "檢查(用量快照, 上限組) -> 放行 | 攔截{維度, 觀測值, 上限值, 處置: 收束|回灌}\\n呼叫時機（三處，缺一不可）：①每次模型呼叫**之前** ②每次子執行者生成**之前** ③每 N 秒的取樣點（牆鐘／記憶體／磁碟）\\n處置規則：金額、回合、牆鐘、記憶體、磁碟 → 收束；併發、深度 → 回灌\\n【不變式測試 A】假後端每次呼叫回報固定成本 c 並自計次數，設上限 2.5c → 斷言呼叫次數 ≤ 3、終態為「金額上限」、記錄成本 ≥ 上限。負控①：把檢查從「呼叫前」移到「迴圈結束後」→ 轉紅（次數無上限）。負控②：把觸發改成只寫警告不收束 → 終態斷言轉紅。\\n【不變式測試 B】設併發=2，假執行者連請三個子執行者 → 斷言前兩成功、第三收到可讀的「配額已滿」工具結果、整次執行終態仍為 success。負控：把配額耗盡改成終止整次執行 → 轉紅。",
+   "why_separate": "改變理由是「上限的種類或判定時機變了」。做成無狀態純函式讓八個維度 × 三個時機可以窮舉測試，而不需要真的起程序；一旦把它併進監督者或迴圈，測一個上限就要跑一次真執行，於是實務上就只會有一兩個維度被測到。【推論】",
+   "depends_on": [
+    "帳本"
+   ]
+  },
+  {
+   "name": "帳本（Ledger）",
+   "responsibility": "把零散的用量事件歸約成可信的成本數字，並區分主迴圈與整棵樹、估算與權威、已預留與已結算。",
+   "inputs": "後端回報的用量事件（帶 message id）；預留與結算請求。",
+   "outputs": "用量快照；預留憑證；每個 run 的最終帳。",
+   "owns_state": "每 run 的用量累計與去重集合、全域預算餘額與預留池。全部必須耐久——崩潰後最需要的就是「已經花了多少」。",
+   "on_failure": "雙態：對預算閘 fail-closed（記帳失敗即暫停發出新的模型呼叫），對報表 fail-open（缺一批資料就標記缺口而不是擋住整個系統）。這個不對稱是刻意的——閘的錯誤方向會直接變成錢，報表的錯誤方向只會變成困惑。【推論】",
+   "interface": "記入(run_id, 用量事件)          # 依 message_id 去重；per-step output token 視為佔位值，只採信收束訊息\\n預留(金額) -> 預留憑證 | 額度不足   # 全域預算的併發防雙花\\n結算(預留憑證, 實際金額)\\n快照(run_id) -> {主迴圈用量, 全樹用量, 估算金額, 權威金額: 未知|已對帳}\\n回補(run_id) -> 帳            # 崩潰時：取崩潰前最後一則收束訊息；若無則依 id 去重加總逐步事件，並明講子執行者用量無法回補\\n【不變式測試 A】假後端回報主迴圈 100 tokens、子執行者 900 → 斷言 run 記錄成本對應 1000，且「主迴圈用量」≠「全樹用量」。負控：把彙總改成只讀主迴圈欄位 → 轉紅。\\n【不變式測試 B】同一回應拆成三則共用同一 message id → 斷言只計一次。負控：拿掉去重 → 轉紅（三倍灌水）。\\n【不變式測試 C】全域預算 = 1.5c，同時啟動兩個各花 c 的 run → 斷言恰有一個被拒或排隊，總支出 ≤ 1.5c + 一次跨越量。負控：把預留改成事後累計 → 轉紅（兩個都通過，雙花）。",
+   "why_separate": "改變理由是「計價規則或用量欄位語意變了」，這是外部強加、變動頻繁、且與所有其他模組無關的。它同時是預算閘的唯一資料來源——閘只能和它讀到的帳一樣準，所以帳的正確性必須能在不起任何真執行的情況下被測到。【推論】",
+   "depends_on": [
+    "事件記錄器"
+   ]
+  },
+  {
+   "name": "副作用閘（Effect Gate）",
+   "responsibility": "在每一次工具呼叫執行之前給出 allow／deny／rewrite／escalate 四選一的同步裁定。",
+   "inputs": "run_id、工具名、參數、情境（工作區、已用配額、呼叫端身分、風險分級規則）。",
+   "outputs": "裁定結果；以及一筆稽核事件（誰要做什麼、准了還是擋了、依哪條規則）。",
+   "owns_state": "無狀態（規則是不可變設定；歷史裁定寫進事件流而不是自己存）。",
+   "on_failure": "fail-closed **但只針對該次工具呼叫**：政策評估失敗即拒絕這一個呼叫、把理由回灌給執行者當工具結果，不收束整次執行。理由有二：拒絕回灌讓執行者能換路走而不是崩潰；而把單一規則的評估失敗升級成整次執行失敗，會誘使營運方直接關掉閘——防線歸零比防線嚴格更糟。【推論】",
+   "interface": "裁定(run_id, 工具名, 參數, 情境) -> 允許 | 允許並改寫{新參數} | 拒絕{給執行者看的理由} | 需人工{請求摘要, 風險等級}\\n規則來源分層：靜態允許清單 → 靜態拒絕清單 → 模式（互動／全自動／唯讀計畫／不問）→ 動態 callback；先命中先決定，且拒絕優先於允許。\\n【不變式測試】造一條會拋例外的動態 callback → 斷言該工具呼叫被拒、拒絕理由出現在回灌的工具結果裡、整次執行終態仍為 success。負控①：把例外處理改成「評估失敗即放行」→ 轉紅。負控②：把評估失敗改成終止整次執行 → 終態斷言轉紅。",
+   "why_separate": "改變理由是「政策語言變了」。它必須與沙箱分開（一個依字串／AST 判斷意圖、一個由 OS 強制效果），也必須與人機交接分開（見下）——閘是同步純決策、毫秒級；交接是耐久非同步狀態機、分鐘到小時級，兩者的失效行為甚至相反。【推論】",
+   "depends_on": [
+    "事件記錄器"
+   ]
+  },
+  {
+   "name": "人機交接仲介（Handoff Broker）",
+   "responsibility": "把「需人工」的裁定外部化成一筆耐久的待審請求，管理它的逾時、授權綁定與恢復語意。",
+   "inputs": "來自副作用閘的升級請求（摘要、選項、風險等級、逾時秒、逾時預設）；來自人類的回覆與其身分憑證。",
+   "outputs": "待審 id；最終決定（含決定者身分與時間）或逾時套用的預設；恢復指令。",
+   "owns_state": "待審請求表（耐久且必須跨監督者重啟存活）、逾時計時、已用過的待審 id（防重放）。",
+   "on_failure": "預設 fail-closed（逾時＝拒絕），但必須是**可設定且被明講的**預設。理由：待審請求在等人時 run 是暫停的（宜用 cgroup.freeze 停住而非空轉燒 CPU），逾時放行等於把「沒人看」變成「有人批准」。反向壓力真實存在——高頻低風險的審批若一律 fail-closed，人類會被淹沒然後開始無腦按准，那時 fail-closed 只是把風險換了個地方，這是本層唯一沒有乾淨答案的失效政策。【推論】",
+   "interface": "提出(run_id, 摘要, 選項[], 逾時秒, 逾時預設: 拒絕|允許) -> 待審id\\n查詢(待審id) -> 待審 | 已決{決定, 決定者, 時間} | 已逾時{套用的預設}\\n回覆(待審id, 決定, 決定者憑證) -> 接受 | 拒絕{已逾時|身分不符|重複回覆}\\n恢復(run_id, 待審id) -> 重入清單{暫停前已完成且不可重做的副作用}\\n【不變式測試 A】提出待審後 SIGKILL 監督者、重啟 → 斷言待審請求仍存在且逾時計時從原始時間起算（不是從重啟起算）。負控：把待審表放在記憶體 → 轉紅。\\n【不變式測試 B】對同一待審 id 回覆兩次 → 斷言第二次被拒；逾時後再回覆 → 斷言被拒且套用的是預設。負控：拿掉單次使用檢查 → 轉紅。\\n【不變式測試 C】造一個「暫停前已送出一封信」的假流程，恢復後斷言該副作用不被重做。負控：把恢復實作成「從節點頭重跑且不查重入清單」→ 轉紅——這正是某主流實作的既有語意：「the runtime restarts the entire node from the beginning…Side effects called before interrupt must be idempotent」【查證 https://docs.langchain.com/oss/python/langgraph/interrupts 】。",
+   "why_separate": "改變理由是「審批流程與逾時政策變了」，這是組織政策而非技術政策，變動頻率遠高於閘的規則語言。技術上它也不能併進閘：閘是無狀態同步函式，交接持有耐久狀態、有計時器、有身分驗證、有重放防護，且其恢復語意會反過來要求「副作用要標記過」——這是一組完全不同的測試。原研究把 HITL 整個劃到產品層是錯的：策略在產品層，但暫停、耐久待審、逾時預設、恢復重入這四件事沒有機制就不存在。【推論】",
+   "depends_on": [
+    "副作用閘",
+    "程序監督者",
+    "事件記錄器"
+   ]
+  },
+  {
+   "name": "事件記錄器（Event Journal）",
+   "responsibility": "以 append-only 且可驗證完整性的方式記下這次執行發生過的每一件事，並鏡寫到工作區之外。",
+   "inputs": "型別化事件（初始化、模型回應、工具呼叫與結果、閘裁定、上限觸發、壓縮邊界、待審與決定、子執行者起訖、收束）。",
+   "outputs": "序號；讀取介面；完整性驗證結果；錨點。",
+   "owns_state": "每 run 的事件序列與雜湊鏈狀態（本機＋鏡寫，兩份），耐久。",
+   "on_failure": "本機寫入 fail-closed（寫不進去即停止執行——沒有稽核的執行等於沒發生，且帳的回補完全依賴它）；鏡寫 fail-open 但必須發出獨立可告警的鏡寫失敗事件，並讓呼叫端可選「失敗即中止」。best-effort 是合理預設，但必須是**明講的**預設而不是靜默丟批。【推論】",
+   "interface": "追加(run_id, 事件) -> 序號        # hash = H(prev_hash ‖ seq ‖ canonical(event))\\n讀取(run_id, 自序號=0) -> 事件[]\\n驗證(run_id) -> 完整 | 斷鏈{序號}\\n錨定(run_id) -> 錨點{最後序號, 最後hash, 時間}   # 寫到另一個信任域\\n【不變式測試 A】跑完一次執行後，直接改寫落檔中第 k 筆事件的一個位元組 → 斷言驗證回傳斷鏈且指出序號 k。負控：把 prev_hash 拿掉（每筆各自雜湊）→ 轉紅（改寫不可偵測）。\\n【不變式測試 B】注入一次鏡寫失敗 → 斷言事件流中出現可告警的鏡寫失敗事件。負控：把該事件拿掉、改成靜默重試 → 轉紅。\\n【不變式測試 C】執行中途 SIGKILL → 斷言已落盤事件可完整讀出且驗證通過（部分寫入的最後一筆應被安全截斷而非讓整條鏈失效）。負控：把追加改成先算鏈再非原子寫 → 轉紅。",
+   "why_separate": "改變理由是「儲存與完整性方案變了」。它與成品庫分開的理由是形狀不同：journal 是小而極多的追加（每 run 數千筆），成品庫是大而少的不可變 blob（每 run 數個到數十個），兩者的寫入路徑、壓縮策略、刪除語意完全不同。硬要合併會讓其中一邊的效能或刪除政策遷就另一邊。【推論】",
+   "depends_on": [
+    "版本與相容閘"
+   ]
+  },
+  {
+   "name": "成品庫（Artifact Store）",
+   "responsibility": "保存執行者產出的檔案與最終輸出，使其在工作區消失後仍可取回，並承載保存期與刪除。",
+   "inputs": "run_id、成品名稱、位元組或路徑；保存期政策；刪除請求。",
+   "outputs": "成品參考（內容雜湊、大小、媒體型別）；取出的位元組；刪除回執。",
+   "owns_state": "內容定址的物件與 run→成品的索引（耐久）；保存期到期表。",
+   "on_failure": "fail-open 但降級：存放失敗時把成品留在本機並在 run record 上標記「未耐久化」，不因存放失敗而丟棄已完成的工作。這與 journal 的 fail-closed 刻意相反——journal 缺一筆會讓稽核與帳的回補失效，成品缺一份只是這一份要重做。這裡有分歧：把成品當成正式交付物的團隊會主張 fail-closed，理由是「以為有備份其實沒有」比「明確失敗」危險。【推論】",
+   "interface": "放入(run_id, 名稱, bytes|路徑) -> 成品參考{content_hash, 大小, 媒體型別} | 降級{本機路徑}\\n取出(成品參考) -> bytes\\n列出(run_id) -> 成品參考[]\\n刪除(run_id, 理由: 保存期到期|刪除請求) -> 回執   # 同時在 journal 標記對應 payload 的 tombstone\\n【不變式測試 A】跑一次會寫檔並產出文字的假執行者；收束後 rm -rf 整個工作區含所有暫存目錄；以 run id 讀回 → 斷言輸出逐字相符、事件數 > 0、帳非零。負控：把耐久化改成「只寫工作區內的 .runs/ 目錄」→ 轉紅。\\n【不變式測試 B】對一個 run 下刪除請求後 → 斷言成品取不到、journal 中的內容欄位變成 tombstone、但終態與帳仍可讀。負控：把刪除實作成整筆 run record 一起刪 → 斷言「終態仍可讀」轉紅（刪除不該讓帳消失）。",
+   "why_separate": "改變理由是「儲存後端或保存期政策變了」。刪除政策是它獨立存在的最硬理由——法遵刪除只能碰得到成品與 journal 的 payload，不能碰終態與帳，而這個「部分刪除」的能力必須設計在資料模型裡，事後補不上。原研究完全沒有涵蓋保存期與刪除。【推論】",
+   "depends_on": [
+    "事件記錄器"
+   ]
+  },
+  {
+   "name": "活性看門狗（Liveness Watchdog）",
+   "responsibility": "回答「這個 run 還在前進嗎、監督者自己還活著嗎」，並在反覆重啟時停手向上升級。",
+   "inputs": "各 run 的進展計數心跳（已完成回合數＋已完成工具數）；監督者自身的心跳；重啟事件。",
+   "outputs": "卡住的 run 清單（僅標記與告警）；監督者失效訊號；重啟強度超限的升級告警。",
+   "owns_state": "最後心跳時間與進展計數（可為記憶體，但重啟計數必須耐久，否則重啟本身會清掉重啟計數）。",
+   "on_failure": "對 run 是 fail-open：偵測失效時只標記可疑並告警，**不殺**。理由是「無進展」與「正在跑一個三十分鐘的編譯」在外部看來一樣，誤殺合法長工的代價高於多跑一會兒；真正的殺一律由牆鐘上限（Quota Enforcer）負責，那是一條不需要判斷的絕對死線。對監督者自身則相反，是 fail-closed：心跳停送即由外部服務管理器強制終止並重啟——這是既有成熟語意，「If the time between two such calls is larger than the configured time, then the service is placed in a failed state and it will be terminated with SIGABRT」【查證 https://man7.org/linux/man-pages/man5/systemd.service.5.html 】。",
+   "interface": "心跳(run_id, 進展計數)\\n巡檢() -> 卡住的[{run_id, 最後進展時間, 進展計數}]\\n自我心跳()                        # 停送 → 外部管理器 SIGABRT 並重啟\\n記錄重啟(單元id) -> 繼續 | 停手升級   # 視窗內次數超過上限即停止自動重啟\\n重啟後回收() -> 回收報告{孤兒 run[], 已收束[]}\\n【不變式測試 A】假執行者停止產生任何事件但程序仍存活 → 斷言巡檢在 N 秒後列出該 run，且該 run **未被終止**（終態仍為 running 直到牆鐘上限到期）。負控：把巡檢的處置從標記改成終止 → 轉紅（活性偵測不該有殺權）。\\n【不變式測試 B】讓某單元在視窗內連續失敗 intensity+1 次 → 斷言停止自動重啟並發出升級告警，而非持續重啟。負控：拿掉強度上限 → 轉紅（重啟風暴）。標準處方：「If more than MaxR number of restarts occur in the last MaxT seconds, the supervisor terminates all the child processes and then itself」【查證 https://www.erlang.org/doc/system/sup_princ.html 】。\\n【不變式測試 C】見核心不變式的 reconcile 那一格。",
+   "why_separate": "改變理由是「活性的判準變了」。它與上限強制器分開是本切法中最重要的一刀：一個是**沒有判斷成分的絕對死線**（到期就殺，可窮舉測試），一個是**有判斷成分的可疑訊號**（只能告警）。把兩者合成一個 timeout 參數，結果一定是二選一——要嘛絕對死線變得太寬鬆（怕誤殺），要嘛活性偵測獲得殺權（開始誤殺）。原研究完全沒有這一格，也沒有監督者自我監督與重啟強度上限。【推論】",
+   "depends_on": [
+    "程序監督者",
+    "事件記錄器"
+   ]
+  },
+  {
+   "name": "終態收束器（Terminal Reducer）",
+   "responsibility": "把多路可能同時抵達的結束訊號歸約成唯一一個封閉列舉終態，並且是 run record 的唯一寫入者。",
+   "inputs": "來自上限強制器、監督者、後端配接器、副作用閘、人機交接、看門狗的結束訊號（各帶事件序號）。",
+   "outputs": "終態值（含帳；成果欄位僅存在於 success 變體）；寫入 run record。",
+   "owns_state": "無狀態；但它是唯一被允許寫終態的路徑（單一收束點）。",
+   "on_failure": "fail-closed 且必須顯式：歸約不出結果時寫入列舉中的「未知終態」成員，絕不留在 running。理由是「永遠 running」是所有終態中最糟的一種——它既不觸發重試也不釋放配額，還會讓呼叫端無限等待，而它恰好是最容易發生的預設行為。【推論】",
+   "interface": "收束(run_id, 訊號集合) -> 終態\\n終態 = 成功{成果, 帳} | 回合上限{帳} | 金額上限{帳} | 牆鐘逾時{帳} | 記憶體上限{帳} | 磁碟上限{帳}\\n     | 外部取消{方式: 軟收|硬殺, 帳} | 執行者崩潰{訊號或退出碼, 帳: 回補值} | 後端失敗{可重試: bool, 帳}\\n     | 權限拒絕致停{帳} | 人工否決{待審id, 帳} | 逾時未決{待審id, 套用預設, 帳} | 無主回收{帳} | 未知{診斷, 帳}\\n歸約規則：取事件序號**最早**的訊號為終態，其餘記入 also_triggered[]。\\n【不變式測試 A】參數化造出上述每一種情境 → 斷言終態兩兩互斥、值域封閉；斷言對非 success 存取成果在型別檢查或執行期明確失敗。負控①：把回合上限的收束路徑改成回傳 success 帶最後一段文字 → 轉紅。負控②：把成果提升到基底型別填 None → 「型別上取不到」轉紅。\\n【不變式測試 B】同時注入「金額上限」與「牆鐘逾時」，讓前者事件序號較早 → 斷言終態為金額上限且 also_triggered 含牆鐘。負控：把歸約改成後到者覆蓋 → 轉紅（終態隨排程抖動而變，重現不了）。",
+   "why_separate": "改變理由是「終態列舉變了」。單一收束點是它存在的全部理由：只要有第二處能寫終態，「上限到了」與「執行者自述完成」就可能互相覆蓋，而這正是驗收權從執行者手上被拿走的那一刀。它必須薄到能被完整窮舉測試。【推論】",
+   "depends_on": [
+    "帳本",
+    "事件記錄器",
+    "版本與相容閘"
+   ]
+  },
+  {
+   "name": "恢復協調器（Recovery Coordinator）",
+   "responsibility": "決定一個已收束或無主的 run 接下來是續跑、重跑還是交回，並保證同一時間只有一個持有者在動它。",
+   "inputs": "終態、冪等性標註、重試政策、租約請求。",
+   "outputs": "處置決定（含理由）；租約；續跑時的重入清單。",
+   "owns_state": "租約表（持有者、到期時間）、每 run 的嘗試序列與冪等鍵，耐久。",
+   "on_failure": "fail-closed：租約拿不到或狀態讀不出時不動作。理由是重複恢復的代價不對稱——漏跑一次可由人工補，重跑一次可能重複已發生的外部副作用；而分散式恢復下的雙重接手是被明確記載的既有破口：「If two processes try to resume the same thread_id simultaneously…has no built-in coordination to prevent both from executing」【查證 https://www.diagrid.io/blog/checkpoints-are-not-durable-execution-why-langgraph-crewai-google-adk-and-others-fall-short-for-production-agent-workflows 】。",
+   "interface": "取得租約(run_id, 持有者, ttl秒) -> 租約 | 已被持有{持有者, 到期}\\n續租(租約) / 釋放(租約)\\n判定(終態, 冪等性) -> 續跑{新上限組} | 重跑{冪等鍵} | 交回{理由}\\n判定規則：回合／牆鐘／金額上限 → 續跑（若後端宣告可續跑，否則交回）；後端可重試失敗 ∧ 冪等 → 重跑；其餘 → 交回\\n重入清單(run_id) -> {已完成且不可重做的副作用[]}\\n【不變式測試 A】(a) 非冪等任務注入一次可重試的後端失敗 → 斷言後端被呼叫 1 次、終態失敗、attempts == 1。(b) 冪等任務同樣注入 → 斷言呼叫 2 次、終態 success、attempts == 2、最終帳 == 兩次之和。負控①：忽略冪等旗標一律重試 → (a) 轉紅。負控②：帳改成以最後一次為準 → (b) 的總和斷言轉紅。\\n【不變式測試 B】兩個持有者同時對同一個無主 run 呼叫取得租約 → 斷言恰有一個成功，另一個拿到已被持有。負控：把租約改成「檢查後再寫」的非原子兩步 → 在注入延遲下轉紅。\\n【不變式測試 C】碰到回合上限時斷言決定為續跑而非重跑。負控：把上限類終態併進 failed 一律重跑 → 轉紅（同一筆錢燒兩次）。",
+   "why_separate": "改變理由是「恢復政策變了」。它不能併進終態收束器：收束器必須薄且無狀態（它是唯一寫入點，複雜度就是風險），恢復協調器則持有耐久租約與嘗試序列。也不能併進受理閘：受理管的是新請求，恢復管的是既存 run 的所有權轉移，兩者的併發語意完全不同。【推論】",
+   "depends_on": [
+    "終態收束器",
+    "帳本",
+    "人機交接仲介"
+   ]
+  }
+ ],
+ "internal_flow": [
+  {
+   "step": "1. 受理與正規化",
+   "subsystem": "受理閘",
+   "decision": "八個上限維度是否齊全（牆鐘／回合／金額／記憶體／磁碟／pids／併發／深度）？冪等性是否標註？保存期是否指定？呼叫端身分是否可解析？任一缺失 → 拒絕，不產生 run_id。齊全 → 配 run_id，進 2。【推論】"
+  },
+  {
+   "step": "2. 相容性與能力協商",
+   "subsystem": "版本與相容閘 → 後端配接器",
+   "decision": "與選定後端協商協定版本與能力集合。分岔：後端不支援續跑 → 在契約上標記「上限類終態不可續跑，只能交回」；不支援權威成本 → 標記成本為估算並降低全域預算的可用比例；版本無交集 → 收束成「後端失敗（不可重試）」而不是硬跑。【查證：版本不合時 SHOULD 斷線而非猜測，https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle 】"
+  },
+  {
+   "step": "3. 預算預留",
+   "subsystem": "帳本",
+   "decision": "對本次執行的金額上限向全域預算預留。額度不足 → 排隊或拒絕受理（此時仍未花錢）。這一步必須在啟動之前，否則 N 個併發 run 各自檢查各自通過，集體超支。【推論】"
+  },
+  {
+   "step": "4. 開帳、開檔、寫入 running 記錄",
+   "subsystem": "事件記錄器 → 帳本",
+   "decision": "先耐久寫入一筆「running 且無終態」的 run record 再啟動。判斷點：這一步失敗 → fail-closed 中止，因為之後崩潰將完全無跡可循；成功 → 這筆無終態記錄同時成為監督者重啟後 reconcile 的依據。【推論】"
+  },
+  {
+   "step": "5. 供備隔離環境",
+   "subsystem": "隔離環境供備器 → 出口仲介 → 秘密仲介",
+   "decision": "三個順序不可顛倒：先建環境與資源上限，再開通出口（拿到 socket 路徑），最後配發哨符。分岔：任一步失敗 → 拆除已建部分、收束成「後端失敗」；掛載來源含排除清單命中的檔案（.env、*.pem、~/.ssh 等）→ 過濾或拒絕，唯讀只防寫不防讀。同時切斷隱性狀態載入（設定來源、自動記憶、全域設定目錄）——注意這是**多個獨立開關**，關掉其一不等於關掉其他。【推論】"
+  },
+  {
+   "step": "6. 啟動為可回收單元並登記識別",
+   "subsystem": "程序監督者",
+   "decision": "以獨立 cgroup／job object 啟動，把成員集合識別**落檔**而非只記在記憶體。判斷點：識別落檔失敗 → 立即終止並收束，因為沒有識別就沒有可靠回收。【推論】"
+  },
+  {
+   "step": "7. 每個花費點前的上限判定",
+   "subsystem": "資源上限強制器",
+   "decision": "三處呼叫：模型呼叫前、子執行者生成前、每 N 秒取樣。分岔按維度不同：金額／回合／牆鐘／記憶體／磁碟 → 送往終止路徑（步驟 11）；併發／深度 → 回灌一則可讀的「配額已滿」工具結果，執行繼續。混為一談會給執行者誤導性訊號。【推論】"
+  },
+  {
+   "step": "8. 每個副作用前的裁定",
+   "subsystem": "副作用閘",
+   "decision": "四分岔：允許 → 執行；改寫 → 以新參數執行；拒絕 → 把理由回灌成工具結果（讓它換路走，不崩潰）；需人工 → 進 9。裁定失敗（callback 拋例外）→ 視為拒絕，只影響該次呼叫。每一分岔都寫一筆稽核事件。【推論】"
+  },
+  {
+   "step": "9. 人工介入與凍結",
+   "subsystem": "人機交接仲介 → 程序監督者",
+   "decision": "寫入耐久待審請求，凍結成員集合（cgroup.freeze，停住不燒 CPU 也不燒 token），起逾時計時。三分岔：人類允許 → 解凍並繼續；人類否決 → 收束成「人工否決」；逾時 → 套用預先宣告的預設（預設拒絕）並收束成「逾時未決」。恢復時必須先查重入清單，避免暫停前的副作用被重做。【查證：恢復是節點從頭重跑、暫停前副作用必須冪等，https://docs.langchain.com/oss/python/langgraph/interrupts 】"
+  },
+  {
+   "step": "10. 事件持續落盤與心跳",
+   "subsystem": "事件記錄器 → 活性看門狗",
+   "decision": "每則事件先落檔（含雜湊鏈）再處理；同時更新進展計數心跳。判斷點：本機寫失敗 → 中止執行；鏡寫失敗 → 發告警事件並依設定決定續跑或中止。收集輸出一律先重導向落檔再讀，不用命令替換、不邊跑邊 grep——執行者 fork 出的背景子程序會繼承 stdout 的 fd，讓收集器被一個早已無關的孤兒卡死。【推論】"
+  },
+  {
+   "step": "11. 終止（三路徑）",
+   "subsystem": "程序監督者",
+   "decision": "①自然結束（產出不含工具呼叫的回應）②上限或政策觸發 → 軟取消 + grace ③外部取消或 grace 逾時 → 對整個成員集合硬殺。判斷點：軟收成功 vs 硬殺收場必須記成不同的值——後者意味著輸出可能不完整，是可疑訊號。【推論】"
+  },
+  {
+   "step": "12. 收乾淨並斷言",
+   "subsystem": "程序監督者 → 隔離環境供備器 → 出口仲介 → 秘密仲介",
+   "decision": "斷言成員集合為空（讀 cgroup.events 的 populated，不遍歷 PID 樹）；拆除環境；關閉出口並取回稽核摘要；撤銷哨符使其立即失效。判斷點：仍有殘留 → 這是一個必須獨立回報的結果，不能吞掉；殘留會跨 run 傳染（佔 port、鎖檔）。清理必須在 finally 路徑，不能只在成功路徑。【查證：cgroup.events populated 的語意與可 poll 通知，https://docs.kernel.org/admin-guide/cgroup-v2.html 】"
+  },
+  {
+   "step": "13. 收束終態",
+   "subsystem": "終態收束器",
+   "decision": "歸約多路訊號：取事件序號最早者為終態，其餘記入 also_triggered。特別處理崩潰：崩潰時收束訊息的帳可能歸零，須用崩潰前最後一則收束訊息，或依 message id 去重加總逐步事件回補，並明講子執行者用量無法回補而非填 0。歸約不出 → 寫「未知」，絕不留 running。【推論】"
+  },
+  {
+   "step": "14. 結算與耐久化",
+   "subsystem": "帳本 → 成品庫 → 事件記錄器",
+   "decision": "以實際金額結算預留（釋放差額回全域預算池）；成品放入成品庫（失敗 → 降級標記未耐久化，不丟工作）；journal 錨定到另一個信任域。判斷點：預留未結算就收束 → 全域預算會被永久扣住，必須在 finally 路徑歸還。【推論】"
+  },
+  {
+   "step": "15. 處置判定",
+   "subsystem": "恢復協調器",
+   "decision": "取租約後判定：上限類終態 ∧ 後端可續跑 → 續跑（帶 session 參考、提高上限，帳累加不覆蓋）；後端可重試失敗 ∧ 任務標為冪等 → 重跑（帶冪等鍵）；其餘 → 交回呼叫端。租約拿不到 → 不動作。決定與理由都要進事件流。【推論】"
+  },
+  {
+   "step": "16.（異步）監督者重啟後的 reconcile",
+   "subsystem": "活性看門狗 → 恢復協調器 → 終態收束器",
+   "decision": "掃描所有「running 且無終態」的 run record，以落檔的成員集合識別查詢：成員仍存在 → 重新接管並續租；成員已空 → 收束成「無主回收」並回補帳。這一步是核心不變式的第二負控所在——沒有它，每一次監督者崩潰都會留下永久 running 的殭屍 run。【推論；病灶指認見 https://www.diagrid.io/blog/checkpoints-are-not-durable-execution-why-langgraph-crewai-google-adk-and-others-fall-short-for-production-agent-workflows 】"
+  }
+ ],
+ "data_model": [
+  {
+   "entity": "RunRecord（執行記錄）",
+   "fields": "run_id (uuid, 高熵不可預測)；session_參考 (可空)；schema_version (int)；契約 (正規化後的執行契約快照，含上限組與後端 id)；狀態 (running|terminal)；終態 (封閉列舉標籤 + 變體欄位；成果僅在 success)；also_triggered[]；成員集合識別 (cgroup 路徑／容器 id／pgid)；帳 (主迴圈用量, 全樹用量, 估算金額, 權威金額狀態)；attempts[] (每次嘗試的 run_id 與成本)；建立時間／收束時間／終止方式 (軟收|硬殺|自然|無主)；呼叫端身分；保存期到期日",
+   "durability": "必須。它是核心不變式的載體——工作區刪光、監督者被 SIGKILL 之後要能靠它讀出結局。特別注意「running 且無終態」的中間態也必須耐久，否則重啟後無從得知有哪些 run 需要 reconcile。【推論】",
+   "lifecycle": "步驟 4（啟動前）以 running 建立 → 步驟 13 由終態收束器**唯一一次**寫入終態 → 步驟 14 補上結算後的帳 → 保存期到期時，成品與 payload 可刪、但終態與帳必須保留（部分刪除）。run_id 必須不可預測且不可猜測，理由與 session id 相同：可猜的識別碼讓外部得以對別人的 run 下停止指令或讀取結果【查證：「MUST use secure, non-deterministic session IDs…Avoid predictable or sequential session identifiers」，https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices 】。"
+  },
+  {
+   "entity": "JournalEntry（事件流條目）",
+   "fields": "run_id；seq (單調遞增)；時間；事件型別 (初始化|模型回應|工具呼叫|工具結果|閘裁定|上限觸發|配額回灌|待審提出|待審決定|壓縮邊界|子執行者起訖|鏡寫失敗|收束)；payload (可被 tombstone 取代)；prev_hash；hash = H(prev_hash ‖ seq ‖ canonical(payload))",
+   "durability": "必須，且需完整性保護。它是三件事的唯一來源：崩潰後的帳回補、稽核歸屬、以及事後解釋行為變化的時間點（例如壓縮邊界之後執行者開始違反早期約束）。雜湊鏈只提供竄改**可偵測**，不提供不可竄改，故需定期把錨點寫到另一個信任域【查證 https://www.c-sharpcorner.com/article/building-tamper-evident-audit-logs-for-ai-agent-actions/ 】。",
+   "lifecycle": "執行期間持續追加，收束後只讀；保存期到期或收到刪除請求時把 payload 換成 tombstone 但保留 seq 與 hash（鏈不能斷，否則整段稽核作廢）。錨點在收束時寫出一次。"
+  },
+  {
+   "entity": "BudgetReservation（預算預留）",
+   "fields": "預留憑證 id；run_id；預留金額；已結算金額 (可空)；狀態 (held|settled|released)；到期時間",
+   "durability": "必須。崩潰時最危險的狀態就是「已扣未結」——若只存在記憶體，重啟後全域預算餘額會憑空多出一截，於是併發超支；若沒有到期時間，崩潰的 run 會把額度永久扣住。【推論】",
+   "lifecycle": "步驟 3 建立（held）→ 步驟 14 結算（settled，差額回池）→ 或到期由看門狗釋放（released）。釋放必須在 finally 路徑。"
+  },
+  {
+   "entity": "PendingApproval（待審請求）",
+   "fields": "待審 id (高熵)；run_id；摘要；選項[]；風險等級；提出時間；逾時秒；逾時預設 (拒絕|允許)；狀態 (待審|已決|已逾時)；決定；決定者身分；決定時間；已使用 (bool，防重放)",
+   "durability": "必須，且逾時計時必須以**提出時間**為基準而非以程序啟動時間——否則監督者重啟會讓每個待審請求的時鐘重置，一個本該逾時拒絕的請求會無限延壽等到有人誤按。【推論】",
+   "lifecycle": "步驟 9 提出（同時凍結成員集合）→ 人類回覆或逾時 → 已決／已逾時後不可再回覆（單次使用）→ 恢復執行時附帶重入清單。保存期與 RunRecord 相同（它是稽核證據）。"
+  },
+  {
+   "entity": "ArtifactRef（成品參考）",
+   "fields": "content_hash (內容定址)；run_id；名稱；大小；媒體型別；耐久狀態 (已耐久|降級本機)；建立時間；保存期到期日",
+   "durability": "必須（索引），內容本身可依政策分層。判準是原研究已給出的那句：工作區整個 rm -rf 之後這次執行仍完整可讀——但要補一句原研究漏掉的：可讀不等於永久可讀，保存期到期後必須可被刪除，而刪除不得使終態與帳一併消失。【推論】",
+   "lifecycle": "步驟 14 放入 → 到期或刪除請求時刪除內容並在 journal 標 tombstone → 索引保留（記錄「曾經存在、已依政策刪除」，這與「從未產出」是不同的事實）。"
+  },
+  {
+   "entity": "BackendCapabilityProfile（後端能力側寫）",
+   "fields": "後端 id；協定版本；串流 (bool)；可中斷 (bool)；可續跑 (bool)；成本 (無|估算|權威)；子執行者帳 (含|不含|不支援)；一致性套件通過的版本與時間",
+   "durability": "需要，但屬於設定級耐久（隨部署變更，不隨 run 生滅）。必須連同「一致性套件何時驗過」一起存，否則能力宣告會退化成一句沒人驗證的自述——後端可以宣告它其實做不到的能力。【推論】",
+   "lifecycle": "部署或協商時寫入 → 每次 run 受理時讀取並凍結進契約快照（否則中途換設定會讓同一個 run 的前後半段假設不同）→ 一致性套件失敗即標記不可用。"
+  },
+  {
+   "entity": "RecoveryLease（恢復租約）",
+   "fields": "run_id；持有者 id；取得時間；到期時間；世代號 (單調遞增，用於偵測被搶走)",
+   "durability": "必須，且取得必須是原子的比較並寫入（compare-and-set），不能是「先查再寫」的兩步。兩個程序同時接手同一個 run 會把非冪等副作用做兩遍，而這正是純檢查點方案被明確指出的缺口【查證 https://www.diagrid.io/blog/checkpoints-are-not-durable-execution-why-langgraph-crewai-google-adk-and-others-fall-short-for-production-agent-workflows 】。",
+   "lifecycle": "步驟 15 或 16 取得 → 持有期間定期續租 → 完成或崩潰後由 TTL 自然過期，世代號遞增使舊持有者的寫入被拒。"
+  },
+  {
+   "entity": "SentinelBinding（哨符綁定）",
+   "fields": "哨符 (每 run 一次性高熵字串)；秘密參考 (指向外部保管庫，非真值)；允許注入的主機[]；run_id；狀態 (有效|已撤銷)",
+   "durability": "不需要跨崩潰存活，反而**應該**隨程序消失——耐久化哨符綁定只會增加外洩面。但撤銷必須是明確動作而非依賴程序結束，因為出口仲介跑在邊界外、生命週期與執行者不同步。【推論】",
+   "lifecycle": "步驟 5 配發 → 執行期間由出口仲介解析 → 步驟 12 明確撤銷（此後重放同一哨符必須被拒）。真值永不進入此實體。"
+  },
+  {
+   "entity": "IdempotencyKey（冪等鍵）",
+   "fields": "鍵值 (由 run_id + 邏輯操作識別導出)；操作描述；首次執行時間；結果摘要",
+   "durability": "必須，否則重跑時無法判斷某個外部副作用是否已經發生。但要誠實標註它的覆蓋範圍：只涵蓋 harness 知道並經手的操作，執行者透過 shell 直接產生的副作用不在其中——這是 agent 場景與傳統 RPC 的根本差別（副作用是開放集合）。【推論】",
+   "lifecycle": "重跑前建立或查詢 → 命中即跳過該操作 → 隨 RunRecord 的保存期一同過期。"
+  }
+ ],
+ "minimal_core": [
+  "程序監督者（含兩段式終止與成員集合斷言）——沒有它，「終止」只是禮貌性請求；所有上限都退化成建議值。",
+  "資源上限強制器（純函式、八維度、三個判定時機）——沒有它，一句開放式指令就是無界迴圈，且爆法有八種而不是一種。",
+  "終態收束器（封閉列舉、單一寫入點、成果只掛 success）——沒有它，驗收權留在執行者手上，呼叫端必然把「沒做完」讀成「做完了」或把「上限到了」讀成「失敗，重試」。",
+  "事件記錄器（append-only、耐久、鏡寫到工作區之外）——沒有它，崩潰時什麼都不剩，帳無法回補，稽核不存在，而崩潰正是最需要看輸出的時刻。",
+  "後端配接器（含能力宣告）——沒有它，前四項會在每個後端各寫一次，於是保證的強度取決於用哪個後端，而測試只覆蓋最常用的那個。"
+ ],
+ "optional": [
+  "出口仲介 + 秘密仲介：處理不可信輸入、多租戶、或執行者需對外呼叫但不該持有憑證時才值得。單機、單人、無網路存取的批次執行可以不做——但一旦執行者能連外，這兩格就從加分變成必需，中間沒有灰帶。",
+  "人機交接仲介：全自動批次場景不需要。當出現「有些操作沒人看過就不能做」時值得做，而判準不是風險高低而是**頻率**——低頻高風險適合 fail-closed 審批；高頻低風險做了會製造審批疲勞，反而應該改用更嚴的靜態閘規則而不是叫人按鈕。",
+  "出口 TLS 終結 + 沙箱內裝 CA：當白名單必須「真的」成立時才值得。不解 TLS 的白名單只能依 client 自報的 hostname 判斷，可被 domain fronting 繞過；代價是憑證管理與一個看得到明文流量的元件。多數情況先把白名單收窄（不要放行 github.com 這種廣域網域）比上 TLS 終結划算。",
+  "雜湊鏈錨定到外部信任域：當威脅模型包含「有寫入權的內部人」時才值得。只防意外損毀的話，本機雜湊鏈已足夠；錨定的代價是多一個跨信任域的寫入路徑要維護。",
+  "預算預留（reservation）：只有一個 run 在跑時不需要，事後累計就夠。一旦有併發 run 共用全域預算，事後累計就會集體超支，此時預留是唯一解——但它的代價是「設預算等於執行互斥」的序列化壓力，必須明講。",
+  "錄放（cassette）重播設施：當測試需要覆蓋 harness 邏輯而不想燒錢時值得。作法是把模型呼叫視為不可化約的非決定性輸入並錄下其輸出，deterministic glue 重跑【查證：record-replay 對 LLM agent 的標準形狀，https://anaynayak.medium.com/eliminating-flaky-tests-using-vcr-tests-for-llms-a3feabf90bc5 】。誠實邊界：它驗 harness 邏輯，不驗執行者行為。",
+  "cgroup.freeze 暫停而非終止：只有在有人機交接或需要「停住不燒錢地等」時才值得。「Writing '1' to the file causes freezing of the cgroup and all descendant cgroups…frozen processes remain killable」【查證 https://docs.kernel.org/admin-guide/cgroup-v2.html 】。沒有 HITL 就別做。",
+  "保存期與刪除引擎：有法遵或隱私要求時才值得。但**資料模型必須從第一天就支援部分刪除**（payload 可 tombstone、終態與帳保留），這個能力事後補不上——引擎可以晚做，schema 不能晚設計。",
+  "成本對帳器（估算 vs 供應商權威）：只在需要對外 chargeback 時才值得。開發期用估算完全夠；但如果打算收費，就必須在型別上一開始就把兩者分成不同名字的欄位，否則之後分不開。",
+  "無進展偵測（stall detection）：只有長跑任務值得。短任務用牆鐘上限就夠，多做一個會製造誤報。",
+  "分散式租約與多節點恢復：單機部署不需要，本機檔案鎖足夠。跨節點時才需要——但那時要注意租約 TTL 與時鐘偏移的互動。",
+  "CRIU 式程序快照遷移：幾乎從來不值得。agent 的狀態大部分在對話與檔案系統上，重建比遷移便宜，而快照會把秘密一起凍進映像。"
+ ],
+ "design_decisions": [
+  {
+   "question": "監督者放在執行者程序內（in-process 取消 token）還是程序外（獨立監督程序）？",
+   "options": "**In-process**：實作簡單、可直接傳例外、無 IPC 序列化成本；代價是執行者無窮迴圈、忽略訊號、或程序本身崩潰時，上限與終止全部失效——保證與被保證者同生共死。**Out-of-process**：上限不依賴執行者配合；代價是跨程序 IPC 複雜度（終態必須可序列化，不能靠例外傳遞）、以及監督者自己也需要被監督。",
+   "recommendation": "程序外。並且把「監督者自己」也交給一個更外層的服務管理器：心跳停送即強制終止並重啟（WatchdogSec 的形狀），重啟次數在視窗內超限即停手升級而非無限重啟（StartLimitBurst / restart intensity 的形狀）【查證 https://man7.org/linux/man-pages/man5/systemd.service.5.html 、https://www.erlang.org/doc/system/sup_princ.html 】。",
+   "reverses_when": "當執行者是你自己寫的、跑在同一個受控 runtime 裡、且沒有能力 spawn 任意子程序時（例如純函式呼叫工具、無 shell），in-process 取消足夠且省掉整條 IPC 路徑。一旦執行者能跑 shell，這個建議立刻反轉——因為它能 setsid 逃出你的 PID 樹。"
+  },
+  {
+   "question": "終態用型別化列舉（可序列化的 result）還是例外階層？",
+   "options": "**型別化列舉**：跨程序、跨語言可過線；可以在型別層面讓成果欄位只存在於 success；代價是呼叫端每次都要 match，樣板碼多。**例外階層**：語言原生、寫起來短；代價是跨程序邊界無法傳遞（必須在邊界上轉成資料，於是等於還要做一份列舉），且例外容易被上游一個寬鬆的 catch 吞掉而退化成布林。",
+   "recommendation": "型別化列舉，並且刻意讓非 success 變體在型別上就取不到成果欄位（不是填 None）。這是把驗收權從執行者手上拿走的第一刀——填 None 的版本，呼叫端寫 `result or \"\"` 就繞過去了。",
+   "reverses_when": "當 harness 純粹是同一程序內的函式庫、永遠不跨程序、且語言的例外階層可以被靜態窮舉（sealed class / 代數資料型別）時，例外派等價且更簡潔。業界在這件事上確實有分歧且分歧很深，不要假裝有標準答案。"
+  },
+  {
+   "question": "上限的「判定」與「強制」要不要放在同一個模組？",
+   "options": "**合併**：少一層介面，判定完直接殺。**分離**：判定是無狀態純函式（八維度 × 三時機可窮舉測試，不需起程序），強制是持有 OS 原語的模組；代價是多一個介面與一次資料傳遞。",
+   "recommendation": "分離。理由是可測性的量級差異：合併之後，測一個上限維度就要真的起一次程序跑到超限，於是實務上只有一兩個維度會被測到，其餘六個維度的 bug 要到生產才會被發現。",
+   "reverses_when": "當上限只有一個維度（例如只有牆鐘）時，分離是形式主義，直接合併。但只要維度數 ≥ 3，分離就開始回本。"
+  },
+  {
+   "question": "活性偵測（無進展）要不要有殺權？",
+   "options": "**有殺權**：一個 timeout 參數解決所有問題，實作簡單。**無殺權（只告警）**：絕對死線歸牆鐘上限，無進展只標記可疑；代價是多一個模組，且真的卡住時會多燒到牆鐘上限為止。",
+   "recommendation": "無殺權。「無進展」與「正在跑一個三十分鐘的編譯」在外部看來完全一樣，而誤殺合法長工的代價（重跑整個任務 + 可能的部分副作用）高於多燒一段牆鐘。把殺的權力集中在唯一一條不需要判斷的規則上（絕對死線），可以讓「為什麼這個 run 被殺了」永遠有一個確定答案。",
+   "reverses_when": "當單位執行成本極高（每分鐘數美元）而任務的正常進展間隔可被精確界定（例如已知每步不超過 90 秒）時，讓活性偵測直接殺是划算的——但前提是你能證明那個間隔上界，不是猜的。"
+  },
+  {
+   "question": "恢復模型：檢查點（呼叫端自負責）還是耐久執行（自動接手）？",
+   "options": "**檢查點**：實作簡單、無需常駐協調者；代價是「沒有人負責偵測失敗」——程序死了沒人知道，run 永遠停在 running【查證 https://www.diagrid.io/blog/checkpoints-are-not-durable-execution-why-langgraph-crewai-google-adk-and-others-fall-short-for-production-agent-workflows 】。**耐久執行**：有心跳、租約、自動接手；代價是必須解決重入語意與雙重接手，複雜度高一個量級。",
+   "recommendation": "取中間：做檢查點 + **reconcile 迴圈 + 租約**，但不做「自動跑到完成」。也就是：崩潰後有人負責把無主的 run 收束成一個明確終態（而不是自動續跑），續跑與否交給恢復協調器依終態與冪等性判定。理由是 agent 的副作用是開放集合，自動跑到完成的語意在這裡比在傳統 workflow 危險得多。",
+   "reverses_when": "當任務的所有副作用都經過你的工具閘、都能套冪等鍵、且業務要求「一定要跑完」（例如批次資料處理）時，全套耐久執行才划算。當執行者能跑任意 shell 指令時，這個建議不會反轉。"
+  },
+  {
+   "question": "續跑時的重入單位：整個步驟重放，還是精確斷點續跑？",
+   "options": "**整步重放**：實作簡單、狀態機小；代價是暫停或崩潰前的副作用會被再做一遍，因此**要求所有前置副作用冪等**——這是某主流實作的既有語意，並明文要求把非冪等操作移到 interrupt 之後或另一個節點【查證 https://docs.langchain.com/oss/python/langgraph/interrupts 】。**精確續跑**：不重做；代價是要記錄細粒度的執行位置，而執行者的內部狀態你根本看不見。",
+   "recommendation": "整步重放 + 顯式的重入清單（記錄「已完成且不可重做」的副作用，重放時跳過）。純整步重放的隱性契約（「你要保證冪等」）在實務上一定會被違反，因為寫的人不知道自己在重放路徑上。把它顯式化成一份查得到的清單，才能寫出會 fail 的測試。",
+   "reverses_when": "當每一步都極貴（例如一步就是十分鐘的模型推理）且副作用可證明為零（純讀取分析）時，投資精確續跑划算。也就是說：貴且無副作用 → 精確；便宜或有副作用 → 重放加清單。"
+  },
+  {
+   "question": "事件流是不是帳與狀態的權威來源（event sourcing）？",
+   "options": "**是（事件溯源）**：崩潰時可靠逐步事件去重加總回補帳；外部監看不需輪詢；代價是儲存量隨 session 線性成長，讀取端要自己處理「同一回應多則訊息共用 id」「per-step 欄位是佔位值」這類語意細節。**否（獨立帳表）**：讀取簡單、聚合快；代價是崩潰時帳表可能落後於實際花費，而崩潰時收束訊息的成本欄位常常歸零。",
+   "recommendation": "事件流為權威、帳表為衍生的物化視圖。理由是唯一能回補崩潰帳的資料就在事件流裡；帳表可以隨時從事件重建，反之不行。但必須把去重與佔位值校正做成帳本模組的內部細節，不要讓每個讀取端各自處理。",
+   "reverses_when": "當單次執行的事件量極大（例如逐 token 串流全落檔）且保存期很長時，全量事件溯源的儲存成本會壓過好處——此時改成「事件流保留摘要級事件為權威、逐 token 另存短保存期」。"
+  },
+  {
+   "question": "預算：事後累計還是事前預留？",
+   "options": "**事後累計**：實作簡單，單 run 場景完全夠。**事前預留**：能防併發雙花；代價是設預算等於執行互斥——全域預算的鎖會持到成本落盤，於是併發執行被序列化。",
+   "recommendation": "單一 run 用事後累計，共用全域預算的多 run 一律預留，且必須把序列化這個代價寫進文件（這是硬上限的明文代價，不是 bug）。判準很簡單：問「兩個 run 同時檢查時看到的餘額一樣嗎」，一樣就會超支。",
+   "reverses_when": "當全域預算遠大於單次執行成本（例如上限是單次的一千倍）時，預留的序列化代價不值得，改用事後累計加一條保守的軟警戒線即可。"
+  },
+  {
+   "question": "秘密：不給（deny／剝除）還是遮罩（sentinel + 邊界外注入）？",
+   "options": "**deny**：把變數 unset，最簡單、零額外元件；代價是需要那個憑證的工具會一起壞掉（git、包管理器、內部 API），於是團隊很快就把 deny 關掉，防線歸零。**mask**：執行者只拿到一次性哨符，真值由邊界外的仲介在出口注入；代價是必須有 TLS 終結才能看到請求內容做替換，於是要管理 CA 與一個看得到明文的元件。",
+   "recommendation": "預設 deny + 對確實需要認證的下游用 mask。並且守住那個 fail-closed 形狀：注入設定錯時哨符原樣送出——認證失敗但不外洩，壞的是功能不是保證。另外別漏掉下游服務的憑證（版控 token、registry token）——保護了模型 API key 卻讓它們裸奔在子程序環境裡是常見的半套。",
+   "reverses_when": "當執行者完全不需要對外認證（純本機分析、離線任務）時，只做 deny，別引進 mask 那一整條 CA 管理鏈。反過來，當任務本質上就是「代表使用者操作外部服務」時，mask 從加分變成必需。"
+  },
+  {
+   "question": "隔離強度：程序級沙箱 / 容器 / 使用者態核心 / microVM？",
+   "options": "四級的強度、開銷、複雜度三軸差距極大：使用者態核心攔截 syscall 對純 CPU 工作近乎零開銷，但重度開關檔的 I/O 可以慢一到兩個量級；microVM 強度最高但啟動與記憶體開銷最大；容器最普及但共用核心。",
+   "recommendation": "以工作負載的 I/O 特性選型，而不是以「越強越好」選型；並且**顯式宣告當前用的是哪一級**、把代價寫進文件。同一份業界資料給出的是一張權衡表而不是一個建議值——這件事沒有標準答案，硬要給一個就是在騙人。要守的紀律是另一件事：不要自己重寫沙箱，也不要在放寬設定時忘記兩層互相抵銷（放行寫入 PATH 上的目錄或 shell 設定檔，等於給了在別的安全脈絡執行程式碼的能力，也就把網路隔離一併抵銷）。",
+   "reverses_when": "當執行者處理的是明確不可信的第三方內容（抓網頁、跑別人的 repo）時，強度優先於開銷，直接上最強一級。當它只處理本組織自己的程式碼、且威脅模型是「防忘記／出錯，不防蓄意」時，程序級沙箱加唯讀掛載就夠。"
+  },
+  {
+   "question": "人工審批逾時的預設：拒絕（fail-closed）還是允許（fail-open）？",
+   "options": "**拒絕**：安全上顯然正確；代價是夜間與週末的長跑任務會大量卡死並在逾時後全部失敗，於是團隊改設極長逾時或乾脆關掉審批。**允許**：可用性好；代價是「沒人看」在系統裡等價於「有人批准」，稽核紀錄從此不可信。",
+   "recommendation": "預設拒絕，但必須做兩件事讓它可持續：①凍結而非空轉（cgroup.freeze，等待期間不燒 CPU 也不燒 token），使長逾時的代價趨近於零；②把逾時後的終態記成獨立的「逾時未決」而不是併進失敗——這樣「多少 run 死在沒人審批」是一個可被量測、可被拿去改流程的數字，而不是隱藏在失敗率裡。",
+   "reverses_when": "當審批項目高頻且低風險時，這個建議會反過來——不是改成 fail-open，而是應該把那類操作從審批清單移到靜態允許清單。也就是說：如果你想 fail-open，真正的訊號是「這件事根本不該進審批」。這是本層唯一沒有乾淨答案的失效政策。"
+  },
+  {
+   "question": "閘拒絕一次工具呼叫時，回灌給執行者還是終止整次執行？",
+   "options": "**回灌**：執行者收到拒絕訊息當工具結果，通常會換一條路走或回報無法繼續；代價是它可能開始嘗試繞路（換一個工具做同一件事），需要靠事件流偵測。**終止**：語意乾淨；代價是任何一條規則的誤判都會浪費整次執行的成本，於是營運方會傾向放寬規則，防線整體變弱。",
+   "recommendation": "回灌，並把「同一意圖被拒絕 N 次」本身當成一個事件記錄下來（繞路偵測）。理由是嚴格的閘之所以能被接受，正因為它的單次誤判很便宜。",
+   "reverses_when": "當被拒絕的是一類「一旦嘗試就代表這次執行的前提已經錯了」的操作（例如它試圖存取另一個租戶的資料）時，應該終止並標記為安全事件，而不是讓它換路再試。判準是：拒絕代表「這條路不通」還是「這個執行者已經不可信」。"
+  },
+  {
+   "question": "run record 的 schema 演進：只增不改（additive-only）還是版本＋轉換器？",
+   "options": "**只增不改**：讀取端永遠向後相容，簡單；代價是欄位語意錯了就永遠修不掉，只能加新欄位並讓舊欄位帶著錯誤語意流傳，日積月累變成沼澤。**版本＋轉換器**：可以修正語意；代價是每次演進要寫並測一條轉換路徑。",
+   "recommendation": "版本＋轉換器，且**讀到比自己新的版本一律拒讀**而非盡力解析。盡力解析會把「欄位語意改了」讀成「欄位遺失」，於是舊程式對新資料算出看似合理的錯帳——這是最難發現的一類錯，因為它不會拋例外。協定層的成熟處方同樣是明確拒絕而非猜測【查證 https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle 】。",
+   "reverses_when": "當記錄的保存期很短（例如 30 天）且部署是單一版本齊步升級時，只增不改的成本更低——因為根本不會有跨版本讀取發生。保存期越長、部署越異質，版本＋轉換器越划算。"
+  },
+  {
+   "question": "transcript 的保存期：永久保存還是設期限並可刪？",
+   "options": "**永久**：稽核完整、事後可回溯；代價是 transcript 含大量明文（使用者資料、內部程式碼、有時是秘密的殘影），保存越久外洩面越大，且沒有刪除能力就無法回應法遵要求。**設期限並可刪**：合規；代價是要設計部分刪除（payload 可 tombstone、終態與帳保留），且雜湊鏈上要保留 seq 與 hash 讓鏈不斷。",
+   "recommendation": "設期限並可刪，而且**資料模型從第一天就要支援部分刪除**。刪除引擎可以晚做，schema 不能晚設計——把 payload 與終態、帳混在同一個不可分割的記錄裡，之後就只剩「全刪或全留」兩個選項，兩個都是錯的。",
+   "reverses_when": "當 harness 只跑在完全隔離的內部環境、處理的資料本身無敏感性、且法遵不適用時，永久保存更簡單。但要注意這個判斷會隨資料流入而失效，而失效時已經來不及改 schema。"
+  }
+ ],
+ "open_questions": [
+  "**牆鐘上限該歸哪一層沒有共識**：一派把它推給容器／叢集層（絕對死線 + grace 期），一派要求 harness 自己有 watchdog。分歧的實質是「誰擁有時間」——推給下層的代價是 harness 無法在逾時前做任何收尾（flush transcript、寫終態），自己做的代價是監督者本身掛掉時死線就失效。目前沒有兩全的作法，只有「兩層都做、以外層為兜底」這個折衷。",
+  "**客戶端估算與供應商帳單的對帳沒有標準方法**：業界明確劃了紅線說估算不能拿來計費，但沒有給出對帳程序（用量事件如何對應到帳單行、延遲多久、差異多大算異常）。每家都在自己重造，而且沒人公佈自己的偏差率。",
+  "**agent 與 tool orchestration 的 telemetry 語意約定仍是暫定**：GenAI 的 chat/embedding 屬性已穩定，但 agent 側的 span 屬性還在變動中。這意味著今天寫的 telemetry 匯出程式碼在約定穩定後很可能要重寫，而現在沒有辦法知道要重寫多少。",
+  "**prompt injection 沒有可靠的偵測方法，也沒有人聲稱有**：這一層的共識立場是「擋不掉被說服，只能縮小被說服後做得到的事」。但這個立場有一個沒被回答的問題：當任務本質上就需要廣泛的網路存取與檔案寫入時，「縮小」的下限在哪？現有處方（白名單、閘、憑證邊界外）在那種任務上全部退化。",
+  "**多 agent 的級聯失敗隔離模型沒有對應物**：程序監督領域有成熟的策略詞彙（一個掛了只重啟它、重啟它之後的所有兄弟、或全部重啟），但 agent 樹上「子執行者失敗時父該怎麼辦」還沒有對應的策略分類，多數實作只有「回傳錯誤給父，父自己看著辦」。同樣地，重啟強度上限在 agent 樹上該怎麼定義（重啟一個子執行者算不算重啟）也沒有共識。【查證：程序側的既有詞彙見 https://www.erlang.org/doc/system/sup_princ.html 】",
+  "**「一次執行」在長駐 session 下的邊界定義有分歧**：ephemeral 部署下 run 與 session 一比一，長駐部署下一個 session 含多個 run。分歧在於帳、上限、終態該掛在哪一邊——掛 session 上則單次任務無法封頂，掛 run 上則跨 run 的累積成本沒人管。目前多數實作是兩邊各有一半，而那個縫隙就是超支發生的地方。",
+  "**重入語意兩派都在生產**：整步重放（要求前置副作用冪等）與精確續跑（要求細粒度執行位置）各有主流實作，且兩者對開發者的隱性要求完全不同。沒有人能說哪一派在 agent 場景更對，因為兩者都還沒有大規模的事故資料公開。",
+  "**記憶／檢索汙染的檢測沒有處方**：威脅本身已被明確歸類（攻擊者汙染檢索資料以操縱後續行為，處方是「classify and validate data before it enters agent memory」）【查證 https://www.paloaltonetworks.com/blog/cloud-security/owasp-agentic-ai-security/ 】，但「validate」具體是什麼、誰來判斷、判錯的代價由誰承擔，沒有可實作的定義。這一格目前只有口號。",
+  "**run record 沒有跨供應商的標準格式**：終態列舉、帳欄位、事件型別各家一套，於是換 harness 等於歷史紀錄作廢，也無法做跨系統的成本或可靠度比較。這件事在容器與 CI 領域早已標準化，在這裡還沒開始。",
+  "**人工審批的疲勞閾值沒有量測方法**：大家都同意審批疲勞會讓 HITL 失效，但沒有人能說「每小時幾次就開始無腦按准」。沒有這個數字，「哪些操作該進審批清單」就只能靠直覺，而直覺會系統性偏向多放一點進去。"
+ ]
+}

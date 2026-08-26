@@ -1,0 +1,645 @@
+{
+ "discipline": "工作流圖工程（Graph Engineering／Workflow Orchestration／durable execution）",
+ "one_sentence": "把「一組有依賴、有副作用的作業目前推進到哪裡、接下來該做什麼」從程序記憶體搬進持久狀態，使任何執行者（程序、機器、人、LLM）的死亡只丟掉快取而不丟掉進度，並在此基礎上對副作用次數、資源配額、金錢與資料流向施加可稽核的上限。",
+ "core_invariant": "【崩潰重建等價】任一時刻把所有執行中程序 SIGKILL、清空記憶體與本機暫存後重啟，系統必須能「只靠持久狀態」（journal＋run/task 紀錄＋effect ledger＋lease 紀錄）重建出尚未完成的工作集合；繼續執行到終態後，所有外部副作用埠的呼叫集合與「不曾崩潰的那次執行」完全相同（每個冪等鍵恰好一次），且沒有任何 task 停在非終態。【怎麼寫成會 fail 的測試】crash-point 列舉：拿一條含 N 個 journal append 點與 M 個副作用點的樣本流程，對每個點各跑一次「此點之後立刻 os._exit(137)」，重啟執行器跑到收斂，斷言 (a) run 終態與基準一致、(b) 每個假副作用埠的計數恰為 1、(c) 查詢所有 task 狀態皆屬終態集合，共 N+M 個 case 全過才算綠。【負控，三條各自獨立轉紅】(i) 把「先寫日誌再套用」倒成「先套用再寫日誌」→ 至少一個注入點出現狀態與日誌不一致或副作用計數 2，(a)(b) 轉紅；(ii) 把 attempt 計數與租約到期時刻改成只存在記憶體 → 重啟後任務永遠停在 running，(c) 轉紅並逾時；(iii) 把 effect ledger 的去重寫入移出「與副作用同一交易」→ 在副作用之後、去重寫入之前注入的那個 case 計數變 2，(b) 轉紅。【推論；WAL／repeating history 依據 https://sookocheff.com/post/databases/write-ahead-logging/】",
+ "glossary": [
+  {
+   "term": "exactly-once",
+   "means": "必須先問「哪一層的 once」。exactly-once delivery（傳輸恰好一次）在網路可失敗的前提下是不可能結果；exactly-once processing／effect（可觀測副作用恰好一次）可達成，但只能由接收端以冪等鍵＋去重表達成，且去重寫入必須與副作用同一交易。【查證 https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/, https://event-driven.io/en/outbox_inbox_patterns_and_delivery_guarantees_explained/】",
+   "often_confused_with": "被當成佇列的功能而非接收端的責任。任何宣稱「佇列給我 exactly-once」的設計，實際拿到的是 at-least-once delivery ＋ 廠商在消費端替你做的去重；跨出那個消費端（例如副作用是打第三方 API）保證即失效。"
+  },
+  {
+   "term": "冪等（idempotent）",
+   "means": "同一操作以同一冪等鍵重複執行，可觀測的外部效果與執行一次相同。實作上＝「唯一索引寫入衝突即代表已做過，直接回既有結果」。",
+   "often_confused_with": "(1) 去重（deduplication）：去重是機制，冪等是性質——去重表壞掉時冪等就消失，所以不能宣稱「這個函式天生冪等」而不談去重儲存的可用性；(2) 交換律（commutative）：交換律容許執行多次但順序無關（例如集合加入），冪等要求次數無關，兩者不互相蘊含；(3) 純函式（pure）：純函式無副作用，冪等是有副作用但次數收斂。"
+  },
+  {
+   "term": "retry／replay／redrive／backfill／rerun",
+   "means": "retry＝同一 task 的下一次 attempt，attempt 計數遞增，冪等鍵通常不變；replay＝拿既有 journal 重新推導狀態或重跑流程程式碼，已完成的外部呼叫從日誌取回結果而不重打；redrive＝把隔離區（死信）內的項目重新投遞回正常流程；backfill＝為「過去本該觸發但沒觸發」的時間窗補開新的 run；rerun/restart＝以相同輸入開一個全新的 run，新 run_id、新冪等鍵。【查證 https://docs.temporal.io/schedule】",
+   "often_confused_with": "這五個詞在同一份設計文件裡互相冒名是本學科最貴的術語事故：把 backfill 當 retry 實作會讓補跑共用冪等鍵而被去重吞掉（看起來補了，其實什麼都沒發生）；把 replay 當 retry 實作會讓已完成的外部呼叫真的再打一次。"
+  },
+  {
+   "term": "lease／lock／fencing token／visibility timeout",
+   "means": "lease＝有到期時刻的所有權宣稱，到期即自動失效，不需要持有者配合；lock＝互斥宣稱，通常需要顯式釋放；visibility timeout＝佇列側的 lease 別名（訊息在此期間對其他消費者不可見）；fencing token＝單調遞增的編號，由下游儲存拒絕小於已見最大值的寫入，才真正阻止舊持有者。【查證 https://www.task-queues.com/queue-fundamentals-architecture/visibility-timeout-deep-dive/, https://hackernoon.com/the-fencing-gap-why-your-distributed-lock-isnt-safe-and-how-to-fix-it】",
+   "often_confused_with": "lease 常被當成正確性機制。它不是——它是效能機制（減少重複工作），GC 停頓／網路分割／「處理完但 ack 前崩潰」都能製造兩個持有者同時寫。正確性只能來自冪等或 fencing token。把「租約層互斥」與「執行層互斥」寫成同一條不變式，是最常見的假保證。"
+  },
+  {
+   "term": "cancel／terminate／pause／abort",
+   "means": "cancel＝合作式停止，訊號送達後流程仍有機會跑清理與補償，並會留下「已請求取消」事件；terminate＝強制停止，流程程式碼不再獲得執行機會，清理不會跑；pause＝停止產生新動作但既有動作不受影響（常見於排程層）；abort 通常是 terminate 的同義詞但無標準。【查證 https://docs.temporal.io/develop/java/workflows/cancellation, https://docs.temporal.io/schedule】",
+   "often_confused_with": "UI 上同一顆「停止」按鈕背後可能是 cancel 也可能是 terminate，後果差一個補償鏈。另一個陷阱：取消要傳到「正在執行的長工作」需要該工作主動回報心跳，沒有心跳通道的節點只能等它自己結束或被 terminate【查證 https://docs.temporal.io/develop/java/workflows/cancellation】。"
+  },
+  {
+   "term": "checkpoint／snapshot／compaction／continue-as-new",
+   "means": "checkpoint＝記錄「到此為止的效果已全部落到主狀態」，使恢復只需重播其後的日誌；snapshot＝完整狀態的具體化副本；compaction＝丟棄被後續事件蓋掉的舊事件；continue-as-new＝以當前狀態為輸入開一個新的執行實例來截斷歷史、維持邏輯連續性。【查證 https://www.postgresql.org/docs/current/runtime-config-wal.html, https://docs.temporal.io/workflow-execution】",
+   "often_confused_with": "continue-as-new 常被當成 checkpoint 的等價物，但它換了 run_id：任何以 run_id 推導的冪等鍵、任何以 run_id 查詢的稽核鏈都會在此斷開，必須顯式串接。"
+  },
+  {
+   "term": "backpressure／rate limit／admission control／throttling／circuit breaking",
+   "means": "backpressure＝下游把「我滿了」的訊號往上游傳，使上游減速；rate limit＝對單位時間請求數設上限；admission control＝在入口決定「這件工作收不收」；throttling＝對已收下的工作降速；circuit breaking＝偵測到下游持續失敗時快速拒絕，不再發出請求。",
+   "often_confused_with": "加權公平佇列是 work-conserving 的，只決定「誰先」不決定「總量」，因此它不是背壓，也不提供硬吞吐保證【查證 https://docs.temporal.io/design-patterns/fairness】。把公平排程當成過載保護是常見誤用；反向誤用是把 circuit breaker 當背壓，結果上游繼續全速產生工作，只是全部被快速拒絕。"
+  },
+  {
+   "term": "fail-closed／fail-open（≠ fail-safe）",
+   "means": "fail-closed＝該子系統無法判斷時，拒絕放行（停止推進）；fail-open＝無法判斷時放行（繼續推進）。方向必須逐子系統宣告，不能整層一致。",
+   "often_confused_with": "fail-safe 是結果詞（哪個方向比較安全）而非機制詞，兩個相反的設計都能自稱 fail-safe。實務上必須寫成「X 不可用時，Y 動作被拒絕／被放行」的可測句子，否則這條規範無法檢查。"
+  },
+  {
+   "term": "soundness（工作流健全性）",
+   "means": "特指 workflow net 的三條性質：option to complete（任何可達狀態都還能走到終態）、proper completion（結束時無殘留 token）、no dead transitions（每個轉移至少在某個可達狀態能發火）。【查證 https://mlwiki.org/index.php/Workflow_Soundness】",
+   "often_confused_with": "被當成「流程正確」。soundness 完全不談語意正確性——一個把錢退給錯的人的流程可以是 sound 的。另外它在加入資料相關守衛與取消區域後常從可判定退化為不可判定【查證 https://www.pads.rwth-aachen.de/global/show_document.asp?id=aaaaaaaaababkwh】。"
+  },
+  {
+   "term": "determinism（決定性）",
+   "means": "同一份輸入與同一份日誌，重跑流程程式碼產生完全相同的命令序列。它是「重播」這個機制的前置條件，約束對象是流程控制流，不是節點內的計算。【查證 https://docs.temporal.io/workflow-execution】",
+   "often_confused_with": "與 reproducibility（結果可重現）混用。節點內呼叫外部 API 拿到不同結果不破壞 determinism（結果被記進日誌）；流程層直接讀時鐘或亂數才破壞。也常與 purity 混用：流程可以有副作用，只要副作用經由受控 API 且被記錄。"
+  },
+  {
+   "term": "orchestration／choreography",
+   "means": "orchestration＝有一處持有完整流程定義並主動推進；choreography＝各參與者只對事件反應，流程不存在於任何單一位置。【查證 https://microservices.io/patterns/data/saga.html】",
+   "often_confused_with": "被當成「集中 vs 分散式部署」的問題。實際差別在「流程知識放在哪」，與部署拓撲正交——集中部署的系統也可能是 choreography（流程知識散在各 handler 的 if）。"
+  },
+  {
+   "term": "版本（workflow version／worker version／graph revision）",
+   "means": "至少三個不同的東西：graph revision＝圖定義本身的內容雜湊；workflow version＝綁定在 run 上、建立時決定且此後唯讀的標籤，決定流程走哪條分支；worker version＝執行者程式碼的標籤，決定它願意接哪些 run。【查證 https://docs.azure.cn/en-us/durable-task/common/durable-orchestration-versioning】",
+   "often_confused_with": "三者被壓成一個「版本號」時，rolling deploy 期間會出現「新程式碼接到舊 run」而重播分歧。文件指出版本比對需要明確策略（None／Strict／CurrentOrOlder），且不匹配時要選擇「退回佇列」或「直接失敗」——這是兩種相反的可用性後果【查證 同上】。"
+  },
+  {
+   "term": "signal／query／trigger／event",
+   "means": "signal＝從外部送進「正在執行的 run」並改變其狀態的訊息（必須進日誌）；query＝只讀取 run 狀態、不得改變狀態、不進日誌；trigger＝造成新 run 誕生的來源（時間、外部事件、人）；event＝journal 內的一筆不可變紀錄。",
+   "often_confused_with": "把 query 實作成會寫狀態（例如順手更新 last_seen），會讓「查看」變成重播分歧來源。把 signal 實作成不進日誌，則崩潰後該次外部輸入永久消失且無跡可循。"
+  },
+  {
+   "term": "catchup window／overlap policy／jitter（排程三件套）",
+   "means": "catchup window＝服務中斷恢復後，多久以前的「本該觸發」還要補；overlap policy＝新一輪到期而上一輪還在跑時的處置（跳過／緩衝一筆／緩衝全部／取消舊的／終止舊的／全部併行）；jitter＝在觸發時刻上加一個有界隨機偏移以打散同時觸發。【查證 https://docs.temporal.io/schedule】",
+   "often_confused_with": "「漏跑」被當成單一故障。實際上長時間執行＋跳過策略造成的漏跑，與服務中斷造成的漏跑，症狀相同但原因相反，必須在觸發紀錄裡記成不同的結構化原因，否則事後無法分辨【查證 同上】。"
+  },
+  {
+   "term": "taint／provenance（污染標記／來源標記）",
+   "means": "對每一份流入圖的資料標記它的信任來源（使用者輸入、第三方 API、模型輸出、內部可信儲存），並讓標記隨資料流動傳播，作為「這條執行路徑能否同時持有私密資料與對外通道」的判斷依據。【查證 https://www.agentpatternscatalog.org/patterns/lethal-trifecta-threat-model/】",
+   "often_confused_with": "與輸入驗證（schema 檢查）混用。schema 檢查回答「格式對不對」，taint 回答「這份內容是誰寫的、因此能授予什麼能力」。當節點是不可靠執行者時，內容中的文字與指令無法可靠區分，過濾與提示都不可靠，只能在編排層以結構隔離【查證 同上】。"
+  },
+  {
+   "term": "終態（terminal state）",
+   "means": "再也不會發生任何狀態轉移的狀態，且該狀態必須攜帶結構化原因碼。集合必須被顯式列舉（成功／業務失敗／取消／逾時／預算耗盡／需人工／驗證器可疑）。",
+   "often_confused_with": "與「完成（done）」混用。「需人工」是終態（自動機不再推進）但不是完成；把它算成完成會讓 run 收尾統計看起來很健康。反向錯誤：把「已隔離」當成非終態而讓它繼續被派工，形成死信循環。"
+  }
+ ],
+ "subsystems": [
+  {
+   "name": "GraphRegistry（圖庫）",
+   "responsibility": "以內容定址的不可變版本保存圖定義，並回答「這個 run 綁的是哪一版」。",
+   "inputs": "圖定義位元組（節點、邊、守衛、終態集合、每節點的重試策略與補償宣告）、發布請求、名稱→頻道的解析請求",
+   "outputs": "GraphVersionId（內容雜湊）、解析後的 Graph 物件（節點集合、鄰接表、守衛、終態集合）",
+   "owns_state": "持久。graph_version 表為 append-only、內容定址、永不覆寫；另有一張可變的「頻道→版本」指標表（如 stable/canary）。",
+   "on_failure": "fail-closed。取不到圖版本時，既不准開新 run，也不准推進既有 run——推進需要知道後繼節點集合，任何猜測（例如「找不到就當終態」）會把流程靜默截斷成 improper completion。代價是圖庫是全域單點，必須可本機快取（快取以內容雜湊為鍵，因此永不失效）。",
+   "interface": "publish(bytes) -> GraphVersionId（同內容回同一 id，重複發布為 no-op）；get(GraphVersionId) -> Graph（快取安全）；resolve(name, channel) -> GraphVersionId；pin(run_id, GraphVersionId)。【不變式】同一 GraphVersionId 永遠回傳同一份 bytes。【測】發布 A 得 id1，修改一個 byte 再發布得 id2，斷言 id1≠id2 且 get(id1) 仍為 A。【負控】把 id 從內容雜湊改成自增序號並允許同 id 覆寫，測轉紅。",
+   "why_separate": "版本是 run 的外鍵，也是重播回歸測試與版本閘唯一的錨點。若執行器就地從檔案系統載入圖，「在途 run 的圖被人改掉」在結構上無法被偵測，此後所有版本保證都是空話。【推論；版本綁定於實例建立時且此後唯讀，見 https://docs.azure.cn/en-us/durable-task/common/durable-orchestration-versioning】",
+   "depends_on": []
+  },
+  {
+   "name": "GraphLinter（結構驗證器）",
+   "responsibility": "在發布時證明圖的結構性質成立，把「只在稀有路徑上發作」的錯誤提前到部署前。",
+   "inputs": "Graph 物件",
+   "outputs": "違規清單（規則碼、涉及的節點／邊、可讀說明），或通過",
+   "owns_state": "無狀態。",
+   "on_failure": "分裂：對「發布」fail-closed（驗證器自己壞掉時拒絕發布新版本，因為放行等於零保證）；對「已發布圖的執行」fail-open（linter 掛掉不得阻止既有 run 推進——那些圖在發布時已驗過，把驗證器塞進熱路徑會讓一個純分析元件變成可用性單點）。",
+   "interface": "lint(Graph) -> list[Violation]，規則至少含 DANGLING_EDGE／ORPHAN_NODE／NON_TERMINAL_SINK／DEAD_GUARD／UNBOUNDED_LOOP_WITHOUT_BUDGET。【不變式一】targets ⊆ nodes ∪ terminal_states。【測】圖裡加一條指向不存在節點的邊，斷言回傳含 DANGLING_EDGE。【負控】註解掉 target 檢查那行，測轉紅。【不變式二】option to complete：從終態集合沿反向邊 BFS 能著色全部節點。【測】加入一個有入無出且不在終態集的節點，斷言 NON_TERMINAL_SINK。【負控】把反向 BFS 改成從起點正向 BFS，該 case 漏抓、測轉紅。節點全集必須以直接列舉節點型別取得，不得由邊集合推導（否則零入零出的孤立節點結構性隱形）。【查證 https://mlwiki.org/index.php/Workflow_Soundness】",
+   "why_separate": "它是唯一一個純函式、零 I/O、可在 CI 內毫秒級跑完全部規則的元件；併進執行器就必須連著資料庫才能測，規則增修的成本立刻上升一個數量級。它的改變理由（新增結構規則）與執行器的改變理由（狀態機語意）完全無關。",
+   "depends_on": [
+    "GraphRegistry"
+   ]
+  },
+  {
+   "name": "RunStore（執行狀態庫）",
+   "responsibility": "持有 run 與 task 的當前狀態，並且是全系統唯一允許進行狀態轉移的地方。",
+   "inputs": "轉移請求（entity_id、from_state、to_state、原因碼、期望的 lease epoch）",
+   "outputs": "轉移結果（成功／衝突＋當前實際狀態），以及狀態查詢",
+   "owns_state": "持久，且是崩潰後必須存活的核心。run(id, graph_version, state, reason_code, budget_ref, created_at, terminal_at)；task(id, run_id, node_id, state, attempt, lease_owner, lease_expires_at, lease_epoch, input_digest, output_ref)。",
+   "on_failure": "fail-closed，整層停。它是唯一真相，讀不到就不知道該做什麼；退化成「先讀後寫」或「先假設成功稍後補寫」等於放棄互斥地基。",
+   "interface": "transition(entity_id, expect_state, to_state, reason, expect_epoch=None) -> Ok|Conflict(actual_state)，必須以單一條件更新（CAS on state[+epoch]）實作；get(entity_id)；list_ready(limit, filters)。【不變式】同一 task 的併發 transition 中，成功者恰為 1。【測】N=64 個執行緒／程序對同一 ready task 呼叫 transition(ready→running)，斷言 Ok 次數＝1、其餘皆為 Conflict（不是例外）。【負控】把 CAS 改成 SELECT 後 UPDATE，在真實資料庫下 Ok 次數 >1，測轉紅。",
+   "why_separate": "它的改變理由是狀態機語意（增加一個狀態、改一條合法轉移）；一旦有第二處程式碼可以直接 UPDATE 狀態欄位，「這個 run 現在在哪」就沒有任何地方能權威回答，且所有互斥保證同時失效。集中 transition 也是唯一能機械檢查「非法轉移不存在」的位置。",
+   "depends_on": []
+  },
+  {
+   "name": "Journal（持久日誌）",
+   "responsibility": "以 append-only 序列記錄每一次狀態轉移與每一次外部呼叫的「已排程／已完成＋結果指標」，並在改動套用到主狀態之前先落地。",
+   "inputs": "事件（run_id, seq, type, payload_ref, causation_id, correlation_id, ts）",
+   "outputs": "事件序列讀取、序號、checkpoint 標記",
+   "owns_state": "持久。append-only，seq 在 run 內單調遞增且無洞；另存 checkpoint 標記與壓縮後的基準狀態。",
+   "on_failure": "fail-closed：日誌寫入失敗時，禁止執行任何副作用、禁止套用狀態轉移。理由是崩潰後的重建完全依賴它；容許「副作用先做、日誌稍後補」等於把整層核心不變式關掉。",
+   "interface": "append(run_id, event) -> seq（同一 (run_id, seq) 唯一索引）；read(run_id, from_seq) -> Iterator[Event]；checkpoint(run_id, seq, state_ref)；truncate_before(run_id, seq)。【不變式】日誌先於套用：對任一事件 e，若主狀態呈現 e 的效果，則 e 必已在日誌中。【測】在「套用」路徑上注入 crash，重啟後掃描主狀態與日誌比對，斷言不存在「狀態有效果但日誌無事件」的 entity。【負控】把 append 與 apply 的順序對調，該掃描找到不一致、測轉紅。【查證 https://sookocheff.com/post/databases/write-ahead-logging/】",
+   "why_separate": "它的改變理由是耐久性與壓縮策略（fsync 政策、保留期、checkpoint 頻率），與狀態機語意正交。與 RunStore 分開的第二個理由是查詢型態完全不同：RunStore 是點查與條件更新，Journal 是順序讀寫與大量歸檔，硬綁在一起會讓兩者的儲存選型互相綁架。",
+   "depends_on": [
+    "PayloadVault"
+   ]
+  },
+  {
+   "name": "PayloadVault（載荷保管庫）",
+   "responsibility": "保管所有事件與任務的內容本體（輸入、輸出、錯誤詳情），讓日誌只存指標，並承載加密、大小上限與抹除。",
+   "inputs": "位元組內容＋分類標籤（是否含個資、保留期、所屬主體 subject_id）",
+   "outputs": "payload_ref（內容雜湊＋主體鍵 id）、讀取結果或明確的 GONE 狀態",
+   "owns_state": "持久。payload_blob(ref, ciphertext, codec, subject_id, class, expires_at)；金鑰不存在此處，只存主體→金鑰 id 的對映。",
+   "on_failure": "寫入失敗 fail-closed（內容存不下就不得宣稱該步完成）。讀取失敗必須區分兩種並都 fail-closed：暫時不可用→重試；已被抹除（金鑰銷毀或過期）→回傳明確的 GONE，禁止以 null／空字串續跑。以 null 續跑會讓一個資料治理動作靜默變成商業邏輯錯誤。【查證 crypto-shredding 後讀取路徑會把被隔離欄位清成 null，且多實例下有快取尚未過期的傳播窗口 https://granit-fx.dev/dotnet/compliance/crypto-shredding/】",
+   "interface": "put(bytes, class, subject_id) -> PayloadRef；get(ref) -> bytes | Gone；shred(subject_id) -> ShredReceipt（銷毀該主體金鑰，密文留存）；set_retention(class, ttl)。編解碼以可插拔 codec 介面表達：encode(list[bytes]) -> list[bytes] / decode(...)，且解碼金鑰只存在於呼叫端與工作者控制的主機上，編排核心不持有【查證 https://docs.temporal.io/production-deployment/data-encryption】。【不變式】抹除後不可讀且不可重播成明文。【測】寫入含標記字串的 payload、shred 該 subject、斷言 get 回 Gone 且原始位元組不出現在任何儲存掃描結果中。【負控】把 shred 實作成只設 deleted=true 旗標而不銷毀金鑰，掃描仍能還原明文，測轉紅。",
+   "why_separate": "保留期與加密政策的變更頻率、法遵驅動來源，與日誌結構完全不同；更關鍵的是抹除必須能「刪內容而不刪骨架」——因果鏈、時序與稽核事件必須留下，個資必須消失。若內容直接內嵌在 append-only 日誌裡，這兩個要求在結構上互斥【查證 https://granit-fx.dev/dotnet/compliance/crypto-shredding/】。第二個理由是大載荷卸載：日誌條目有大小上限，把 100MB 的中間結果塞進事件會讓整個歷史不可讀。",
+   "depends_on": []
+  },
+  {
+   "name": "EffectLedger（效果帳）",
+   "responsibility": "以冪等鍵保證每個具副作用的操作在可觀測層面恰好發生一次，並保存其結果供重播取回。",
+   "inputs": "冪等鍵（由 run_id、node_id、attempt_class、輸入指紋穩定推導）、待執行的操作、操作結果",
+   "outputs": "FirstRun（本次應真的執行）或 AlreadyDone(result)",
+   "owns_state": "持久。effect(key UNIQUE, state, result_ref, created_at, completed_at)；key 上的唯一索引就是整個機制。",
+   "on_failure": "fail-closed，且是本層最不容妥協的一處：去重表不可用時禁止執行任何有副作用的操作，寧可整條流程停住。fail-open 的代價是重複扣款／重複發信，而這類損害不可回滾。",
+   "interface": "begin(key) -> FirstRun(token) | AlreadyDone(result_ref) | InFlight(owner)；commit(token, result_ref) —— begin 的插入與副作用的效果必須落在同一個交易內，若副作用在外部系統則改用「先寫 intent、後寫 outcome」兩階段並由 Reaper 收斂 InFlight。【不變式】同鍵操作的外部副作用計數恰為 1。【測】以假副作用埠（計數器）並行執行同鍵操作 N=50 次，斷言計數＝1 且每個呼叫端拿到一致結果。【負控一】拿掉唯一索引，計數變 50，轉紅。【負控二】把 begin 的寫入移到副作用之後，在兩者之間注入 crash，計數變 2，轉紅。【查證 https://event-driven.io/en/outbox_inbox_patterns_and_delivery_guarantees_explained/】",
+   "why_separate": "它是把不可能的 exactly-once delivery 換成可達成的 effectively-once 的唯一承接點，且它的改變理由是「冪等鍵怎麼推導」——這條規則會隨業務演進（例如把 attempt 納入或排除鍵），與派工、租約、重試的邏輯無關。混進 LeaseBroker 會製造最危險的假保證：以為租約已經保證了互斥。",
+   "depends_on": [
+    "Journal"
+   ]
+  },
+  {
+   "name": "OutboxRelay（出境中繼）",
+   "responsibility": "讓「狀態改變」與「下游被通知」成為同一個原子動作，消除 dual-write。",
+   "inputs": "與業務交易同批寫入的出境紀錄（目的地、內容 ref、順序鍵）",
+   "outputs": "投遞到佇列／下游的訊息、投遞狀態標記",
+   "owns_state": "持久。outbox(id, aggregate_id, seq, destination, payload_ref, sent_at NULL)；relay 自己的游標。",
+   "on_failure": "對重複 fail-open（relay 在送出後、標記前崩潰會重送，這是設計接受的代價，由 EffectLedger 承接）；對遺失 fail-closed（禁止在確認送出前標記 sent，也禁止在無法投遞時丟棄紀錄——只能堆積並告警）。【查證 https://microservices.io/patterns/data/transactional-outbox.html】",
+   "interface": "enqueue(tx, destination, payload_ref, order_key)（必須接受呼叫端的交易控制代碼）；relay_once() -> DispatchedCount（可並行多份執行，以 CAS 於 sent_at 互斥）。【不變式】交易提交 ⇔ 訊息最終送出。【測】在 relay 前注入 crash，重啟後斷言訊息仍被送出；在交易回滾的路徑上斷言訊息從未送出。【負控】把 enqueue 改成交易外的獨立寫入，回滾路徑會出現「已送出但狀態未變」，測轉紅。",
+   "why_separate": "它的改變理由是傳輸層（換 broker、換投遞協定），而它必須與業務資料同庫同交易——這兩個約束同時存在，正是它必須是一個薄薄的獨立元件而不是散在各處呼叫的原因。",
+   "depends_on": [
+    "RunStore",
+    "Journal"
+   ]
+  },
+  {
+   "name": "LeaseBroker（租約經紀）",
+   "responsibility": "把任務的執行權以有到期時刻的租約發給某個工作者，並在到期後自動失效。",
+   "inputs": "claim 請求（worker_id、批次大小）、heartbeat、ack／nack",
+   "outputs": "租約（task、lease_epoch、到期時刻）、續租結果、釋放結果",
+   "owns_state": "持久（欄位寄生在 task 上）：lease_owner、lease_expires_at、lease_epoch（單調遞增，即 fencing token）。",
+   "on_failure": "fail-closed：claim 失敗即不執行。特別要求：heartbeat 續租失敗時工作者必須主動中止當前工作而非繼續跑完——繼續跑等於製造第二持有者。",
+   "interface": "claim(worker_id, n) -> list[Lease]（單一條件更新完成 ready→running＋owner＋到期＋epoch+1＋attempt+1）；heartbeat(lease) -> Ok|Lost；ack(lease, outcome) -> Ok|Lost（條件含 owner 與 epoch 相符）；nack(lease, reason) -> Ok。租約長度＝批次大小 × p99 單筆執行時間 × 安全係數，因為批次領取時所有筆的到期時鐘在領取當下同時起算【查證 https://www.task-queues.com/queue-fundamentals-architecture/visibility-timeout-deep-dive/】；settle（ack/nack）必須在接收通道仍開啟時完成，關閉後再 settle 會鎖遺失、重送、投遞次數累加並誤入死信【查證 https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-dead-letter-queues】。【不變式】任一時刻至多一個有效租約持有者。【測】見 RunStore 的併發 claim 測；另加一測：claim 後把時鐘推過到期、由另一 worker claim 成功，斷言舊 lease 的 ack 回 Lost 而非 Ok。【負控】把 ack 的條件更新中的 epoch 比對拿掉，舊 lease 的 ack 成功覆寫新持有者的結果，測轉紅。",
+   "why_separate": "它的改變理由是「存活性的近似方式」（租約長度推導、是否加 fencing、心跳頻率）。與 Dispatcher 分開的理由是職責方向相反：Dispatcher 決定「該派哪一件」（政策，可以錯而只損失效率），LeaseBroker 決定「誰有權執行」（機制，錯了損失正確性）。兩者混寫會讓政策調整意外改動互斥語意。",
+   "depends_on": [
+    "RunStore"
+   ]
+  },
+  {
+   "name": "Dispatcher（入場與派工閘）",
+   "responsibility": "決定新工作收不收、以及既有 ready 工作依什麼順序被交給租約層。",
+   "inputs": "入列請求、ready 任務集合、政策（佇列深度上限、併發上限、公平鍵與權重、aging 門檻）、來自 Meter 與 FailurePolicy 的否決訊號",
+   "outputs": "接受／拒絕（帶結構化原因）、下一批候選任務",
+   "owns_state": "少量持久（每個公平鍵的虛擬佇列游標與 aging 起算時刻可重建，但重啟後從零起算會造成一次不公平），建議持久化游標。",
+   "on_failure": "fail-closed：無法判定是否超限時拒絕入場、暫停派工。理由是 fail-open 會同時關掉併發上限與預算保護，而這兩者的損害是不可回滾的成本；代價是控制面故障＝全系統停擺，必須由 Selfwatch 以外部可見的方式喊出來，否則會變成靜默死機。",
+   "interface": "admit(request) -> Accepted(task_id) | Rejected(reason)（reason 為列舉：QUEUE_FULL／CONCURRENCY_CAP／BUDGET_EXHAUSTED／BREAKER_OPEN）；next_batch(worker_caps, n) -> list[TaskId]；set_policy(policy)。排程為兩級：跨公平鍵用加權輪詢保證每鍵持續有進展，鍵內用優先序堆，另加 aging【查證 https://docs.temporal.io/design-patterns/fairness】。必須在契約中明講已知限制：權重在排程時刻評估，改權重不重排既有 backlog；鍵數極大時精度下降；這是軟隔離而非硬吞吐保證【查證 同上】。【不變式一】背壓有界：深度上限 M 下連續入列 M+5 筆，斷言深度＝M、後 5 筆各得可辨識的 Rejected、且 5 筆拒絕都有紀錄（拒絕也是事件，不得靜默丟棄）。【負控】拿掉深度檢查，深度變 M+5 且無拒絕紀錄，轉紅。【不變式二】無飢餓：持續注入高優先序流量下，一個低優先序任務在 aging 門檻的固定倍數內被派出。【負控】把排程改成純優先序堆，該測逾時轉紅。",
+   "why_separate": "它的改變理由是資源政策，而政策是最常被調整的東西（幾乎每次容量事故後都會動）。把它獨立成純函式式的政策元件（輸入 ready 集合與計數，輸出候選清單），才可能用合成負載對排程行為做確定性測試，而不必啟動整個執行環境。",
+   "depends_on": [
+    "RunStore",
+    "LeaseBroker",
+    "Meter",
+    "FailurePolicy"
+   ]
+  },
+  {
+   "name": "Meter（計量器）",
+   "responsibility": "累計每個 run／每個租戶的資源消耗（時間、呼叫次數、token、金額），並回答「還剩多少額度」。",
+   "inputs": "消耗事件（cost_unit、amount、attribution：run_id/tenant/node）、預算設定",
+   "outputs": "當前累計值、剩餘額度、超限判定",
+   "owns_state": "持久。budget(scope_id, limit, spent, window)；cost_event 明細（可較短保留期）。",
+   "on_failure": "混合且必須分開宣告：明細寫入失敗 fail-open（記帳可事後補，阻塞執行代價過高）；預算判定不可用時 fail-closed（拒絕派工）。理由是預算是硬上限，判定不可用時放行等於無上限；已知代價是「預算＝執行互斥」——超限判定與扣帳若要精確就必須序列化，這是硬上限的明文代價。【推論；成本失控的量級見 https://tianpan.co/blog/2026-04-10-retry-storm-problem-agentic-systems 所述「失控重試迴圈可產生相對單次成功執行 200x 的 token 成本」】",
+   "interface": "charge(scope_id, unit, amount, attribution) -> Spent；check(scope_id, projected) -> Allow | Deny(remaining)；reserve(scope_id, amount) -> Reservation（用於「先扣後做」以避免併發超賣）；release(Reservation)。【不變式】預算硬上限不被超越：設上限 L，注入每次消耗 c 的任務直到拒絕，斷言 spent ≤ L 且第一筆被拒的請求有 BUDGET_EXHAUSTED 原因碼。【負控】把 reserve 改成「先執行後 charge」，在併發下 spent > L，測轉紅。",
+   "why_separate": "它在關鍵路徑上且方向是 fail-closed，而 Observatory 在旁路且是 fail-open——這兩種相反的失敗方向不能住在同一個元件裡。第二個理由：成本歸因需要跨 run／跨租戶聚合的資料模型，與逐 run 的稽核鏈查詢型態不同。",
+   "depends_on": [
+    "Journal"
+   ]
+  },
+  {
+   "name": "TriggerClock（觸發器與時鐘）",
+   "responsibility": "把時間與外部事件轉成 run 的誕生，並以明文語意處理「該觸發而沒觸發」與「上一輪還沒跑完」。",
+   "inputs": "排程規格（週期、時區、jitter 上限、catchup window、overlap policy）、外部事件、手動觸發、定時器到期",
+   "outputs": "新 run 的建立請求、定時器到期事件、觸發紀錄（含結構化的「未觸發原因」）",
+   "owns_state": "持久。schedule(id, spec, paused, last_fired_at, next_due_at, overlap_policy, catchup_window)；timer(run_id, fire_at, seq)。",
+   "on_failure": "預設 fail-closed 於重複（寧漏不重：先以 CAS 標記該時間窗已處理再觸發，崩潰於執行前即漏跑，漏跑項必須留下 MISSED 紀錄待人工）。理由是重複觸發會複製整條流程的副作用，而漏跑是可補的——但這是有代價的選擇，且方向會反轉（見決策點）。【查證 catchup window 與 overlap policy 的語意 https://docs.temporal.io/schedule】",
+   "interface": "upsert_schedule(spec)；pause(id, note)/resume(id)；tick(now) -> list[FireDecision]，FireDecision 必含 fired | skipped(reason)，reason 為列舉：OVERLAP_SKIP／OUTSIDE_CATCHUP_WINDOW／PAUSED／ADMISSION_REJECTED；backfill(id, from, to, overlap_policy) -> list[RunId]（必為新 run_id 與新冪等鍵，不得複用原窗的鍵）。觸發時刻加入 [0, jitter_max] 的有界隨機偏移【查證 同上】。【不變式】同一排程的同一時間窗至多產生一個 run。【測】以可控時鐘讓兩個 TriggerClock 實例同時處理同一個到期窗，斷言 run 數＝1。【負控】把「先 CAS 標記窗口再建立 run」改成「建立 run 後標記」，並在兩者間注入 crash，重跑後出現兩個 run，測轉紅。",
+   "why_separate": "時間語意是獨立的一組錯誤來源（時區、閏秒、DST、長時間停機後的補跑洪峰），且它是唯一需要「可控時鐘」注入才能測的子系統。原研究把觸發完全略過，導致「服務中斷三天後恢復，瞬間補開三天份的 run 把系統壓垮」這個常見事故沒有任何機制承接。",
+   "depends_on": [
+    "RunStore",
+    "Dispatcher"
+   ]
+  },
+  {
+   "name": "FailurePolicy（失敗分類與重試預算）",
+   "responsibility": "把一次失敗分類，並回答「要不要再試、什麼時候試、還准不准試」。",
+   "inputs": "失敗（例外型別、下游狀態碼、是否逾時、是否為驗證失敗）、task 的 attempt 與歷史、下游健康統計",
+   "outputs": "Decision：RetryAfter(delay) | Terminal(reason) | BreakerOpen(retry_at)",
+   "owns_state": "持久 attempt 與上次失敗原因（寄生於 task）；旁路的下游健康統計與重試預算計數（可短暫易失，重啟後保守起算）。",
+   "on_failure": "fail-closed：無法分類的錯誤一律視為不可重試並送隔離區。理由是相反的預設（未知＝可重試）正是重試風暴的成因——重試在多層之間相乘，三層各三次即單一失敗放大成 27 次請求【查證 https://www.systemoverflow.com/learn/resilience-patterns/circuit-breaker/circuit-breaker-failure-modes-flapping-stampedes-and-retry-amplification】。",
+   "interface": "classify(error) -> RETRYABLE_TRANSIENT | RETRYABLE_MODIFIED | TERMINAL_PERMANENT | TERMINAL_BUDGET（四類分法取自 https://tianpan.co/blog/2026-04-10-retry-storm-problem-agentic-systems）；decide(task, error) -> Decision；record_outcome(downstream_id, ok)。退避為指數＋抖動；重試預算以 token bucket 限制重試流量佔正常流量的比例（該來源建議 10–20%，超出即快速失敗）；斷路器需 hysteresis（連續多次成功才關閉）與抖動冷卻以避免 flapping 與半開狀態的群衝【查證 上述 systemoverflow】。【不變式】重試有界：注入永遠失敗的任務、上限 K=3，斷言執行次數恰為 3、任務進隔離區、之後 10 輪派工都不再派到它。【負控】把 attempt 計數改成只存記憶體（worker 重啟歸零），執行次數變無界，測逾時轉紅。",
+   "why_separate": "錯誤分類法是最會隨接觸的下游而增生的規則集（每接一個新外部系統就多幾條），而重試機制本身幾乎不變。把分類表與退避機制綁在執行器裡，會讓每次新增一條分類規則都要動執行核心。",
+   "depends_on": [
+    "RunStore"
+   ]
+  },
+  {
+   "name": "Quarantine（隔離區）",
+   "responsibility": "承接不再自動重試的任務，保存結構化的處置原因，並提供受控的重新投遞。",
+   "inputs": "隔離請求（task、結構化原因碼、例外型別＋堆疊、最後一次輸入 ref）",
+   "outputs": "隔離項目查詢、redrive 結果、隔離深度與新增率指標",
+   "owns_state": "持久。quarantine(id, task_ref, reason_code, detail_ref, quarantined_at, redriven_at, redrive_of)。",
+   "on_failure": "fail-closed：寫不進隔離區就不得把任務標成已處置。這是防止工作靜默消失的最後一道——一旦允許「隔離失敗就丟掉」，整層的「工作不會不見」保證就不成立。",
+   "interface": "quarantine(task, reason_code, detail) -> QuarantineId，reason_code 為列舉且不得為自由文字（至少：HANDLER_EXCEPTION／DELIVERY_COUNT_EXCEEDED／MESSAGE_EXPIRED／NEVER_SETTLED／VALIDATION_REJECTED／BUDGET_EXHAUSTED／DEPENDENCY_TERMINAL）；list(filter)；redrive(ids, require_cause_ack=True) -> list[TaskId]（必須以新 attempt_class 產生新冪等鍵，且預設要求呼叫端聲明已修因）。原因必須結構化的實證理由：處理器有 bug、訊息過期、從未被 settle，三者在投遞計數上呈現相同症狀，事後無法分辨【查證 https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-dead-letter-queues】。【不變式】隔離不吞工作：注入 K+1 次失敗，斷言恰有一筆隔離紀錄且能被 list 查到、且其 reason_code 屬列舉。【負控】把 reason 改成自由文字並在測試中斷言可依原因分組統計，統計崩掉，轉紅。",
+   "why_separate": "它的改變理由是人工介入流程（誰看、怎麼分類、redrive 的核准要求），是唯一以人為主要使用者的儲存；併進佇列會讓「查詢與修改後重投」這種互動式需求污染熱路徑的資料結構。",
+   "depends_on": [
+    "RunStore",
+    "Journal"
+   ]
+  },
+  {
+   "name": "Reaper（復原掃描器）",
+   "responsibility": "週期性尋找不會自己好起來的殘骸並把它們推回可推進狀態。",
+   "inputs": "當前時鐘、RunStore 掃描結果",
+   "outputs": "回收動作（running→ready＋attempt+1）、孤兒 run 標記、InFlight 效果的收斂裁決",
+   "owns_state": "無狀態（游標可易失）；但必須寫出自己的執行心跳供 Selfwatch 監看。",
+   "on_failure": "fail-open（它停了不影響正確性，只讓恢復停滯）——但必須 fail-loud：停跳超過 N 個週期要能被外部偵測。理由是它是唯一的跨機恢復保底，靜默停止會表現成「系統看起來很安靜」，那是最難察覺的故障形狀。",
+   "interface": "scan_once(now) -> ReapReport，至少三類：(a) lease_expires_at < now 且 state=running → 釋放；(b) state=running 但 owner 不在活躍工作者註冊表 → 釋放；(c) run 的所有 task 皆終態但 run 未收尾，或 run 非終態但無任何 ready/running → 標記 NEEDS_ATTENTION。必須可並行多份執行且每個回收動作以 CAS 保護。【不變式】租約過期必被回收：以可控時鐘 claim 一個任務、不發心跳、推過到期、跑一次 scan_once，斷言狀態回 ready、attempt 已加一、另一 worker 能成功 claim。【負控】停用掃描器（或把到期比較改成恆假），任務永遠停在 running，測轉紅。存活偵測必須採保守近似（租約到期）而非「程序還在嗎」——非同步環境下無法可靠偵測崩潰【查證 https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/】。",
+   "why_separate": "它必須與工作者的生命週期完全無關才能發揮作用（工作者自己死了就不可能自己回收自己）。這條「與被監督者無共同故障域」的要求，本身就要求它是獨立部署單元，不能是執行器裡的一個背景執行緒。",
+   "depends_on": [
+    "RunStore",
+    "EffectLedger"
+   ]
+  },
+  {
+   "name": "Canceller（取消傳播器）",
+   "responsibility": "把「停止」意圖從 run 傳到所有仍在活動的子節點、定時器與子 run，並保證 run 只在無殘留活動時進入終態。",
+   "inputs": "取消請求（run_id、原因、是否強制）、節點的心跳通道",
+   "outputs": "取消訊號投遞、強制終止指令、收尾許可",
+   "owns_state": "無狀態（意圖記於 journal 與 task.state=cancel_requested）。",
+   "on_failure": "對傳播延遲 fail-open（訊號晚到可接受）；對收尾 fail-closed（run 不得在仍有非終態 task 時進入終態）。理由是「宣告結束但分支還在跑」會持續消耗預算與產生副作用，且事後無人再看那個 run。",
+   "interface": "request_cancel(run_id, reason)；propagate(run_id) -> list[Delivered|Undeliverable]；force_terminate(task_id)（記錄與 cancel 不同的事件型別）；can_finalize(run_id) -> bool。合作式取消要抵達執行中的長工作，需要該工作有心跳通道並在其上回讀取消旗標，沒有心跳的節點無法被取消、只能等待或強制終止【查證 https://docs.temporal.io/develop/java/workflows/cancellation】；需保護的清理段必須能宣告為不可取消區域，否則清理本身會被取消打斷。【不變式】終態收斂（proper completion）：跑一個含平行分支的流程、取消其中一支，斷言 run 收尾後所有 task 狀態皆屬終態集合。【負控】把取消實作成只標記 run 而不傳播到子節點，殘留 running 子節點，測轉紅。【查證 https://mlwiki.org/index.php/Workflow_Soundness】",
+   "why_separate": "取消與補償常被合成一個「中止處理器」，但兩者的觸發來源與正確性條件不同：取消可以不補償（單純停止），補償可以不由取消觸發（失敗即補償）。合併會產生一個帶大量條件分支的元件，且無法分別測試「訊號有沒有到」與「逆向動作有沒有做」。",
+   "depends_on": [
+    "RunStore",
+    "Journal"
+   ]
+  },
+  {
+   "name": "Compensator（補償執行器）",
+   "responsibility": "在需要語意回滾時，以相反順序執行已完成步驟所宣告的補償動作。",
+   "inputs": "run 的已完成步驟清單（來自 journal，不是呼叫堆疊）、觸發原因",
+   "outputs": "補償執行結果、補償失敗的獨立終態",
+   "owns_state": "持久（補償進度指標寄生於 run），因為補償本身必須能跨程序重啟續跑。",
+   "on_failure": "fail-closed：補償失敗在有限重試後必須進入獨立終態 COMPENSATION_FAILED（需人工），不得靜默放棄，也不得無限重試。理由是半套用狀態是最貴的狀態，靜默放棄會讓它永遠留在系統裡而無人知曉。",
+   "interface": "compensate(run_id, upto_step) -> CompensationReport；每個補償動作透過 EffectLedger 取得自己的冪等鍵（compensation:{run_id}:{step_id}）。【不變式】補償完整性：三步 saga 於第三步失敗，斷言補償呼叫序列＝[c2, c1]、各恰一次；再對 c2 注入一次失敗＋重試，斷言其效果仍只發生一次。【負控】把已完成步驟清單改成只靠呼叫堆疊或只記最後一步，在跨程序重啟情境下補償序列缺項，測轉紅。必須在契約中明講缺乏隔離性：並行的 saga 會看到中間狀態，對策（語意鎖、交換律更新、重讀校驗、版本檔）屬領域層而非本層【查證 https://microservices.io/patterns/data/saga.html】。",
+   "why_separate": "見 Canceller 的說明；此外它的改變理由是「補償動作的宣告方式」（如何把補償綁到節點上），與訊號傳播機制無關。",
+   "depends_on": [
+    "Journal",
+    "EffectLedger"
+   ]
+  },
+  {
+   "name": "Replayer & VersionGate（重播器與版本閘）",
+   "responsibility": "從既有 journal 重建執行進度，並確保重建它的程式碼版本與該 journal 相容。",
+   "inputs": "journal、run 綁定的 workflow version、工作者的版本與比對策略",
+   "outputs": "重建後的執行前緣（下一步要做什麼）、相容／不相容裁決、命令序列雜湊",
+   "owns_state": "無狀態（重建結果不落地，或只以 checkpoint 形式落地）。",
+   "on_failure": "fail-closed：版本不相容時把 run 退回佇列等待相容的工作者，而不是強行執行。可選的第二策略是立即以失敗終止該 run；兩者在文件中都是明列選項，差別是「可用性 vs 快速止血」【查證 https://docs.azure.cn/en-us/durable-task/common/durable-orchestration-versioning】。",
+   "interface": "replay(journal, code_version) -> Frontier | Divergence(at_seq, expected, actual)；version_of(run) -> Version（建立時決定，此後唯讀）；accepts(worker_version, run_version, strategy) -> bool，strategy ∈ {NONE, STRICT, CURRENT_OR_OLDER}；未設版本的舊 run 其 version 為 null，null 之間相等且小於任何已定義版本——這個 null 分支必須顯式處理【查證 同上】。【不變式一】重播決定性：同一 journal 以同一程式碼重播兩次，命令序列雜湊相同。【測】錄一份 journal，重播兩次比對雜湊。【負控】在流程層直接呼叫 wall-clock 或亂數（不經受控 API），兩次雜湊不同，轉紅。【不變式二】歷史相容性閘：以版本庫中保存的既有 journal 樣本重播當前程式碼，任何分歧即擋下部署。【負控】把流程中兩個外部呼叫的順序對調，舊樣本重播必須轉紅。【查證 https://docs.temporal.io/workflow-execution】",
+   "why_separate": "它是唯一能在「部署之前」把重播分歧變成 CI 失敗的元件，因此必須能離線執行（只吃 journal 與程式碼，不碰資料庫與網路）。這個可離線性一旦失去，版本回歸測試就退化成上線後觀察。",
+   "depends_on": [
+    "Journal",
+    "GraphRegistry"
+   ]
+  },
+  {
+   "name": "HumanGate（人工節點與交接）",
+   "responsibility": "把「等一個人做決定」表達成一個有持久狀態、有期限、有升級路徑的節點。",
+   "inputs": "人工任務定義（候選處理人／角色、期限、升級對象、預設決策）、人的回應（核准／退回／編輯後續行）",
+   "outputs": "決策結果與決策者身分、逾時後的處置、完整的人工動作稽核紀錄",
+   "owns_state": "持久。human_task(id, run_id, node_id, assignee, candidates, due_at, escalate_to, escalated_at, decision, decided_by, decided_at, decision_token)。",
+   "on_failure": "預設 fail-closed（逾時＝拒絕或升級，不是自動核准），但這必須是每個節點可設定的欄位而非全域常數：確實存在應該逾時放行的場景（低風險的通知型核准），業界工具兩種預設都有【查證 逾時後可用預設值續行 https://www.astronomer.io/docs/learn/airflow-human-in-the-loop；逾時應路由給主管升級 https://docs.oracle.com/en/middleware/soa-suite/soa/12.2.1.3/develop/getting-started-human-workflow.html】。",
+   "interface": "open(run_id, node_id, spec) -> HumanTaskId；decide(human_task_id, decision_token, decision, actor) -> Ok|AlreadyDecided|Expired（decision_token 使同一決策連結被點兩次只生效一次，即人工決策也走冪等鍵）；tick(now) -> list[Escalated|TimedOut]。等待必須以持久定時器表達而非常駐執行緒【推論；「決策被持久等待、SLA 自動強制、升級不需要外部排程器」見 https://temporal.io/blog/human-in-the-loop-approvals】。【不變式】人工決策冪等且可稽核：對同一 decision_token 併發送出兩次相反決策，斷言恰一次生效、另一次得 AlreadyDecided，且 journal 中留有兩次嘗試的紀錄與 actor。【負控】拿掉 decision_token 的唯一性檢查，兩次都生效且最終狀態取決於競態，測轉紅。",
+   "why_separate": "它引入一種其他子系統都沒有的時間尺度（天到週）與一種其他子系統都沒有的失敗模式（人離職、人放假、人重複點擊）。原研究完全略過這一格，結果是「等待人」只能被實作成一個超長逾時的普通節點——升級、改派、期限延長全部無處可放。",
+   "depends_on": [
+    "RunStore",
+    "TriggerClock",
+    "Journal"
+   ]
+  },
+  {
+   "name": "TaintBroker（信任標記與能力經紀）",
+   "responsibility": "追蹤每份資料的信任來源並沿邊傳播，據此決定某個節點執行時能拿到哪些能力（憑證、對外通道、私密資料讀取權）。",
+   "inputs": "資料的來源標記、節點宣告所需的能力、圖上的邊（資料流向）",
+   "outputs": "授予的能力集合（縮小過的憑證）或明確拒絕，以及被拒的結構化原因",
+   "owns_state": "持久標記（payload 的 trust_label 與傳播歷史）；能力本身不落地（短期憑證於執行時鑄造）。",
+   "on_failure": "fail-closed，無條件：無法判定某份資料的來源等級時，拒絕在同一執行路徑上同時授予「私密資料讀取」與「對外通道」。理由是這三者（私密資料存取、不可信內容攝入、對外通道）同時出現於單一執行路徑即構成可被內容操控的結構性漏洞，而以過濾或提示來緩解被明確認定為不可靠，只能在編排層以結構隔離【查證 https://www.agentpatternscatalog.org/patterns/lethal-trifecta-threat-model/, https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/】。",
+   "interface": "label(payload_ref, source_kind) -> TrustLabel（source_kind ∈ {TRUSTED_INTERNAL, USER_INPUT, THIRD_PARTY_FETCH, UNRELIABLE_EXECUTOR_OUTPUT}）；propagate(inputs) -> TrustLabel（取最低信任）；authorize(node, inputs, requested_caps) -> Grant | Denied(rule)；rule 至少含 TRIFECTA_ON_ONE_PATH。另需把不可靠執行者的輸出預設標成不可信，並在授予對外通道前要求它先經過一個只回傳固定選項集合的裁決節點（以固定動作目錄取代自由生成）【查證 同上】。【不變式】三合一不共存：建構一條路徑同時含「讀私密儲存」與「對外 HTTP」且輸入標記為 THIRD_PARTY_FETCH，斷言 authorize 回 Denied(TRIFECTA_ON_ONE_PATH)。【負控】把 propagate 從「取最低信任」改成「取呼叫端宣告值」，該路徑被放行，測轉紅。",
+   "why_separate": "原研究把安全整個推到邊界外（「屬於安全層」），這是錯的分界：只有圖層同時知道資料從哪裡來、要流到哪個節點、那個節點會被授予什麼能力。授權決策需要的三個事實只有這一層齊備，推給執行者等於推給最不可信的那一方。它必須獨立於 Dispatcher，因為它的改變理由是信任模型（新增一種資料來源、新增一條隔離規則），與資源政策無關。",
+   "depends_on": [
+    "GraphRegistry",
+    "PayloadVault"
+   ]
+  },
+  {
+   "name": "Observatory（觀測站與因果索引）",
+   "responsibility": "讓「這個 run 現在卡在哪、為什麼、代價多少」以及「這一週哪類失敗最多」能在不讀程式碼、不進資料庫的情況下被回答。",
+   "inputs": "journal 事件流、Meter 明細、Quarantine 明細、租約與重試統計",
+   "outputs": "因果鏈視圖、卡住偵測告警、分布指標、分散式追蹤 span",
+   "owns_state": "衍生狀態（索引與物化視圖），可完全重建。",
+   "on_failure": "fail-open，且必須是本層唯一明確 fail-open 的核心元件：觀測不可用不得阻塞任何執行。代價是事故當下可能沒有視野，因此關鍵告警的判定依據要能回退到一手來源（journal、程序表）。",
+   "interface": "trace_context 必須被序列化進每一則出境訊息本體（traceparent／tracestate），因為長生命的串流連線無法逐訊息附掛 metadata，不這麼做會讓編排 span、節點 span 與使用者程式碼 span 在後端呈現為三堆互不相連的碎片【查證 https://opentelemetry.io/blog/2026/dapr-workflow-observability/】；重播期間必須抑制 span 產生（is_replaying 判斷），否則每次重播都會產生重複且誤導的追蹤資料，且不得讓自訂 span 跨越持久等待【查證 https://oneuptime.com/blog/post/2026-02-06-instrument-azure-durable-functions-opentelemetry/view】。查詢面：causal_chain(run_id) -> Tree；stuck(threshold) -> list[Task]；dlq_by_reason(window)；delivery_count_histogram()。健康判讀門檻：投遞次數分布應以 1 為主且尾巴很薄，「已領取數 − 已刪除數」的持續缺口代表在重送，p99 執行時間對租約長度比值超過約六成即告警【查證 https://www.task-queues.com/queue-fundamentals-architecture/visibility-timeout-deep-dive/】；重試比率健康值低於 0.1，持續高於 0.3 應告警【查證 https://tianpan.co/blog/2026-04-10-retry-storm-problem-agentic-systems】。【不變式】重播不製造重複 span：對同一 run 重播三次，斷言 span 數不變。【負控】拿掉 is_replaying 抑制，span 數變三倍，測轉紅。",
+   "why_separate": "它是唯一應該 fail-open 的核心元件，且它的資料是衍生的、可重建的——這兩點使它的儲存選型、保留期、可用性要求都與主狀態完全不同。把它併進 RunStore 會讓一個可丟棄的索引繼承主狀態的耐久性成本。",
+   "depends_on": [
+    "Journal",
+    "Meter",
+    "Quarantine"
+   ]
+  },
+  {
+   "name": "Selfwatch（控制面自我健康）",
+   "responsibility": "回答「這一層自己壞掉了嗎」，並在控制面失效時讓失效本身可見、可界定。",
+   "inputs": "各子系統的心跳與進度水位（Reaper 掃描週期、Relay 游標落後量、Dispatcher 是否處於全拒模式、Meter 判定是否可用）",
+   "outputs": "降級狀態宣告、外部 dead-man 訊號、拒絕原因的統一回報",
+   "owns_state": "少量持久（各元件最後心跳時刻與降級旗標）。",
+   "on_failure": "對行動 fail-open（它自己不確定時不得主動停掉別人——一個誤判的自我保護會製造它想避免的故障）；對沉默 fail-closed（它自己停止必須被外部偵測到）。實作上這代表 Selfwatch 必須向一個外部的 dead-man switch 定期報到，而不是只在內部寫日誌。",
+   "interface": "heartbeat(component_id, progress_watermark)；health() -> {component: OK|LAGGING(by)|SILENT(since)}；degraded_mode() -> {ACCEPTING, DRAINING, HALTED} 三態，且此狀態必須出現在 Dispatcher 每一個 Rejected 的原因碼裡，讓呼叫端能分辨「你的請求有問題」與「我現在不收」。【不變式】控制面停擺可見：殺掉 Reaper，斷言在 N 個週期內 health() 回 SILENT 且外部 dead-man 未被續期。【負控】把心跳改成由 Reaper 自己的執行緒在啟動時寫一次而非每輪寫，殺掉它之後 health() 仍回 OK，測轉紅。另一條【不變式】拒絕可歸因：在 HALTED 狀態下 admit() 的每一個拒絕都帶 CONTROL_PLANE_HALTED 而非泛用錯誤。【負控】把降級原因併成單一 SERVICE_UNAVAILABLE，斷言「拒絕原因可分組統計」的測試轉紅。",
+   "why_separate": "「這一層自己壞掉時怎麼辦」不能由這一層的任何業務元件回答，因為它們與故障共用故障域。它必須是最小、依賴最少、失敗方向與所有人相反的一個元件——這組要求與任何其他子系統都不相容，所以它只能獨立存在。原研究完全沒有這一格，導致 Dispatcher 的 fail-closed 選擇會直接表現成「系統靜默停止且沒有人知道為什麼」。",
+   "depends_on": [
+    "RunStore"
+   ]
+  }
+ ],
+ "internal_flow": [
+  {
+   "step": "1. 發布與封版",
+   "subsystem": "GraphRegistry → GraphLinter",
+   "decision": "lint 通過才允許發布；任一 DANGLING_EDGE／NON_TERMINAL_SINK／DEAD_GUARD 即拒絕。通過後圖定義被內容雜湊封版，此後不可變。分岔：發布到 canary 頻道還是 stable——這決定接下來哪些新 run 綁到它。【查證 https://mlwiki.org/index.php/Workflow_Soundness】"
+  },
+  {
+   "step": "2. 誕生",
+   "subsystem": "TriggerClock",
+   "decision": "判斷這個時間窗是否已處理過（CAS 標記）、是否在 catchup window 內、上一輪是否仍在跑（overlap policy）。三個否決各自產生不同的 skipped reason 並被記錄——漏跑必須留痕，否則事後無法分辨「跳過」與「壞掉」。【查證 https://docs.temporal.io/schedule】"
+  },
+  {
+   "step": "3. 入場",
+   "subsystem": "Dispatcher → Meter",
+   "decision": "佇列深度、租戶併發上限、預算餘額三道閘。任一不過即回傳帶結構化原因的 Rejected（不得靜默丟棄，也不得無界緩衝）。此處也附加降級模式判定：控制面 HALTED 時所有入場都帶 CONTROL_PLANE_HALTED。"
+  },
+  {
+   "step": "4. 實例化（第一個 dual-write 發作點）",
+   "subsystem": "RunStore + Journal + OutboxRelay",
+   "decision": "同一交易內寫入 run 紀錄、第一筆 journal 事件、以及首批就緒節點的 outbox 紀錄。分岔點在於「就緒節點的計算」是在交易內同步做還是交由後續 relay 做——前者延長交易，後者需要額外一次 CAS 保護。【查證 https://microservices.io/patterns/data/transactional-outbox.html】"
+  },
+  {
+   "step": "5. 授權判定",
+   "subsystem": "TaintBroker",
+   "decision": "依節點輸入的信任標記（取最低）與節點宣告的能力需求，決定授予哪些憑證與通道。若同一執行路徑同時需要私密資料與對外通道且輸入含不可信來源，拒絕並要求改走隔離節點。這一步必須在派工之前，因為它可能改變「這件工作能不能做」。【查證 https://www.agentpatternscatalog.org/patterns/lethal-trifecta-threat-model/】"
+  },
+  {
+   "step": "6. 排序",
+   "subsystem": "Dispatcher",
+   "decision": "跨公平鍵加權輪詢選出候選鍵，鍵內取優先序最高者，等待超過 aging 門檻者提權。此處只決定順序，不決定執行權。【查證 https://docs.temporal.io/design-patterns/fairness】"
+  },
+  {
+   "step": "7. 取得執行權",
+   "subsystem": "LeaseBroker",
+   "decision": "單一條件更新完成 ready→running、寫入 owner、到期時刻、epoch+1、attempt+1。CAS 失敗＝別人先拿到，直接放棄這一筆，不重試同一筆（重試同一筆是活鎖來源）。"
+  },
+  {
+   "step": "8. 版本裁決",
+   "subsystem": "Replayer & VersionGate",
+   "decision": "比對 run 綁定的版本與本工作者版本。不相容時依策略退回佇列（保可用性）或直接失敗（保快速止血）。相容則從 journal 重建執行前緣：已完成的外部呼叫從日誌取結果，不重打。【查證 https://docs.azure.cn/en-us/durable-task/common/durable-orchestration-versioning】"
+  },
+  {
+   "step": "9. 副作用閘",
+   "subsystem": "EffectLedger",
+   "decision": "以冪等鍵 begin：AlreadyDone 即直接取回結果跳過執行；InFlight 表示有另一個持有者或前次崩潰於中途，交由 Reaper 裁決；FirstRun 才真的執行。這是「只做一次」的唯一落點。"
+  },
+  {
+   "step": "10. 執行與續租",
+   "subsystem": "LeaseBroker + Meter + Observatory",
+   "decision": "長工作以心跳續租，續租失敗（Lost）必須主動中止而非跑完；每次資源消耗即時 charge；追蹤上下文序列化進出境訊息本體，重播期間抑制 span。分岔：心跳通道同時承載取消旗標的回讀。【查證 https://opentelemetry.io/blog/2026/dapr-workflow-observability/】"
+  },
+  {
+   "step": "11. 落帳",
+   "subsystem": "Journal → RunStore → OutboxRelay",
+   "decision": "先寫 journal（含輸出的 payload_ref），再以條件更新（owner 與 epoch 相符）把節點轉終態，同一交易內把後繼節點寫進 outbox。settle 必須在接收通道仍開啟時完成。【查證 https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-dead-letter-queues】"
+  },
+  {
+   "step": "12. 失敗裁決",
+   "subsystem": "FailurePolicy",
+   "decision": "四分類：暫時性可重試→退避後回 ready；參數需修改可重試→以新輸入產生新冪等鍵；永久性→終態；預算耗盡→終態。無法分類一律走永久性。並檢查重試預算與斷路器是否已開。【查證 https://tianpan.co/blog/2026-04-10-retry-storm-problem-agentic-systems】"
+  },
+  {
+   "step": "13. 處置",
+   "subsystem": "Quarantine / Compensator / HumanGate",
+   "decision": "超過 attempt 上限→隔離並附結構化原因；需語意回滾→依 journal 的已完成步驟清單反序補償；需人判斷→開人工任務、設期限與升級對象，以持久定時器等待。三條路徑互斥，由節點的宣告決定走哪條。"
+  },
+  {
+   "step": "14. 收尾",
+   "subsystem": "Canceller → RunStore",
+   "decision": "can_finalize 檢查：仍有非終態 task 即不得收尾（proper completion）。取消路徑必須先把訊號傳到所有子節點與定時器並確認送達或強制終止。終態種類決定後續路由（通知、下游觸發、人工佇列）。"
+  },
+  {
+   "step": "15. 巡場",
+   "subsystem": "Reaper + Selfwatch",
+   "decision": "與上述流程完全非同步：回收過期租約、回收持有者消失的 running、標記 run 層孤兒、裁決 InFlight 的效果。同時各元件回報心跳與進度水位；水位落後或心跳消失即宣告降級並向外部 dead-man 停止續期。"
+  },
+  {
+   "step": "16. 歷史治理",
+   "subsystem": "Journal + PayloadVault",
+   "decision": "日誌超過門檻→checkpoint 壓縮，或以當前狀態開新實例截斷歷史（此時 run_id 改變，所有以 run_id 推導的冪等鍵與稽核鏈必須顯式串接）；載荷依分類到期或依主體被抹除，抹除後讀取回 GONE 而非 null。【查證 https://docs.temporal.io/workflow-execution, https://granit-fx.dev/dotnet/compliance/crypto-shredding/】"
+  }
+ ],
+ "data_model": [
+  {
+   "entity": "graph_version",
+   "fields": "id (content hash, PK)、bytes、parsed_digest、published_at、published_by、channel_pointers 另表",
+   "durability": "必須存活。它是所有在途 run 的外鍵；丟了就無法知道任一 run 的後繼節點集合，等於全部 run 變成孤兒。【推論】",
+   "lifecycle": "發布時建立，永不變更、永不刪除（只允許把頻道指標移走）。刪除的前提是「沒有任何 run 或 journal 引用它」，實務上等於永久保留。"
+  },
+  {
+   "entity": "run",
+   "fields": "id、graph_version_id、workflow_version（建立時決定、此後唯讀）、state、reason_code、parent_run_id、budget_scope、trigger_ref、created_at、terminal_at",
+   "durability": "必須存活。這是「這件事推進到哪」的錨點。",
+   "lifecycle": "由 TriggerClock 或外部呼叫建立；state 只經 RunStore.transition 變更；進入終態後不可再轉移；保留期到期後可歸檔（歸檔必須保留 id 與終態，只丟明細）。"
+  },
+  {
+   "entity": "task",
+   "fields": "id、run_id、node_id、state、attempt、lease_owner、lease_expires_at、lease_epoch、input_digest、output_ref、last_error_class、cancel_requested",
+   "durability": "必須存活，且 attempt 與 lease_* 尤其必須——這兩組欄位若只存在記憶體，工作者重啟後任務永遠停在 running 且重試無界，核心不變式的兩條負控都是打在這裡。",
+   "lifecycle": "隨 run 建立或動態擴張時建立；每次 claim 遞增 attempt 與 epoch；終態後除稽核外不再變更。"
+  },
+  {
+   "entity": "journal_event",
+   "fields": "(run_id, seq) PK、type、payload_ref、causation_id、correlation_id、actor、ts",
+   "durability": "必須存活。它是崩潰重建的唯一依據，也是因果鏈與補償清單的唯一來源（補償清單不得依賴呼叫堆疊）。",
+   "lifecycle": "append-only；checkpoint 之後允許 truncate_before；歸檔後仍需可讀（重播回歸測試會用到生產樣本）。"
+  },
+  {
+   "entity": "payload_blob",
+   "fields": "ref (content hash) PK、ciphertext、codec、subject_id、class、expires_at",
+   "durability": "必須存活，但存活期限與 journal 不同：這是唯一允許「內容消失而骨架留下」的實體，用以同時滿足不可變稽核與資料抹除。【查證 https://granit-fx.dev/dotnet/compliance/crypto-shredding/】",
+   "lifecycle": "寫入即不可變；依 class 的 TTL 或依 subject 的抹除請求（銷毀金鑰）失效；失效後讀取必須回明確的 GONE。"
+  },
+  {
+   "entity": "effect_entry",
+   "fields": "idempotency_key UNIQUE、state (intent|done)、result_ref、owner、created_at、completed_at",
+   "durability": "必須存活，且保留期必須長於「任何可能的重送窗口」——去重表比訊息早過期，等於在那個時間點之後靜默失去冪等。這是最容易被保留期政策誤殺的一張表。【推論】",
+   "lifecycle": "begin 時以唯一索引插入 intent；副作用完成後轉 done 並寫 result_ref；停留在 intent 過久者由 Reaper 裁決（重試或標為可疑）。"
+  },
+  {
+   "entity": "outbox_record",
+   "fields": "id、aggregate_id、seq、destination、payload_ref、created_at、sent_at NULL",
+   "durability": "必須存活。未送出的紀錄若隨程序消失，就出現「狀態變了但下游永遠不知道」，且無任何痕跡可查。【查證 https://microservices.io/patterns/data/transactional-outbox.html】",
+   "lifecycle": "與業務交易同批寫入；relay 送出後以 CAS 標記 sent_at；已送出且超過保留期者可刪。"
+  },
+  {
+   "entity": "schedule",
+   "fields": "id、spec (週期/時區/jitter_max)、paused、pause_note、overlap_policy、catchup_window、last_fired_window、next_due_at",
+   "durability": "必須存活。last_fired_window 是「同一時間窗至多一個 run」的唯一依據；丟了會在重啟後重複觸發整批。",
+   "lifecycle": "由人建立與修改；tick 時更新 last_fired_window（CAS）；暫停不影響已啟動的 run。【查證 https://docs.temporal.io/schedule】"
+  },
+  {
+   "entity": "quarantine_entry",
+   "fields": "id、task_ref、reason_code (列舉)、detail_ref、quarantined_at、redriven_at、redrive_of",
+   "durability": "必須存活。它是「工作不會不見」的最後帳；同時它的深度與新增率是唯一能發現「整類工作三個月前就全掛了」的訊號。",
+   "lifecycle": "隔離時建立；redrive 產生新 task 並回填 redrive_of 形成鏈（不得原地重置，否則失去重投次數）；只有在原因已修且經人確認後才允許清理。"
+  },
+  {
+   "entity": "human_task",
+   "fields": "id、run_id、node_id、assignee、candidates、due_at、escalate_to、escalated_at、decision、decided_by、decided_at、decision_token UNIQUE",
+   "durability": "必須存活，且時間尺度最長（天到週）。它跨越的部署次數最多，因此對 schema 演進的相容性要求最高。",
+   "lifecycle": "節點進入等待時建立；逾時觸發升級（改 assignee，保留原始 assignee 供稽核）；decide 以 token 冪等地寫入決策；決策後不可變。"
+  },
+  {
+   "entity": "budget_ledger",
+   "fields": "scope_id、window、limit、spent、reserved、updated_at（＋較短保留期的 cost_event 明細）",
+   "durability": "必須存活。餘額若可在重啟後歸零，硬上限就形同虛設；反之明細可容忍短期遺失。",
+   "lifecycle": "依 window 滾動重置；reserve/release 成對；達上限即由 Dispatcher 拒絕並產生 BUDGET_EXHAUSTED。"
+  },
+  {
+   "entity": "trust_label",
+   "fields": "payload_ref、source_kind、derived_from[]、lowest_trust、labeled_at",
+   "durability": "必須存活。標記若在跨程序邊界遺失，重建時只能保守地把資料當不可信（安全但會卡住流程）或樂觀當可信（不安全）——兩種都是壞結果，所以它必須跟著 payload 一起持久。【查證 https://www.agentpatternscatalog.org/patterns/lethal-trifecta-threat-model/】",
+   "lifecycle": "資料進入系統時建立；每次經過節點以「取最低信任」推導新標記並記錄 derived_from；隨 payload 一同抹除。"
+  }
+ ],
+ "minimal_core": [
+  "RunStore（狀態機＋條件更新）——沒有它就沒有互斥地基，其餘一切都是先讀後寫的競態",
+  "Journal（先寫日誌後套用）——沒有它崩潰後無法知道剛才在做什麼，核心不變式直接不成立",
+  "EffectLedger（冪等鍵去重，且與副作用同交易）——傳輸層的 at-least-once 是不可消除的底線，只做一次只能在這裡承接",
+  "LeaseBroker（租約＋epoch）——沒有它「工作者死了工作要回來」無從表達",
+  "Reaper（獨立於工作者的復原掃描）——租約到期只是資料上該回收，沒有人去掃就只是一筆過期的列",
+  "Dispatcher 的上限閘（佇列深度＋併發上限，可先不含公平性）——無界佇列把快速失敗換成緩慢死亡，這道閘不能延後",
+  "FailurePolicy 的 attempt 上限＋Quarantine（可先只有一種原因碼）——沒有它一則壞輸入就能把系統餓死",
+  "GraphLinter 的兩條規則（懸空邊、非終態 sink）——這兩條的實作成本是幾十行，卻擋掉最貴的一類「只在稀有路徑發作」的錯誤"
+ ],
+ "optional": [
+  "GraphLinter 的死轉移與符號求解——只有在守衛語法被限縮成有限離散條件時才值得做；守衛允許任意運算式時此規則無法機械化，此時該做的是限縮語法而不是加驗證器【查證 https://www.pads.rwth-aachen.de/global/show_document.asp?id=aaaaaaaaababkwh】",
+  "決定性重播（Replayer 全套）——當流程控制流複雜到宣告式圖會爆炸、或需要天／月級的等待時才值得；只有數個步驟的線性流程用顯式 checkpoint 更便宜，且不必背決定性硬約束",
+  "公平鍵與加權輪詢——單租戶時不值得；出現第二個租戶或第二類工作負載、且已觀察到互相排擠時再上",
+  "fencing token 讓下游拒絕舊 epoch 的寫入——只在「有無法冪等的下游」時才值得，因為它要求所有下游儲存配合檢查 token，成本外溢到本層之外【查證 https://hackernoon.com/the-fencing-gap-why-your-distributed-lock-isnt-safe-and-how-to-fix-it】",
+  "TriggerClock 的 backfill 與 overlap policy 全集——只有排程觸發的工作負載才需要；純事件驅動系統做了也不會被用到",
+  "PayloadVault 的 crypto-shredding——只有當日誌內確實含個資、且有抹除義務時才值得；非個資資料用實體刪除更簡單，而 per-subject 金鑰在高讀取吞吐下會加上每次存取的金鑰查詢成本【查證 https://granit-fx.dev/dotnet/compliance/crypto-shredding/】",
+  "HumanGate 的改派與代理人——等待人的節點超過個位數、或出現過「負責人休假導致流程卡兩週」之後再做",
+  "動態圖擴張（執行時產生節點）——只在確實有「清單長度執行時才知道」的 fan-out 時才值得；它讓容量規劃變難且失敗模式變多，靜態能表達就別動態【查證 https://www.systemoverflow.com/learn/data-pipelines-orchestration/dag-orchestration/choosing-dag-orchestration-vs-alternatives】",
+  "Meter 的即時預算熔斷——只有在單次失控的成本足以造成實質損害時才值得；否則事後對帳＋告警成本低得多，且不必付「預算＝執行互斥」的序列化代價"
+ ],
+ "design_decisions": [
+  {
+   "question": "狀態的真相來源：狀態欄位（state-as-record）還是事件日誌推導（fully event-sourced）？",
+   "options": "(a) 狀態欄位為真相、日誌為稽核：查詢直接、CAS 天然、實作最短；代價是日誌可能與狀態不一致而無人發現，且「為什麼變成這樣」要靠人拼。(b) 日誌為真相、狀態為投影：因果完整、可任意重建投影；代價是每次查詢都要重播或維護投影一致性，且投影落後會讓 CAS 失去意義。(c) 混合：狀態欄位為真相，但每次轉移必附一筆日誌事件，並有一致性掃描器比對兩者。",
+   "recommendation": "選 (c)。它保住 CAS 這個地基（互斥必須靠單一列的條件更新），同時保住因果鏈；一致性掃描器把「日誌與狀態不一致」從沉默錯誤變成可告警事件。【推論】",
+   "reverses_when": "當流程需要「回到任意歷史時點重新分岔」或需要跨版本重建投影（例如稽核口徑改變要重算歷史）時，(b) 反而便宜——這時混合方案的雙寫一致性維護成本會超過純事件溯源。"
+  },
+  {
+   "question": "續跑機制：決定性重播，還是顯式 checkpoint？",
+   "options": "(a) 決定性重播：續跑幾乎免費、控制流表達力等同語言本身；代價是同輸入必須產生同一串命令序列這條硬約束會污染商業程式碼、限制可用函式庫，且「改程式碼＝改重播行為」使版本化變成一等問題【查證 https://docs.temporal.io/workflow-execution】。(b) 顯式 checkpoint：每個節點自己宣告「我做完了、結果在這」，續跑就是跳過已完成節點；代價是複雜控制流（巢狀迴圈、動態並行）要手寫大量「已完成則跳過」，容易漏。",
+   "recommendation": "預設選 (b)，只在確實出現「流程要等好幾天」或「控制流用宣告式圖表達會醜到不可讀」時才引入 (a)，且引入時同批引入版本閘與重播回歸測試——沒有這兩者的 (a) 是定時炸彈。【推論】",
+   "reverses_when": "當節點本身就是不可靠執行者（輸出非決定性）時，(a) 的決定性前提只能覆蓋控制流而覆蓋不了節點內容，它的相對收益下降；反過來，當流程等待期以「天」計且中途有大量外部事件要處理時，(b) 的手寫跳過邏輯會爆炸，(a) 明顯勝出。"
+  },
+  {
+   "question": "冪等鍵怎麼推導：含不含 attempt？",
+   "options": "(a) 不含 attempt（key = run:node:input_digest）：重試會被去重擋下，等於「第一次的結果就是最終結果」；適合真正冪等的外部操作，但會讓「因暫時性錯誤而重試」變得不可能。(b) 含 attempt（key = run:node:attempt）：每次重試都是新副作用；適合可安全重做的操作，但一旦重試原因是『其實已經成功只是回應遺失』就會重複。(c) 分級：由節點宣告自己屬於哪一類，預設 (a)。",
+   "recommendation": "選 (c) 且預設 (a)。理由是預設方向決定了錯誤時的損害方向：預設 (a) 的最壞情況是「該重試的沒重試」（可觀測、可人工處理），預設 (b) 的最壞情況是「重複扣款」（不可回滾）。【推論】",
+   "reverses_when": "當外部系統本身提供伺服器端冪等（接受呼叫端的 idempotency key 並保證重放安全）時，(b) 的風險被下游吸收，此時預設 (b) 可以換到更好的暫時性錯誤恢復率。"
+  },
+  {
+   "question": "互斥用租約就好，還是要加 fencing token？",
+   "options": "(a) 純租約：實作簡單、下游零改動；代價是 GC 停頓／網路分割下無法阻止舊持有者寫入，正確性完全押在冪等上【查證 https://www.task-queues.com/queue-fundamentals-architecture/visibility-timeout-deep-dive/】。(b) 租約＋單調遞增 epoch，且所有下游儲存拒絕較小 epoch 的寫入：真互斥；代價是成本外溢到本層之外，每個下游都要配合。【查證 https://hackernoon.com/the-fencing-gap-why-your-distributed-lock-isnt-safe-and-how-to-fix-it】",
+   "recommendation": "選 (a)＋在本層內部（RunStore 的 ack 條件）強制 epoch 比對，但不要求外部下游配合。這樣「舊持有者的落帳會被拒絕」在本層成立，外部副作用的重複則交給冪等。【推論】",
+   "reverses_when": "當存在一個既不冪等、又不可能改造的外部下游（例如只能追加的第三方帳本）時，必須升級到 (b) 或改為把該操作包進一個本層可控的代理，否則沒有任何機制能防止雙寫。"
+  },
+  {
+   "question": "排程漏跑：寧漏不重，還是寧重不漏？",
+   "options": "(a) 寧漏（先標記時間窗再觸發）：崩潰於標記與觸發之間即漏跑，漏跑項留痕待人工；代價是需要有人看那個佇列。(b) 寧重（先觸發再標記）：不漏但可能重複開 run，複製整條流程的副作用。(c) 寧重＋整條流程以時間窗為冪等鍵：既不漏也不重，但要求整條流程的所有副作用都納入同一個鍵空間，實務上很難完全做到。",
+   "recommendation": "預設 (a)，並強制漏跑產生結構化 MISSED 紀錄＋告警。理由同上：損害方向可觀測且可補。另外必須設有限的 catchup window——長時間停機後把數天份的觸發一次補開，本身就是一場自製的流量洪峰【查證 https://docs.temporal.io/schedule】。",
+   "reverses_when": "當流程的最終效果本身是收斂的（例如「把某個外部狀態同步成當前值」這類覆寫式操作），重複執行無害而漏跑會讓資料長期偏離，此時 (b) 明顯較好。"
+  },
+  {
+   "question": "佇列放在業務資料庫裡，還是用獨立 broker？",
+   "options": "(a) 同庫佇列：outbox、去重表、狀態轉移可以在同一個交易內完成，dual-write 直接消失；代價是吞吐受資料庫限制，且輪詢會產生持續負載。(b) 獨立 broker：吞吐與投遞功能強；代價是每一個「改狀態＋發訊息」都成為 dual-write，必須另建 outbox 與 relay，且 broker 的 settle 語意（何時 ack、鎖何時遺失）成為新的一整類故障來源【查證 https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-dead-letter-queues】。",
+   "recommendation": "在吞吐未被實測證明不足之前選 (a)。理由是 (b) 引入的故障類別（settle 太晚、鎖遺失、投遞計數誤入死信）在症狀上與應用層 bug 完全相同，除錯成本極高，而這個成本是在你需要它的吞吐之前就開始付。【推論】",
+   "reverses_when": "當每秒事件數已使資料庫的輪詢與鎖競爭成為瓶頸、或需要跨資料中心扇出時，(b) 不可避免；此時 outbox＋relay 從「額外複雜度」變成必要基礎設施。"
+  },
+  {
+   "question": "載荷放在日誌事件裡，還是外部保管庫只留指標？",
+   "options": "(a) 內嵌：讀取一次搞定、無額外元件；代價是事件大小上限成為業務限制、加密粒度只能整條日誌、且無法做到「刪內容留骨架」。(b) 外部保管庫＋指標：可設不同保留期、可 per-subject 加密與抹除、可卸載大物件；代價是多一次 I/O、多一個可用性依賴、且「指標指向已抹除內容」是一種必須被顯式處理的新狀態。",
+   "recommendation": "選 (b)，且從第一天就把讀取結果設計成 bytes | Gone 的和類型而非 Optional[bytes]。理由是抹除與不可變稽核的張力在結構上無法後補：一旦個資寫進了 append-only 日誌本體，之後只能重寫整段日誌【查證 https://granit-fx.dev/dotnet/compliance/crypto-shredding/, https://docs.temporal.io/production-deployment/data-encryption】。",
+   "reverses_when": "當系統確定不接觸個資、載荷都是小型結構化資料、且沒有法遵抹除義務時，(a) 的簡單性勝出——此時 (b) 的每次金鑰查詢與額外 I/O 是純粹的稅。"
+  },
+  {
+   "question": "Meter 不可用時，派工要停還是要放？",
+   "options": "(a) fail-closed（停）：硬上限真的是硬的；代價是計量元件成為全系統可用性單點，且「預算＝執行互斥」——精確扣帳要序列化。(b) fail-open（放，事後補帳）：可用性好；代價是失控迴圈可在計量故障期間把預算燒穿，而失控重試的量級可達單次成功執行的兩百倍【查證 https://tianpan.co/blog/2026-04-10-retry-storm-problem-agentic-systems】。(c) 分級：低額度 scope fail-open，接近上限的 scope fail-closed。",
+   "recommendation": "選 (a) 並把代價寫進契約明文（設預算即接受執行互斥與可用性耦合）。理由是預算存在的唯一目的就是設一個不會被繞過的上限；一個在故障時自動消失的上限不是上限。【推論】",
+   "reverses_when": "當工作負載的單位成本極低、而中斷的商業損失極高（例如高頻的內部同步任務）時，(b) 或 (c) 是對的——此時預算的角色從「防護」降級成「觀測」，應該誠實地改名而不是假裝它是硬閘。"
+  },
+  {
+   "question": "版本不相容時：退回佇列等相容工作者，還是直接讓 run 失敗？",
+   "options": "(a) 退回佇列（reject）：run 存活、等待相容工作者；代價是若相容工作者永遠不會再出現（已全數下線），run 會無聲卡住直到有人發現。(b) 直接失敗：立即可見、快速止血；代價是一次錯誤的部署可能瞬間殺掉大量在途 run，且它們無法被續跑。【查證 兩種策略均為明列選項 https://docs.azure.cn/en-us/durable-task/common/durable-orchestration-versioning】",
+   "recommendation": "選 (a)，但必須配一條「退回次數／滯留時長」的告警，把無聲卡住轉成可見事件。理由是資料（在途 run）比可用性更難重建。【推論】",
+   "reverses_when": "當在途 run 的重新發起成本極低（短流程、可重跑、輸入都還在）時，(b) 更好——快速失敗換來的部署信號比保住那些 run 值錢。"
+  },
+  {
+   "question": "人工節點逾時的預設方向：拒絕／升級，還是放行？",
+   "options": "(a) 預設拒絕或升級：安全；代價是核准者放假就卡流程，且會養出「大家都在最後一刻批」的行為。(b) 預設放行（提供預設決策並讓任務成功）：流程不卡；代價是「沒人看」與「大家都同意」在資料上長得一模一樣。業界兩種預設都存在【查證 https://www.astronomer.io/docs/learn/airflow-human-in-the-loop 的逾時取預設值；https://docs.oracle.com/en/middleware/soa-suite/soa/12.2.1.3/develop/getting-started-human-workflow.html 的逾時升級給主管】。",
+   "recommendation": "預設 (a)＋強制每個人工節點宣告 escalate_to，並在稽核紀錄中把「逾時放行」與「主動核准」記成不同的 decision 值。理由是若兩者在資料上不可分辨，任何以核准率為基礎的稽核都是假的。【推論】",
+   "reverses_when": "當該節點的作用只是「知會」而非「把關」（低風險、可事後糾正）時，(b) 是對的——此時把它做成阻塞閘只是製造無意義的延遲。"
+  },
+  {
+   "question": "不可信輸入的隔離做在圖層，還是推給節點內的執行者？",
+   "options": "(a) 推給執行者（提示、過濾、內容檢查）：不動架構；代價是被明確認定為不可靠——資料裡的指令與系統指令在形式上無法區分【查證 https://www.agentpatternscatalog.org/patterns/lethal-trifecta-threat-model/】。(b) 做在圖層：以 taint 傳播與能力最小化，禁止單一執行路徑同時持有私密資料存取、不可信內容與對外通道；代價是圖要多切節點、資料要多帶標記、開發者要學會一套新約束。",
+   "recommendation": "選 (b)。理由不只是安全性，而是職責歸屬：只有圖層同時知道資料從哪來、去哪個節點、那個節點被授予什麼能力，這三個事實在別處都不齊。把它推給執行者等於把授權決策交給最不可信的一方。【查證 同上】",
+   "reverses_when": "當系統完全不接觸不可信內容（所有輸入都來自已認證的內部來源），且沒有對外通道時，(b) 的標記傳播是純成本。但這個前提會隨第一個外部整合而消失，所以要事先確認撤退成本。"
+  },
+  {
+   "question": "重播期間要不要產生追蹤 span 與指標？",
+   "options": "(a) 產生：實作簡單、不需要 is_replaying 判斷；代價是每次重播都複製一遍 span 與指標，追蹤後端呈現重複且誤導的資料，錯誤率統計被灌水【查證 https://oneuptime.com/blog/post/2026-02-06-instrument-azure-durable-functions-opentelemetry/view】。(b) 抑制：追蹤乾淨；代價是流程程式碼裡多一個到處要記得檢查的旗標，忘記檢查就退化成 (a)。",
+   "recommendation": "選 (b)，但不要靠開發者記得——把觀測 API 包成只有在非重播狀態下才真的發送的薄殼，讓「忘記檢查」在結構上不可能發生，並用「同一 run 重播三次 span 數不變」的測試背書。【推論】",
+   "reverses_when": "當重播本身是你要診斷的對象（例如追查重播分歧）時，需要一個可開關的模式讓重播也發 span，但它必須標成不同的 span 類型，不能與正常執行混在同一組指標裡。"
+  },
+  {
+   "question": "子系統的切分軸：按資料所有權切，還是按流程階段切？",
+   "options": "(a) 按流程階段切（入場層／執行層／收尾層）：符合直覺、對應時序；代價是同一份狀態被多層寫入，「一個子系統只有一個改變的理由」立刻失守——改一次狀態機語意要動三層。(b) 按資料所有權與失敗方向切（誰擁有哪張表、壞掉時往哪個方向倒）：每張持久表恰有一個擁有者，每個元件有一個明確的 fail 方向；代價是流程的時序被打散在多個元件裡，要靠一份流程文件才讀得懂全貌。",
+   "recommendation": "選 (b)。判準是本層絕大多數的貴錯誤都是狀態被多處寫入造成的（先讀後寫的 claim、繞過 transition 的直接 UPDATE、記憶體裡的 attempt 計數），而這類錯誤在 (a) 的切法下是結構性容易發生的。至於時序可讀性，用一份執行流程說明補足即可——那是文件能解決的問題，而多寫入者不是。【推論】",
+   "reverses_when": "當系統小到只有一個人維護、且持久狀態只有兩三張表時，(b) 的元件數會顯得形式主義；此時應退回到「一個執行器＋一張 task 表」，但仍必須保住三件事：狀態只經一個 transition 函式、日誌先於套用、冪等鍵有唯一索引。這三條是任何規模都不能省的。"
+  },
+  {
+   "question": "控制面自我保護：偵測到自己異常時要不要自動停機？",
+   "options": "(a) 自動停（fail-closed 的自我保護）：異常時不會做出錯誤動作；代價是誤判會製造它本想避免的故障，且自動停機本身可能因為同一個故障而無法解除。(b) 不自動停、只宣告降級並讓外部決定：不會自我誤殺；代價是真異常時仍在動作。",
+   "recommendation": "選 (b)：Selfwatch 對行動 fail-open、對沉默 fail-closed——它不主動停別人，但它自己停止必須讓外部的 dead-man switch 察覺。理由是自動停機的判斷者與被判斷者共用故障域，這個結構本身不可靠。【推論】",
+   "reverses_when": "當錯誤動作的損害不可回滾且遠大於停機損害（例如控制面異常會導致重複發送金流指令）時，(a) 是對的——但此時解除機制必須在故障域之外，且要有人工覆寫路徑。"
+  }
+ ],
+ "open_questions": [
+  "以金額／token 為單位的背壓沒有公認模型。時間與併發有成熟的排隊理論支撐，成本沒有：預算應該是排程資源（可預留、可搶占）還是純粹的熔斷閘，業界沒有收斂，連「一個被中途熔斷的 run 該補償還是掛起」都沒有共識做法。【推論；成本失控的量級證據見 https://tianpan.co/blog/2026-04-10-retry-storm-problem-agentic-systems】",
+  "節點是不可靠執行者時，重播與重試的語意未定義。決定性重播的前提是同輸入產生同命令序列，而不可靠執行者連「同一次執行」都不保證同輸出；此時「從日誌取回上次結果」與「重新執行」在語意上是兩件不同的事，卻共用同一個 attempt 概念。是否該引入第三種原語（例如「已觀察過的非決定性結果」），有分歧。【推論】",
+  "taint／provenance 在編排層的形式化尚無標準。有共識的是必須做結構隔離而非過濾【查證 https://www.agentpatternscatalog.org/patterns/lethal-trifecta-threat-model/】，沒有共識的是標記格式、傳播規則（取最低信任是否過度保守）、以及如何測試「隔離確實成立」——目前多數是人工審查圖的形狀，缺乏可機械檢查的判準。",
+  "soundness 在含資料守衛與取消區域的圖上不可判定，工程近似無共識。多數工具只做語法層與可達性的弱檢查，但「弱到什麼程度仍有價值」缺乏量化——沒有人能說出「這組檢查能擋掉哪個比例的實際事故」。【查證 https://www.pads.rwth-aachen.de/global/show_document.asp?id=aaaaaaaaababkwh, https://arxiv.org/pdf/2206.02606】",
+  "不可變稽核與資料抹除的張力沒有乾淨解。金鑰銷毀能讓密文變噪音，但重播與投影在遇到已抹除欄位時的正確行為未定義（回 null 會讓商業邏輯默默走錯，回錯誤會讓歷史不可重播），且多實例部署下有金鑰快取尚未過期的傳播窗口。【查證 https://granit-fx.dev/dotnet/compliance/crypto-shredding/】",
+  "公平性只有軟隔離，硬吞吐保證缺模型。加權公平佇列是 work-conserving 的，不提供速率背壓；權重在排程時刻評估因此不重排既有 backlog；鍵數極大時精度下降。要硬上限就得另外疊配額與熔斷，但兩者如何組合而不互相打架，沒有標準答案。【查證 https://docs.temporal.io/design-patterns/fairness】",
+  "死信自動重投的安全條件未定。自動 redrive 會讓壞輸入換條路徑再循環一次，純人工 redrive 則讓隔離區變成沒人看的黑洞。「什麼樣的原因碼可以安全自動重投」沒有公認清單。【推論】",
+  "跨信任域的工作流（日誌歸誰）沒有成熟做法。當流程跨越組織邊界時，journal 是共同真相還是各持一份、補償由誰執行、誰有權 terminate，這些問題在單一組織內的機制裡沒有對應物。【推論】",
+  "控制面自身故障的可觀測性缺乏標準形狀。業界對業務層的 SLI 有成熟做法，對「編排器自己卡住了」則多半靠人發現；dead-man switch 這類外部保底沒有被寫進主流的可觀測性框架裡。【推論】"
+ ]
+}
