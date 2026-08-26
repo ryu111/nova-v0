@@ -1,0 +1,30 @@
+[project]
+name = "nova"
+version = "0.0.0"
+description = "把 LLM 做成系統與結構化軟體工程的宿主引擎"
+requires-python = "==3.14.7"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "hypothesis",
+    "pytest-xdist==3.8.0",
+    "mutmut==3.7.0",
+]
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+python_files = ["測_*.py", "test_*.py"]
+python_functions = ["測試_*", "test_*"]
+python_classes = ["測_*", "Test*"]
+pythonpath = ["."]
+
+[tool.mutmut]
+source_paths = ["nova/核心"]
+tests_dir = ["驗收/工具鏈"]
+also_copy = ["驗收", "nova"]
+use_git_change_detection = false
