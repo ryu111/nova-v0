@@ -141,15 +141,25 @@ git commit -m "feat: 宣告執行者能力契約"
 
 **ClaimSpec落點:** `execution.backend-capability.tool-output-delegation-contract` → `規格/執行/保證/能力/工具輸出代理契約.claim.json`（本 task Create）
 
-**固定負控:** 【推論】四個 named subjects 分別在 deny 後仍呼叫 handler、回 malformed structured output、越過 delegation depth、把 ROOT_ONLY 標成 tree total；各自指定 predicate direct red。
+**固定負控:** 【推論】五個 named subjects 分別在 deny 後仍呼叫 handler、回 malformed structured output、越過 delegation depth、把 ROOT_ONLY 標成 tree total、
+宣告 `SEEDED_REQUEST` 卻不忠實交付 seed；各自指定 predicate direct red。
+第五格的 oracle 是 **seed-sensitive transport spy**，不是輸出：
+spy 直接記錄 adapter 實際交付給後端的 canonical request；兩個不同 seed 送入，
+斷言收到的 request **保留同值、同型別、同欄位位置**；spy 的輸出固定且與 seed
+無關——**明確禁止用輸出是否相同作 oracle**（後端本來就決定性時，丟掉 seed
+完全可能不紅；seed 的保證是「請求欄位被忠實交付」，不是「輸出因此改變」）。
+faulty adapter 刪除／覆寫／固定 seed 時只紅在 `seeded_request_delivers_seed`。
+防恆真半格：未宣告 `SEEDED_REQUEST` 的 adapter 不因此被要求接受 seed。
+（R14 重做：R13-03 版把 `SEEDED_REQUEST` 與 repeatability 混成一格——
+R2-03／R3-03 兩次踩過的形狀，第三次由 oracle 選錯重現。）
 
-- [ ] **Step 1: 寫四個 faulty subjects 與 exact failed predicate red**
+- [ ] **Step 1: 寫五個 faulty subjects（第五格用 transport spy）與 exact failed predicate red**
 - [ ] **Step 2: 跑 `uv run pytest -q 驗收/執行者能力/測_工具輸出代理契約.py`**
 
 Expected: 【推論】FAIL；至少四個 faulty subjects 尚未被 contract suite 拒絕。
 
 - [ ] **Step 3: 寫 pure contract runner，不呼叫 SDK 或資料庫**
-- [ ] **Step 4: 跑 tests 與 ClaimSpec，確認 reference subject PASS、四個 negatives direct red**
+- [ ] **Step 4: 跑 tests 與 ClaimSpec，確認 reference subject PASS、五個 negatives direct red**
 - [ ] **Step 5: Commit**
 
 ```bash
