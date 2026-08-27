@@ -184,6 +184,14 @@ argv = ["uv", "run", "python", "架構/檢查工程規範.py"]
 name = "plans"
 argv = ["uv", "run", "python", "docs/計畫複驗.py"]
 
+# 執法器自己的回歸負控。R12 實測：`計畫複驗自測/撞號/` 帶真缺陷時自測綠、
+# 把 fixture 改成序號正確時自測紅（「預期字串沒出現」）——它偵測的是
+# **執法器不再抓那個缺陷**，不是只跑一次就算。
+# 沒接進這份清單就沒有人會跑它，那時它只是診斷工具不是持續保護機制。
+[[gate]]
+name = "selftest"
+argv = ["uv", "run", "python", "docs/計畫複驗.py", "--自測"]
+
 [[gate]]
 name = "tests"
 argv = ["uv", "run", "pytest", "-q"]

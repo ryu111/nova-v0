@@ -127,6 +127,9 @@ git commit -m "feat: 為 Claude Agent SDK 後端建立指紋"
 **ClaimSpec:** 【推論】`backend.claude-agent-sdk.execution.protocol-parity` 從紅轉綠。
 
 **固定負控:** 【推論】未知SDK message被drop、SDK result success直接寫SUCCEEDED、自由exception string冒充typed fault、event在STARTED前出現；common suite direct red。
+`malformed-sdk-payload`：缺必填欄位／非法 enum 的 SDK message 必須成
+`PROTOCOL_FAULT`，不得被當 assistant text——15 的 `malformed.jsonl` 對稱格
+（R12 交叉比對：14 只殺 unknown、不殺 malformed 的不對稱）。
 
 - [ ] **Step 1: 寫full typed fixture stream與unknown-event red**
 

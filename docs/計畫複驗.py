@@ -283,7 +283,7 @@ def i9_訊息用中文(檔):
 
 
 BINDING_ID白名單 = frozenset({'execution-envelope.reference', 'execution-envelope.production'})
-未遷移基線 = 131  # R4-01 給 09 Task 4、R4-02 給 05 Task 7 各補落點行後自 133 減二；新開 task 全帶落點行不計入
+未遷移基線 = 130  # R12-01 給 12 Task 9 補落點行後自 131 減一  # R4-01 給 09 Task 4、R4-02 給 05 Task 7 各補落點行後自 133 減二；新開 task 全帶落點行不計入
 ID樣式 = re.compile(r'^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$')
 
 
@@ -423,7 +423,36 @@ def i4_任務完整(檔):
     return 總
 
 
+def 自測():
+    """對 docs/計畫複驗自測/<情境>/ 逐一跑本執法器，斷言非零且輸出含 預期.txt 的字串。
+
+    存在理由（R11 實測）：真撞號修好之後，「執法器抓得到撞號」就只剩程式碼、沒有長期
+    牙齒——負控 fixture 不能只活在暫存目錄。fixture 只保證目標訊息出現；
+    其他不變式在最小 fixture 上本來就會紅（如 I10 基線），不計。"""
+    import subprocess
+    根目錄 = os.path.dirname(os.path.abspath(__file__))
+    自測根 = os.path.join(根目錄, '計畫複驗自測')
+    情境們 = sorted(d for d in glob.glob(os.path.join(自測根, '*')) if os.path.isdir(d))
+    if not 情境們:
+        print('自測：找不到任何情境目錄', file=sys.stderr); return 2
+    壞 = 0
+    for 情境 in 情境們:
+        預期 = open(os.path.join(情境, '預期.txt'), encoding='utf-8').read().strip()
+        跑 = subprocess.run([sys.executable, os.path.abspath(__file__), 情境],
+                            capture_output=True, text=True)
+        中 = 預期 in (跑.stdout + 跑.stderr)
+        if 跑.returncode == 0 or not 中:
+            壞 += 1
+            print(f'自測 ✗ {os.path.basename(情境)}：exit={跑.returncode}，'
+                  f'預期字串{"有" if 中 else "沒"}出現')
+        else:
+            print(f'自測 ✓ {os.path.basename(情境)}：非零且含「{預期}」')
+    return 1 if 壞 else 0
+
+
 def main():
+    if sys.argv[1:] == ['--自測']:
+        return 自測()
     檔 = 計畫檔()
     if not 檔:
         print('找不到計畫檔', file=sys.stderr); return 2
