@@ -12,6 +12,26 @@
    （這條寫死在此。前一版把它委派給 `~/.claude/CLAUDE.md`，而那個檔從來不存在
    ——委派出去的規則等於沒有規則。）
 3. **報告**：失敗與跳過明講，不讓「沒提到」變成「通過了」。完成且驗過才說完成。
+4. **地基與加蓋**（2026-08-27 控制端裁定）：**官方與權威論點是地基，優先級高於本檔。**
+   本檔與官方立場衝突時，改的是本檔。nova ＝ 業界標準（地基）＋ 控制端要的（加蓋）。
+   `nova[llm]` 的方括號是 **extras 標記**：nova 本體是「用軟體工程的方式把那幾門
+   engineering 做**拆解／組合／擴充**」這件事，`[llm]` 是裝上去的一個 extra——
+   所以 claude CLI 與 codex、gemini 平級。
+
+   **加蓋的合法動作只有兩種**（第一版寫「只能增加拒絕」，被 `nova[llm]` 自己駁倒——
+   安裝 extra 會讓原本 `UNSUPPORTED_*` 的請求變成可執行，接受集合**擴大**）：
+   ① 對既有能力**增加拒絕**；
+   ② 透過**已宣告、具命名空間、具版本、可協商的擴充點**增加新能力。
+   **未理解該擴充的舊元件必須 fail-closed 或回 `UNSUPPORTED_CAPABILITY`，
+   不得靜默忽略後誤判為成功。** 這叫語意單調，不是「接受集合只能縮小」。
+   出處：MCP Extensions（extension 不得移除或改名欄位、改型別、改既有行為語意、
+   增加新必填欄位）、PyPA dependency specifiers 的 extras。
+
+   **地基不是「凍結某家廠商今天的 JSON」**——否則業界出新版本時 nova 反而不能跟進。
+   不可破壞的是**已採用介面的語意與相容性規則**。
+
+   **引不出官方出處的東西不是地基**，是 nova 的拆解決定／組合契約／額外拒絕。
+   標錯的代價是拿沙子當混凝土。已知降級清單見 `交接.md` §十九。
 
 ## 這個專案在做什麼
 
@@ -63,7 +83,13 @@ nova 本體就是產品：它是宿主引擎，claude CLI 與 codex、gemini 平
 - v1 isolation 明示 `COOPERATIVE_PROCESS`；能力不足只回 typed `UNSUPPORTED_*`，
   **不得靜默降級**。
 - raw mutation kill rate 永遠不進驗收判準；只有事前命名的 mutation 被指定
-  predicate 殺掉才有驗收權。
+  predicate 殺掉才有驗收權。**這條有外部權威背書**：Google 在 ICSE-SEIP '18
+  "State of Mutation Testing at Google"（DOI 10.1145/3183519.3183521）明講他們不把
+  mutation score 當指標或閘，理由是「unable to find a good way to surface it to the
+  engineers in an actionable way」，加上「The question of equivalence is unfortunately
+  undecidable」——分數型門檻天生把不可殺的 mutant 算進分母。
+  （生態現況佐證：Stryker 的 `break` 門檻**預設 null**，官方逐字「never let your build
+  fail」；PIT 的整數百分比門檻官方承認會讓分數靜默退化。有工具不等於有閘。）
 - 燒錢測試三擇一：錄／播／明講跳過，不做無紀錄的裸真跑。
 - 「全集」宣稱一律直接列舉目標型別，不從別的型別推導：列目錄用 `iterdir()` 過濾
   `is_dir()`、列類別走 `ClassDef`、數呼叫走 `ast.Attribute`、找環跑 SCC。
@@ -116,18 +142,39 @@ plans／tests）。三處共讀，不各自維護：
   實測叫 `驗收.yml` 時 GitHub 註冊成功、顯示 active、手動觸發也跑得起來，
   但 `push`／`pull_request` **一次都不觸發**，而 UI 上完全看不出異常。
 
-**還是不准寫「不可能繞過」。** 三個確切的上限，全部實測過：
+**還是不准寫「不可能繞過」。** 五個確切的上限。前三個是人為決定，**第四、五個是機制漏洞**：
 
 1. hook 可以被 `git commit --no-verify` 繞過。**2026-08-27 我自己就繞過一次**，
    把一個測試引用舊檔名的壞 commit 送進 main，CI 才抓下來。
 2. hook 可能**根本沒裝**——`.git/` 不在版控裡，新 clone 預設沒有，
    要跑 `uv run python 工具/裝_git_鉤子.py`。
-3. **「紅了合不進去」2026-08-27 起成立，但仍有兩個出口。** repo 轉公開後
-   ruleset `main-gates` 已 active：必經 PR、`gates` 必須綠、擋 force push 與刪除。
-   **實測**：直推 main 得到 `GH013 ... Changes must be made through a pull request.`；
-   CI 紅的 PR 合併得到 `the base branch policy prohibits the merge`。
-   兩個出口：`gh pr merge --admin` 用管理員權限跳過，以及 repo 設定隨時可被改掉。
-   **兩者都是人為決定，不是機制漏洞**——寫在這裡是為了不讓人以為它密不透風。
+   （附帶：Git 官方逐字說 hook 沒有 executable bit 就被 `ignored`——**靜默**。
+   `裝_git_鉤子.py` 哪次 chmod 失敗，hook 從此不跑而不會有人發現。這值得一格負控。）
+3. **「紅了合不進去」2026-08-27 起成立，但有兩個人為出口。** ruleset `main-gates`：
+   必經 PR、`gates` 必須綠、擋 force push 與刪除。**實測**：直推 main 得到
+   `GH013 ... Changes must be made through a pull request.`；CI 紅的 PR 合併得到
+   `the base branch policy prohibits the merge`。出口是 `gh pr merge --admin`
+   （GitHub 官方明列的繞過通道）與 repo 設定隨時可被改掉。
+   **這兩個是人為決定不是機制漏洞。** 業界的做法不是消滅它，是**記錄連續性**
+   （SLSA Source Track），讓繞過留下痕跡並使 claim 自動降級。
+4. **CI 跑的是候選者自己那一份 checker。這是機制漏洞，不需要任何人為決定。**
+   **實測**（PR #8 的真實 CI log，2026-08-27）：
+   `git checkout --progress --force refs/remotes/pull/8/merge` →
+   `HEAD is now at d7d1587 Merge 2d93188... into 0f664a7...`。
+   六道閘的程式（`架構/檢查工程規範.py`、`docs/計畫複驗.py`、pytest 收到的測試檔）
+   **全部來自 PR 的 commit**，沒有任何一道去 base branch 讀基準。
+   在同一個 PR 裡把 checker 改成 `raise SystemExit(0)`，required check 會綠。
+   官方解法：ruleset workflows 可指定 workflow 檔**來自另一個 repo／另一個 ref**，
+   讓閘的觸發與程式離開被閘管的人的寫入範圍。**尚未做，計畫 01 Task 16。**
+   （我證到的是「跑的是哪一份 code」；「跑起來會綠」是從「沒有任何閘讀 base 基準」
+   推出來的，**沒有實跑過破壞實驗**。）
+5. **被 `if:` 跳過的 job 會被算成通過。** GitHub 官方對 required status check 的
+   通過定義逐字是「must have a `successful`, `skipped`, or `neutral` status」。
+   `gates` job 哪天加了條件式，閘會**靜默變成永遠綠**——這是「入口永遠回零」的 CI 版本。
+
+**GitHub branch protection 預設不套用到 admin**（官方逐字「the restrictions of a branch
+protection rule do not apply to people with admin permissions」）。裝了就以為擋得住自己
+是最普遍的誤解；要另外開「Do not allow bypassing the above settings」。
 
 負控實跑過四條（入口第一紅就停、入口永遠回零、CI 漏跑一道、hook 吞掉非零 exit），
 外加防恆真格「閘全綠時 hook 不擋正常 commit」。claim 落點
