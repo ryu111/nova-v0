@@ -162,7 +162,8 @@ def test_runner_cli_可重複指定_claim_與_binding(tmp_path: Path) -> None:
         ["--claim", "claim.one", "--claim", "claim.two", "--binding", "b1", "--binding", "b2"],
         catalog=目錄,
     )
-    assert 結果.code in ("OK", "FAIL")
+    assert 結果.exit_code == 1
+    assert 結果.code == "UNSUPPORTED_CLAIM_EXECUTION"
 
     目錄_缺一 = 已知目錄({"claim.one": 檔1, "claim.two": tmp_path / "deleted.claim.json"})
     結果_缺 = 跑驗收(["--claim", "claim.one", "--claim", "claim.two"], catalog=目錄_缺一)
@@ -172,6 +173,85 @@ def test_runner_cli_可重複指定_claim_與_binding(tmp_path: Path) -> None:
     結果_未知 = 跑驗收(["--claim", "claim.one", "--claim", "claim.unknown"], catalog=目錄)
     assert 結果_未知.exit_code != 0
     assert 結果_未知.code == "UNKNOWN_CLAIM_ID"
+
+
+def test_合法_claim_回_unsupported_claim_execution_且_零呼叫_subprocess(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """必加測試格 1：合法 id 回精確 UNSUPPORTED_CLAIM_EXECUTION，spy 證明 subprocess 零呼叫。"""
+    檔 = tmp_path / "c1.claim.json"
+    檔.write_text("{}", encoding="utf-8")
+    目錄 = 已知目錄({"claim.one": 檔})
+
+    呼叫次數 = 0
+
+    def 假_subprocess_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal 呼叫次數
+        呼叫次數 += 1
+        return subprocess.CompletedProcess(args=[], returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", 假_subprocess_run)
+
+    結果 = 跑驗收(["--claim", "claim.one"], catalog=目錄)
+    assert 結果.exit_code == 1
+    assert 結果.code == "UNSUPPORTED_CLAIM_EXECUTION"
+    assert 呼叫次數 == 0
+
+
+def test_合法與查無混用_不被提前掩蓋_回_unknown_claim_id(tmp_path: Path) -> None:
+    """必加測試格 2：合法 id + 查無 id 不得被提前回 unsupported 掩掉，仍回 UNKNOWN_CLAIM_ID。"""
+    檔 = tmp_path / "valid.claim.json"
+    檔.write_text("{}", encoding="utf-8")
+    目錄 = 已知目錄({"valid.claim": 檔})
+
+    結果1 = 跑驗收(["--claim", "valid.claim", "--claim", "unknown.claim"], catalog=目錄)
+    assert 結果1.exit_code == 1
+    assert 結果1.code == "UNKNOWN_CLAIM_ID"
+    assert 結果1.細節 == "unknown.claim"
+
+    結果2 = 跑驗收(["--claim", "unknown.claim", "--claim", "valid.claim"], catalog=目錄)
+    assert 結果2.exit_code == 1
+    assert 結果2.code == "UNKNOWN_CLAIM_ID"
+    assert 結果2.細節 == "unknown.claim"
+
+
+def test_合法與缺檔混用_不被提前掩蓋_回_claim_file_missing(tmp_path: Path) -> None:
+    """必加測試格 3：合法 id + 缺檔 entry 仍回 CLAIM_FILE_MISSING。"""
+    檔 = tmp_path / "valid.claim.json"
+    檔.write_text("{}", encoding="utf-8")
+    缺檔 = tmp_path / "missing.claim.json"
+    目錄 = 已知目錄({"valid.claim": 檔, "missing.claim": 缺檔})
+
+    結果1 = 跑驗收(["--claim", "valid.claim", "--claim", "missing.claim"], catalog=目錄)
+    assert 結果1.exit_code == 1
+    assert 結果1.code == "CLAIM_FILE_MISSING"
+
+    結果2 = 跑驗收(["--claim", "missing.claim", "--claim", "valid.claim"], catalog=目錄)
+    assert 結果2.exit_code == 1
+    assert 結果2.code == "CLAIM_FILE_MISSING"
+
+
+def test_負控_舊版把_claim_json_當_positional_傳給_pytest_必被抓到(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """必加測試格 5：負控 claim-json-as-pytest-positional 證明壞變體必被特定斷言抓到。"""
+    檔 = tmp_path / "valid.claim.json"
+    檔.write_text("{}", encoding="utf-8")
+    目錄 = 已知目錄({"valid.claim": 檔})
+
+    呼叫次數 = 0
+
+    def 假_subprocess_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal 呼叫次數
+        呼叫次數 += 1
+        return subprocess.CompletedProcess(args=[], returncode=4)
+
+    monkeypatch.setattr(subprocess, "run", 假_subprocess_run)
+
+    結果 = 跑驗收(["--claim", "valid.claim"], catalog=目錄)
+
+    assert 結果.code == "UNSUPPORTED_CLAIM_EXECUTION"
+    assert 呼叫次數 == 0
 
 
 def test_claim_catalog_生產綁定掃描與測試注入() -> None:

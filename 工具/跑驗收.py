@@ -46,8 +46,6 @@ def 跑驗收(
     已知, 其餘 = 剖析器.parse_known_args(參數)
 
     用目錄 = catalog if catalog is not None else ClaimCatalog.掃描(專案根目錄)
-    解析路徑們: list[Path] = []
-
     for 目標 in 已知.claim:
         狀態, 路徑 = 用目錄.解析(目標)
         if 狀態 == "UNKNOWN_CLAIM_ID":
@@ -59,13 +57,16 @@ def 跑驗收(
                 file=sys.stderr,
             )
             return 跑驗收結果(exit_code=1, code="CLAIM_FILE_MISSING", 細節=f"{目標}:{路徑}")
-        if 路徑 is not None:
-            解析路徑們.append(路徑)
+
+    if 已知.claim:
+        print("UNSUPPORTED_CLAIM_EXECUTION: claim 執行尚未接線", file=sys.stderr)
+        return 跑驗收結果(
+            exit_code=1,
+            code="UNSUPPORTED_CLAIM_EXECUTION",
+            細節=",".join(已知.claim),
+        )
 
     指令 = [sys.executable, "-m", "pytest", "-q", "-p", 外掛, *其餘]
-    for p in 解析路徑們:
-        指令.append(str(p))
-
     完成 = subprocess.run(指令, cwd=專案根目錄, check=False)
     return 跑驗收結果(
         exit_code=完成.returncode,
