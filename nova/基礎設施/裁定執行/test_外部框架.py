@@ -16,9 +16,17 @@ from pathlib import Path
 
 import pytest
 
-from nova.基礎設施.裁定執行.外部測試框架 import 判定, 案例識別, 證據行, 轉譯
+from nova.基礎設施.裁定執行.外部測試框架 import (
+    ClaimCatalog,
+    判定,
+    已知目錄,
+    案例識別,
+    證據行,
+    轉譯,
+)
 from nova.基礎設施.裁定執行.案例執行 import CaseResult, CaseTerminal
 from nova.核心.錯誤 import CaseFailureKind
+from 工具.跑驗收 import 跑驗收, 跑驗收結果
 
 外掛 = "nova.基礎設施.裁定執行.外部測試框架"
 
@@ -133,3 +141,128 @@ def test_harness_error_在_pytest_下是_error_不是_xfail(tmp_path: Path) -> N
     assert 出.returncode != 0
     assert "error" in 出.stdout.lower()
     assert "xfail" not in 出.stdout.lower()
+
+
+def 吞缺檔_跑驗收(參數: list[str], catalog: ClaimCatalog | None = None) -> 跑驗收結果:
+    """壞 runner（受測負控 subject）：只吞 CLAIM_FILE_MISSING 這一個 code。"""
+    結果 = 跑驗收(參數, catalog=catalog)
+    if 結果.code == "CLAIM_FILE_MISSING":
+        return 跑驗收結果(exit_code=0, code="OK", 細節="吞掉缺檔")
+    return 結果
+
+
+def test_runner_cli_可重複指定_claim_與_binding(tmp_path: Path) -> None:
+    檔1 = tmp_path / "c1.claim.json"
+    檔2 = tmp_path / "c2.claim.json"
+    檔1.write_text("{}", encoding="utf-8")
+    檔2.write_text("{}", encoding="utf-8")
+    目錄 = 已知目錄({"claim.one": 檔1, "claim.two": 檔2})
+
+    結果 = 跑驗收(
+        ["--claim", "claim.one", "--claim", "claim.two", "--binding", "b1", "--binding", "b2"],
+        catalog=目錄,
+    )
+    assert 結果.code in ("OK", "FAIL")
+
+    目錄_缺一 = 已知目錄({"claim.one": 檔1, "claim.two": tmp_path / "deleted.claim.json"})
+    結果_缺 = 跑驗收(["--claim", "claim.one", "--claim", "claim.two"], catalog=目錄_缺一)
+    assert 結果_缺.exit_code != 0
+    assert 結果_缺.code == "CLAIM_FILE_MISSING"
+
+    結果_未知 = 跑驗收(["--claim", "claim.one", "--claim", "claim.unknown"], catalog=目錄)
+    assert 結果_未知.exit_code != 0
+    assert 結果_未知.code == "UNKNOWN_CLAIM_ID"
+
+
+def test_claim_catalog_生產綁定掃描與測試注入() -> None:
+    專案根 = Path(__file__).resolve().parents[3]
+    目錄 = ClaimCatalog.掃描(專案根)
+    assert "toolchain.python-3-14.day-one-probe" in 目錄.條目
+    assert 目錄.條目["toolchain.python-3-14.day-one-probe"].is_file()
+
+    狀態, 路徑 = 目錄.解析("toolchain.python-3-14.day-one-probe")
+    assert 狀態 == "OK"
+    assert 路徑 is not None and 路徑.is_file()
+
+    假目錄 = 已知目錄({"custom.claim": Path("/nonexistent/custom.claim.json")})
+    assert "custom.claim" in 假目錄.條目
+    狀態假, _ = 假目錄.解析("custom.claim")
+    assert 狀態假 == "CLAIM_FILE_MISSING"
+
+
+def test_catalog_查無_id_回_unknown_claim_id_且_exit_非零() -> None:
+    目錄 = 已知目錄({"existing.claim": Path("/tmp/some_file.json")})
+    結果 = 跑驗收(["--claim", "nonexistent.claim"], catalog=目錄)
+    assert 結果.exit_code != 0
+    assert 結果.code == "UNKNOWN_CLAIM_ID"
+
+
+def test_catalog_有_entry_但檔案缺失回_claim_file_missing_且_exit_非零(tmp_path: Path) -> None:
+    缺失路徑 = tmp_path / "missing.claim.json"
+    目錄 = 已知目錄({"missing.claim": 缺失路徑})
+    結果 = 跑驗收(["--claim", "missing.claim"], catalog=目錄)
+    assert 結果.exit_code != 0
+    assert 結果.code == "CLAIM_FILE_MISSING"
+
+
+def test_交叉斷言_查無_id_不能回_claim_file_missing() -> None:
+    目錄 = 已知目錄({"existing.claim": Path("/tmp/nonexistent_12345.json")})
+    結果 = 跑驗收(["--claim", "未知id"], catalog=目錄)
+    assert 結果.code == "UNKNOWN_CLAIM_ID"
+    assert 結果.code != "CLAIM_FILE_MISSING"
+
+
+def test_交叉斷言_檔案缺失不能回_unknown_claim_id(tmp_path: Path) -> None:
+    缺失路徑 = tmp_path / "nonexistent_12345.json"
+    目錄 = 已知目錄({"已存在.claim": 缺失路徑})
+    結果 = 跑驗收(["--claim", "已存在.claim"], catalog=目錄)
+    assert 結果.code == "CLAIM_FILE_MISSING"
+    assert 結果.code != "UNKNOWN_CLAIM_ID"
+
+
+def test_交叉斷言_反向變體必紅(tmp_path: Path) -> None:
+    缺失路徑 = tmp_path / "nonexistent_12345.json"
+    目錄 = 已知目錄({"已存在.claim": 缺失路徑})
+
+    def 誤回缺檔_跑驗收(參數: list[str], catalog: ClaimCatalog | None = None) -> 跑驗收結果:
+        結果 = 跑驗收(參數, catalog=catalog)
+        if 結果.code == "UNKNOWN_CLAIM_ID":
+            return 跑驗收結果(exit_code=1, code="CLAIM_FILE_MISSING", 細節=結果.細節)
+        return 結果
+
+    def 誤回未知_跑驗收(參數: list[str], catalog: ClaimCatalog | None = None) -> 跑驗收結果:
+        結果 = 跑驗收(參數, catalog=catalog)
+        if 結果.code == "CLAIM_FILE_MISSING":
+            return 跑驗收結果(exit_code=1, code="UNKNOWN_CLAIM_ID", 細節=結果.細節)
+        return 結果
+
+    甲結果 = 誤回缺檔_跑驗收(["--claim", "未知id"], catalog=目錄)
+    assert 甲結果.code != "UNKNOWN_CLAIM_ID"
+
+    乙結果 = 誤回未知_跑驗收(["--claim", "已存在.claim"], catalog=目錄)
+    assert 乙結果.code != "CLAIM_FILE_MISSING"
+
+
+def test_缺檔被吞負控(tmp_path: Path) -> None:
+    假檔 = tmp_path / "已刪除.claim.json"
+    目錄 = 已知目錄({"測試.已刪檔": 假檔})
+
+    正常結果 = 跑驗收(["--claim", "測試.已刪檔"], catalog=目錄)
+    assert 正常結果.exit_code != 0
+    assert 正常結果.code == "CLAIM_FILE_MISSING"
+
+    壞結果 = 吞缺檔_跑驗收(["--claim", "測試.已刪檔"], catalog=目錄)
+    assert 壞結果.exit_code == 0
+    assert 壞結果.code == "OK"
+
+    查無結果 = 吞缺檔_跑驗收(["--claim", "根本不存在的id"], catalog=目錄)
+    assert 查無結果.exit_code != 0
+    assert 查無結果.code == "UNKNOWN_CLAIM_ID"
+
+    assert 壞結果.exit_code != 正常結果.exit_code
+
+
+def test_保留既有_positional_pytest_路徑與_exit_code_透傳() -> None:
+    結果 = 跑驗收(["nova/基礎設施/裁定執行/test_外部框架.py", "-k", "test_判定裡根本沒有_xfail"])
+    assert 結果.exit_code == 0
+    assert 結果.code == "OK"

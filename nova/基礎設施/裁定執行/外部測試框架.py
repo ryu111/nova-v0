@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import enum
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -157,3 +158,62 @@ def pytest_collection_modifyitems(
     for 路徑 in config.getoption("--claim-plan"):
         檔 = ClaimPlanFile.from_parent(session, path=Path(str(路徑)))
         items.extend(檔.collect())
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimCatalog:
+    """claim_id → claim 檔案路徑的目錄 port。
+
+    存在理由：在純掃描式解析下，「檔案缺失」會退化成「目錄裡沒有這個 id」，
+    使得 UNKNOWN_CLAIM_ID 與 CLAIM_FILE_MISSING 兩態不可分。
+    ClaimCatalog port 讓測試可以注入包含特定 entry 但實體檔案缺失的 catalog，
+    使 CLAIM_FILE_MISSING 成為可達且可獨立驗證的狀態。
+    """
+
+    條目: dict[str, Path]
+
+    @classmethod
+    def 掃描(cls, 根目錄: Path) -> ClaimCatalog:
+        """Production binding：掃描 規格/**/保證/*.claim.json 建立 claim_id 映射。"""
+        條目: dict[str, Path] = {}
+        for 路徑 in sorted(根目錄.glob("規格/**/保證/*.claim.json")):
+            if not 路徑.is_file():
+                continue
+            try:
+                內容 = json.loads(路徑.read_text(encoding="utf-8"))
+                if isinstance(內容, dict) and "claim_id" in 內容:
+                    條目[str(內容["claim_id"])] = 路徑
+            except Exception:
+                continue
+        return cls(條目=條目)
+
+    def 解析(self, claim_id: str) -> tuple[str, Path | None]:
+        """查 claim_id 對應的路徑。
+
+        回傳 (code, path):
+        - 查無 claim_id: ("UNKNOWN_CLAIM_ID", None)
+        - 有 entry 但檔案不存在或不可讀: ("CLAIM_FILE_MISSING", 路徑)
+        - 正常存在: ("OK", 路徑)
+        """
+        if claim_id not in self.條目:
+            return ("UNKNOWN_CLAIM_ID", None)
+        路徑 = self.條目[claim_id]
+        if not 路徑.exists() or not 路徑.is_file():
+            return ("CLAIM_FILE_MISSING", 路徑)
+        try:
+            with 路徑.open("rb") as _:
+                pass
+        except OSError:
+            return ("CLAIM_FILE_MISSING", 路徑)
+        return ("OK", 路徑)
+
+
+def 已知目錄(條目: dict[str, Path | str] | None = None, **kwargs: Path | str) -> ClaimCatalog:
+    """測試注入用 helper：把 dict 或 keyword args 轉成 ClaimCatalog。"""
+    合併: dict[str, Path] = {}
+    if 條目:
+        for k, v in 條目.items():
+            合併[k] = Path(v) if isinstance(v, str) else v
+    for k, v in kwargs.items():
+        合併[k] = Path(v) if isinstance(v, str) else v
+    return ClaimCatalog(條目=合併)
