@@ -74,6 +74,7 @@ class TestPlan:
     binding_digest: str
     isolation_digest: str
     cases: tuple[dict[str, Any], ...]
+    predicates: tuple[dict[str, Any], ...]
     canonical_bytes: bytes
     digest: Sha256Ref
 
@@ -81,6 +82,10 @@ class TestPlan:
     def 案數(self) -> int:
         """Actual 一格，加上每個正控與負控各一格。"""
         return len(self.cases)
+
+    def 取(self, kind: str) -> tuple[dict[str, Any], ...]:
+        """依 kind 取出該色的 case，順序與編譯時相同。"""
+        return tuple(格 for 格 in self.cases if 格["kind"] == kind)
 
 
 def 查原語(spec: ClaimSpec, 目錄: 原語目錄) -> CompileFailure | None:
@@ -208,6 +213,7 @@ def compile_claim(
         binding_digest=binding.digest.hex,
         isolation_digest=offer.digest.hex,
         cases=案,
+        predicates=tuple(spec.judge_all_of),
         canonical_bytes=位元組,
         digest=sha256_ref(位元組),
     )

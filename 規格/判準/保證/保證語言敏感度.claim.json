@@ -1,0 +1,186 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "claimspec.controls.direct-red-preserved",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "三色矩陣的每一色都必須各自成立：actual 必須 ACCEPT、每個正控必須 ACCEPT、每個負控必須直接紅（CLAIM_REJECTED）且 failed_predicates 恰等於它宣告的 must_fail_exactly。外層 meta-test 綠代表內層的負控真的紅過——外層綠而內層沒紅過等於什麼都沒驗到。UNBOUND_SUBJECT、UNSUPPORTED_ISOLATION、HARNESS_ERROR、HARNESS_LIMIT 四種獨立結果一律不算負控成立：subject 自己爆掉不是抓到錯，是根本沒驗到。判定不看比例也不看多數，任一格不對就不通過。",
+  "sources": [
+    {
+      "source_id": "plan.01.task.8",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-8"
+    },
+    {
+      "source_id": "plan.01.independent-results",
+      "kind": "PLAN_CONSTRAINT",
+      "locator": "docs/計畫/01-可執行保證語言.md#L19"
+    },
+    {
+      "source_id": "claude-md.acceptance",
+      "kind": "DECISION",
+      "locator": "CLAUDE.md#誰有權說接受"
+    }
+  ],
+  "primitive_catalog": {
+    "catalog_id": "claimspec-runner.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "claimspec-runner.v1",
+    "operation": "run-plan",
+    "binding_slot": "claimspec-runner.in-process"
+  },
+  "parameters": {
+    "terminals": [
+      "ACCEPT",
+      "CLAIM_REJECTED",
+      "UNBOUND_SUBJECT",
+      "UNSUPPORTED_ISOLATION",
+      "HARNESS_ERROR",
+      "HARNESS_LIMIT"
+    ],
+    "independent_results_never_count_as_negative_success": true
+  },
+  "setup": [],
+  "stimulus": [
+    {
+      "primitive": "claimspec.run_plan",
+      "arguments": {
+        "plan": "$SUBJECT_PLAN"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "code",
+      "source": "STIMULUS_RESULT",
+      "path": "code",
+      "type": "STRING"
+    }
+  ],
+  "judge": {
+    "all_of": [
+      {
+        "predicate_id": "actual_must_accept",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "ACTUAL_NOT_ACCEPTED"
+        }
+      },
+      {
+        "predicate_id": "positive_must_accept",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "POSITIVE_NOT_ACCEPTED"
+        }
+      },
+      {
+        "predicate_id": "negative_must_be_direct_red",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "NEGATIVE_NOT_DIRECT_RED"
+        }
+      },
+      {
+        "predicate_id": "negative_red_matches_must_fail_exactly",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "NEGATIVE_RED_ON_WRONG_PREDICATE"
+        }
+      },
+      {
+        "predicate_id": "independent_result_is_not_negative_success",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "INDEPENDENT_RESULT_COUNTED_AS_SUCCESS"
+        }
+      },
+      {
+        "predicate_id": "verdict_is_ok",
+        "operator": "EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "OK"
+        }
+      }
+    ]
+  },
+  "controls": {
+    "positive": [
+      {
+        "control_id": "reference-envelope-three-colours",
+        "subject_binding": "CLAIMSPEC_RUNNER_IN_PROCESS",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
+    "negative": [
+      {
+        "control_id": "constant-true-judge",
+        "faulty_subject": "驗收/保證規格語言/測_敏感度.py::test_constant_true_判準讓敏感度轉紅",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "negative_must_be_direct_red"
+        ]
+      },
+      {
+        "control_id": "negative-subject-crashes",
+        "faulty_subject": "驗收/保證規格語言/測_敏感度.py::test_negative_自己爆掉不算抓到錯",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "independent_result_is_not_negative_success"
+        ]
+      },
+      {
+        "control_id": "negative-red-on-wrong-predicate",
+        "faulty_subject": "驗收/保證規格語言/測_敏感度.py::test_negative_紅錯_predicate_不算通過",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "negative_red_matches_must_fail_exactly"
+        ]
+      },
+      {
+        "control_id": "actual-red",
+        "faulty_subject": "驗收/保證規格語言/測_敏感度.py::test_actual_紅了整份就不通過",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "actual_must_accept"
+        ]
+      }
+    ]
+  },
+  "run_limits": {
+    "wall_ms": 60000,
+    "max_output_bytes": 1048576
+  },
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {
+    "retain": [
+      "code",
+      "detail"
+    ],
+    "record_kind": "SENSITIVITY_MATRIX"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
+  "cleanup": []
+}
