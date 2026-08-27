@@ -14,6 +14,9 @@
   I5 修改方向     Modify 的對象必須由自己或**遞移**前置計畫 Create——否則就是一條沒有
                   宣告的隱含依賴，照宣告的順序執行時那個檔案還不存在。用遞移閉包而不是
                   直接邊：14 沒有直接宣告 01，但它宣告了 01B 而 01B 依賴 01。
+  I7 引用可解析   `Run:` 指令引用的檔案必須在該 task 或更早被 Create；File Structure
+                  宣告的檔案必須有人 Create。I1 只查 Create/Modify 條目的所有權，
+                  查不到指令引用——實測一次掃出 22 處。
 
 負控（改壞任一項應轉紅）：
   I1 → 把某個 Create 路徑複製到另一份計畫。
@@ -21,6 +24,7 @@
   I3 → 讓 05 宣告依賴 09。
   I4 → 刪掉任一 task 的「**固定負控:**」段。
   I5 → 讓 05 去 Modify 一個由 14 Create 的檔案。
+  I7 → 把任一 Run: 指令的檔名改掉一個字，或從 File Structure 挑一個檔刪掉它的 Create 條目。
   I6 → 把兩個 task 併成一個（commit 步會變成兩個）。
        註：ClaimSpec 上限 2 抓不到 1+1 合併（併完剛好是 2，仍在上限內），
        所以偵測合併靠的是 commit 步那條——164/164 個 task 都恰好一次 commit。
@@ -174,6 +178,58 @@ def i6_任務口徑(檔, 上限條=2, 上限檔=10):
                 失敗.append(f'I6 一個 task 動 {檔數} 個檔（上限 {上限檔}）：{名}')
 
 
+def i7_引用可解析(檔):
+    """Run: 引用的檔案必須在該 task 或更早被 Create；File Structure 宣告的必須有人 Create。
+
+    為什麼：I1 只查 Create/Modify 條目彼此的所有權，不查**指令引用**。2026-08-27 手掃
+    一次抓到 22 處：4 處引用尚未建立的檔（真順序問題）、10 處引用整份計畫從未 Create 過
+    的檔（改名沒跟上）、8 處 File Structure 宣告了卻沒有任何 task 建立。
+
+    第二類最貴：實作者跑到 `pytest 某個不存在的檔` 會得到 file not found，最可能的反應是
+    「大概改名了」自己挑一個看起來對的檔跑——那道檢查就**靜默消失，而且不會有任何紅**。
+    這正是本 repo 最痛恨的形狀：宣稱有把關而沒有。
+    """
+    路徑樣式 = re.compile(r'(?:nova|規格|驗收|前端|工具|架構)/[^\s`\'"()、，。：]+')
+    樹字 = set("│├└─ ")
+    全建 = set()
+    for f in 檔:
+        全建 |= set(re.findall(r'^- Create: `([^`]+)`', open(f, encoding='utf-8').read(), re.M))
+
+    已存在 = set()
+    for f in sorted(檔, key=lambda x: 序位(編號(x))):
+        s = open(f, encoding='utf-8').read()
+        for i, b in enumerate(re.split(r'^### Task \d+:', s, flags=re.M)[1:], 1):
+            名 = f'{編號(f)}-Task{i}'
+            本 = set(re.findall(r'^- (?:Create|Modify): `([^`]+)`', b, re.M))
+            引用 = set()
+            for 行 in re.findall(r'^Run:\s*`([^`]+)`', b, re.M):
+                引用 |= {p.split('::')[0].rstrip('/') for p in 路徑樣式.findall(行)}
+            for p in sorted(引用):
+                if p in 已存在 or p in 本: continue
+                if any(x.startswith(p + '/') for x in 已存在 | 本): continue
+                因 = '該檔在後面的 task 才 Create' if (p in 全建 or any(
+                    x.startswith(p + '/') for x in 全建)) else '整份計畫從未 Create 過這個檔'
+                失敗.append(f'I7 {名} 的 Run 引用了不存在的 {p}（{因}）')
+            已存在 |= set(re.findall(r'^- Create: `([^`]+)`', b, re.M))
+
+        m = re.search(r'## File Structure\s*```text\n(.*?)```', s, re.S)
+        if not m: continue
+        堆 = []
+        for 行 in m.group(1).splitlines():
+            j = 0
+            while j < len(行) and 行[j] in 樹字: j += 1
+            if j >= len(行): continue
+            深, 名2 = j // 4, 行[j:].split('—')[0].strip()
+            if not 名2: continue
+            if 名2.endswith('/'):
+                堆 = 堆[:深] + [名2]; continue
+            路徑 = ''.join(堆[:深]) + 名2
+            if '*' in 路徑 or not re.match(
+                    r'^(nova|規格|驗收|前端|工具|架構)/.+\.\w+$', 路徑): continue
+            if 路徑 not in 全建:
+                失敗.append(f'I7 {編號(f)} 的 File Structure 宣告了 {路徑} 但沒有任何 task Create')
+
+
 def i4_任務完整(檔):
     總 = 0
     for f in 檔:
@@ -199,6 +255,7 @@ def main():
     建數 = i1_i5_檔案所有權(檔, 邊)
     任務數 = i4_任務完整(檔)
     i6_任務口徑(檔)
+    i7_引用可解析(檔)
     print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個')
     for n in sorted(邊):
         print(f'  {n} ← {邊[n] or "（無前置）"}')
@@ -206,7 +263,7 @@ def main():
         print(f'\n不變式不成立（{len(失敗)}）：')
         for x in 失敗: print(f'  ✗ {x}')
         return 1
-    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑　全部成立')
+    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析　全部成立')
     return 0
 
 
