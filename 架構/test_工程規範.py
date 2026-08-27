@@ -1,5 +1,7 @@
 """工程規範 checker 的近身測試：每條規則都要有一個事前固定的錯誤 subject 把它打紅。"""
 
+import contextlib
+import functools
 import json
 import pathlib
 import re
@@ -374,7 +376,6 @@ def test_臨時倉不得被繼承的_GIT_環境變數帶去污染真倉(
     誘餌設定 = (誘餌 / ".git" / "config").read_text(encoding="utf-8")
     assert "t@t" not in 誘餌設定, "誘餌倉的 config 被污染了"
     assert not (誘餌 / ".git" / "hooks" / "pre-commit").exists(), "誘餌倉的 hook 被覆寫了"
-    assert "bare = false" in 誘餌設定, "誘餌倉被翻成 bare"
     誘餌_HEAD = subprocess.run(
         ["git", "rev-parse", "--verify", "HEAD"],
         cwd=誘餌,
@@ -382,6 +383,55 @@ def test_臨時倉不得被繼承的_GIT_環境變數帶去污染真倉(
         env=乾淨環境(),
     )
     assert 誘餌_HEAD.returncode != 0, "誘餌倉被寫進了 commit"
+
+
+def test_臨時倉不得把共用設定翻成_bare(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """負控：`GIT_DIR` **指向連結工作樹的 git dir** 加 `git init` 會翻掉共用 config 的 bare。
+
+    **「連結工作樹」那半不能省。** nova-ea 的對照實驗（各三跑）夾出的是一個合取：
+
+    | 條件 | `core.bare` |
+    |---|---|
+    | `GIT_DIR` = **worktree** git dir 加 `git init` | **true** |
+    | `GIT_DIR` = 主 `.git` 加 `git init` | false |
+    | cwd 在工作樹、不設 env 加 `git init` | false |
+    | `GIT_DIR` = worktree 加 只跑 `git config` | false（身分照樣被污染） |
+
+    所以誘餌**必須有連結工作樹**、`GIT_DIR` 必須指向那個工作樹的 git dir。
+    用普通 repo 加 `GIT_DIR=誘餌/.git` 寫這一格，assert 會永遠綠——
+    看起來守住了 bare，實際上守不住，而且沒有任何格會告訴你。
+    （2026-08-28 我第一版就是那樣寫的，被 nova-ea 指出來。）
+
+    真實鏈路：agy 在 `實作/01-T11` 這個**連結工作樹**裡 commit，
+    鉤子把 `GIT_DIR` 設成 `.git/worktrees/T11`，`造臨時倉` 的 `git init -q` 繼承它，
+    於是主 repo 的 `core.bare` 被翻成 true、`git status` 從此回
+    `fatal: this operation must be run in a work tree`。
+    """
+    誘餌 = tmp_path / "誘餌"
+    工作 = tmp_path / "工作"
+    誘餌.mkdir()
+    工作.mkdir()
+    跑 = functools.partial(subprocess.run, check=True, env=乾淨環境())
+    跑(["git", "init", "-q"], cwd=誘餌)
+    (誘餌 / "種.txt").write_text("x\n", encoding="utf-8")
+    跑(["git", "add", "-A"], cwd=誘餌)
+    跑(["git", "-c", "user.email=種@種", "-c", "user.name=種", "commit", "-qm", "種"], cwd=誘餌)
+    跑(["git", "worktree", "add", "-q", str(tmp_path / "連結"), "-b", "連結分支"], cwd=誘餌)
+
+    工作樹_git_目錄 = 誘餌 / ".git" / "worktrees" / "連結"
+    assert 工作樹_git_目錄.is_dir(), "連結工作樹沒建起來，這一格會退化成恆真"
+    monkeypatch.setenv("GIT_DIR", str(工作樹_git_目錄))
+
+    # 隔離失效時 `git init` 先翻掉 bare，後面的 `git config` 才炸成 exit 128。
+    # 不吞掉那個例外的話，這一格會紅在 CalledProcessError 而不是紅在下面那句斷言
+    # ——「紅在別的地方」等於這一格沒驗到它宣稱要驗的東西。
+    with contextlib.suppress(subprocess.CalledProcessError):
+        造臨時倉(工作, 入口回傳=0)
+
+    共用設定 = (誘餌 / ".git" / "config").read_text(encoding="utf-8")
+    assert "bare = true" not in 共用設定, "共用 config 被翻成 bare"
 
 
 def 造批次(
