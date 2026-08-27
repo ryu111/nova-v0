@@ -197,6 +197,12 @@ git commit -m "feat: 編譯 literal 的 CLI argv 樣板"
 **ClaimSpec:** 【推論】`backend.generic-cli.execution.protocol-parity` 從紅轉綠。
 
 **固定負控:** 【推論】FINAL mode宣告tool/round/quota events、unknown JSONL dropped、exit0 self-success terminal、unbounded stdout；common suite direct red。
+`ignore-term-grandchild`：fixture_agent 增 hang／fork 模式——忽略 SIGTERM 並 fork
+孫程序無限睡眠；wall deadline 後父與孫都必須不存在、終態 `TIMED_OUT`。
+**寫入條件**（審查，2026-08-28）：**「不存在」必須以程序身分或 handle 驗證，
+不得只用 PID**——PID 會被重用，拿它當死亡證據會在系統忙碌時給出假綠。
+（R13 並排比對：14／15／17 各有 adapter 級的 cancel／process-tree 負控，16 原本沒有
+——通用 runtime 走 ProcessSupervisor 不豁免 adapter 自證。）
 
 - [ ] **Step 1: 寫same behavioral fixtures through both modes red**
 
@@ -302,6 +308,10 @@ git commit -m "feat: 綁定通用 CLI 的額度能力"
 **ClaimSpec:** 【推論】`backend.generic-cli.context-plan-consumer-only` 從紅轉綠。
 
 **固定負控:** 【推論】adapter查Constraint/Knowledge registry、caller重新排序advisories、FINAL mode宣告turn reassert、meter無upper-bound proof；architecture/contract direct red或unsupported。
+`sealed-canary-in-invocation`：sealed canary 出現在 argv／env／stdin／workspace 任一，
+必須紅在 `invocation_contains_no_sealed_bytes`（雙池 fixture 沿用 06 的 builders）。
+（R13 並排比對：14 的 `測_投影.py` 與 15 的 Task 8 都有此格，16 只有 registry 面、
+沒有 bytes 面——對稱補齊。）
 
 - [ ] **Step 1: 寫constructor/public-input與capability red**
 
