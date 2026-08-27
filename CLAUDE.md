@@ -122,11 +122,12 @@ plans／tests）。三處共讀，不各自維護：
    把一個測試引用舊檔名的壞 commit 送進 main，CI 才抓下來。
 2. hook 可能**根本沒裝**——`.git/` 不在版控裡，新 clone 預設沒有，
    要跑 `uv run python 工具/裝_git_鉤子.py`。
-3. **「紅了合不進去」目前不成立。** `ryu111/nova` 是 private repo ＋ GitHub Free，
-   branch protection 與 ruleset 兩條 API 都回
-   `403 Upgrade to GitHub Pro or make this repository public`。
-   所以現況能寫的只有：**CI 會在每次 push 與 PR 跑並顯示紅，但不會擋住任何合併。**
-   要讓它擋，只有兩條路：升級 GitHub Pro，或把 repo 轉公開。查證日 2026-08-27。
+3. **「紅了合不進去」2026-08-27 起成立，但仍有兩個出口。** repo 轉公開後
+   ruleset `main-gates` 已 active：必經 PR、`gates` 必須綠、擋 force push 與刪除。
+   **實測**：直推 main 得到 `GH013 ... Changes must be made through a pull request.`；
+   CI 紅的 PR 合併得到 `the base branch policy prohibits the merge`。
+   兩個出口：`gh pr merge --admin` 用管理員權限跳過，以及 repo 設定隨時可被改掉。
+   **兩者都是人為決定，不是機制漏洞**——寫在這裡是為了不讓人以為它密不透風。
 
 負控實跑過四條（入口第一紅就停、入口永遠回零、CI 漏跑一道、hook 吞掉非零 exit），
 外加防恆真格「閘全綠時 hook 不擋正常 commit」。claim 落點
