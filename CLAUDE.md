@@ -116,13 +116,17 @@ plans／tests）。三處共讀，不各自維護：
   實測叫 `驗收.yml` 時 GitHub 註冊成功、顯示 active、手動觸發也跑得起來，
   但 `push`／`pull_request` **一次都不觸發**，而 UI 上完全看不出異常。
 
-**還是不准寫「不可能繞過」。** 三個確切的上限，寫在這裡是為了讓下一個人不必自己踩：
+**還是不准寫「不可能繞過」。** 三個確切的上限，全部實測過：
 
-1. hook 可以被 `git commit --no-verify` 繞過。
-2. hook 可能**根本沒裝**——新 clone 預設沒有。
-3. CI 會跑，但「紅了不准合併」需要在 GitHub 上開 branch protection 並把 `gates`
-   設成 required check。**那是 repo 設定，不在版控裡，實作者改不到。**未確認之前，
-   能寫的是「CI 會跑並顯示紅」，不能寫「紅了合不進去」。
+1. hook 可以被 `git commit --no-verify` 繞過。**2026-08-27 我自己就繞過一次**，
+   把一個測試引用舊檔名的壞 commit 送進 main，CI 才抓下來。
+2. hook 可能**根本沒裝**——`.git/` 不在版控裡，新 clone 預設沒有，
+   要跑 `uv run python 工具/裝_git_鉤子.py`。
+3. **「紅了合不進去」目前不成立。** `ryu111/nova` 是 private repo ＋ GitHub Free，
+   branch protection 與 ruleset 兩條 API 都回
+   `403 Upgrade to GitHub Pro or make this repository public`。
+   所以現況能寫的只有：**CI 會在每次 push 與 PR 跑並顯示紅，但不會擋住任何合併。**
+   要讓它擋，只有兩條路：升級 GitHub Pro，或把 repo 轉公開。查證日 2026-08-27。
 
 負控實跑過四條（入口第一紅就停、入口永遠回零、CI 漏跑一道、hook 吞掉非零 exit），
 外加防恆真格「閘全綠時 hook 不擋正常 commit」。claim 落點
