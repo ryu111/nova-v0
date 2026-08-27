@@ -1,0 +1,44 @@
+{
+  "$schema": "../ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "claimspec.compiler.deterministic-typed-plan",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "同一份 ClaimSpec 配同一份原語目錄、綁定清單與隔離供給，編出來的 plan_digest 永遠相同，且與 pytest worker 數無關。digest 綁四個輸入而不只綁 claim——只綁 claim 等於宣稱在別的環境上驗的是同一件事。編不出來的原因不得壓成同一個字串：UNBOUND_SUBJECT 與 UNSUPPORTED_ISOLATION 是獨立結果不是負控成功，TYPE_MISMATCH 是規格寫錯，三者必須分得開。被測者自報的 DURATION_MS 不得用來證明外部期限。外部效果由目錄宣告的種類決定，不由原語名字的前綴猜。",
+  "sources": [
+    {"source_id": "plan.01.task.7", "kind": "PLAN_TASK", "locator": "docs/計畫/01-可執行保證語言.md#task-7"},
+    {"source_id": "overview.independent-results", "kind": "PLAN_CONSTRAINT", "locator": "docs/計畫/01-可執行保證語言.md#L19"}
+  ],
+  "primitive_catalog": {"catalog_id": "claimspec-compiler.v1", "digest": null},
+  "subject": {"contract": "claimspec-compiler.v1", "operation": "compile-claim", "binding_slot": "claimspec-compiler.in-process"},
+  "parameters": {"digest_inputs": ["claim", "catalog", "binding", "isolation"], "value_types": ["STRING", "INTEGER", "BOOLEAN", "DURATION_MS", "BYTES"]},
+  "setup": [],
+  "stimulus": [{"primitive": "claimspec.compile", "arguments": {"spec": "$SUBJECT_SPEC"}}],
+  "observations": [{"observation_id": "code", "source": "STIMULUS_RESULT", "path": "code", "type": "STRING"}],
+  "judge": {
+    "all_of": [
+      {"predicate_id": "same_inputs_same_digest", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "PLAN_DIGEST_UNSTABLE"}},
+      {"predicate_id": "digest_covers_all_four_inputs", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "PLAN_DIGEST_IGNORES_INPUT"}},
+      {"predicate_id": "type_mismatch_is_rejected", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "TYPE_MISMATCH"}},
+      {"predicate_id": "unknown_primitive_is_rejected", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "UNKNOWN_PRIMITIVE"}},
+      {"predicate_id": "subject_time_cannot_prove_external_deadline", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "UNTRUSTED_OBSERVATION"}},
+      {"predicate_id": "independent_results_stay_distinct", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "COMPILE_CODES_COLLAPSED"}},
+      {"predicate_id": "verdict_is_ok", "operator": "EQUALS", "left": {"observation": "code"}, "right": {"const": "OK"}}
+    ]
+  },
+  "controls": {
+    "positive": [{"control_id": "lawful-claim-compiles", "subject_binding": "COMPILER_IN_PROCESS", "expected_terminal": "ACCEPT"}],
+    "negative": [
+      {"control_id": "duration-compared-with-bytes", "faulty_subject": "nova/權威/判準/test_保證規格語言.py::test_型別不符的比較被擋", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["type_mismatch_is_rejected"]},
+      {"control_id": "primitive-not-in-catalog", "faulty_subject": "nova/權威/判準/test_保證規格語言.py::test_未知原語被擋", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["unknown_primitive_is_rejected"]},
+      {"control_id": "subject-reported-elapsed", "faulty_subject": "nova/權威/判準/test_保證規格語言.py::test_subject_time_不能證外部期限", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["subject_time_cannot_prove_external_deadline"]},
+      {"control_id": "three-codes-collapsed", "faulty_subject": "nova/權威/判準/test_保證規格語言.py::test_三類編譯錯誤不被壓成同一字串", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["independent_results_stay_distinct"]}
+    ]
+  },
+  "run_limits": {"wall_ms": 60000, "max_output_bytes": 1048576},
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {"retain": ["code", "detail"], "record_kind": "COMPILE_VERDICT"},
+  "feedback": {"to_candidate": "NONE"},
+  "cleanup": []
+}
