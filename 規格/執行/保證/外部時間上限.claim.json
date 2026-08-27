@@ -1,0 +1,41 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "execution.limit.wall.externally-enforced",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "宣告了 wall limit 的執行封套，必須由封套外面的監督者在牆鐘到期後真的把 worker 殺掉：worker 在 wall_ms + grace_ms 之後不得還活著，而且這件事由 verifier 在外面量，不看被測者自報。只回報 TIMED_OUT 不算數——合作式的封套自報逾時的字串跟真的一模一樣，差別只有在外面量才看得見。所以三條判準要一起成立：終態是 TIMED_OUT、外部量到的用時在界內、worker 確實死了。少了後兩條，任何肯回傳 TIMED_OUT 的被測者都能通過。",
+  "sources": [
+    {"source_id": "plan.01.task.10", "kind": "PLAN_TASK", "locator": "docs/計畫/01-可執行保證語言.md#task-10"},
+    {"source_id": "compiler.untrusted-observation", "kind": "PLAN_CONSTRAINT", "locator": "docs/計畫/01-可執行保證語言.md#task-7"}
+  ],
+  "primitive_catalog": {"catalog_id": "execution-envelope.v1", "digest": null},
+  "subject": {"contract": "execution-envelope.v1", "operation": "run", "binding_slot": "execution-envelope.reference"},
+  "parameters": {"wall_ms": 300, "grace_ms": 200, "probe_extra_ms": 2000, "elapsed_bound_ms": 1500},
+  "setup": [],
+  "stimulus": [{"primitive": "envelope.run", "arguments": {"worker": "$SLEEP_FOREVER", "wall_ms": 300, "grace_ms": 200}}],
+  "observations": [
+    {"observation_id": "terminal", "source": "VERIFIER", "path": "terminal", "type": "STRING"},
+    {"observation_id": "elapsed_ms", "source": "VERIFIER", "path": "elapsed_ms", "type": "DURATION_MS"},
+    {"observation_id": "worker_alive_after_grace", "source": "VERIFIER", "path": "worker_alive_after_grace", "type": "BOOLEAN"}
+  ],
+  "judge": {
+    "all_of": [
+      {"predicate_id": "terminal_is_timed_out", "operator": "EQUALS", "left": {"observation": "terminal"}, "right": {"const": "TIMED_OUT"}},
+      {"predicate_id": "elapsed_bound", "operator": "LESS_THAN", "left": {"observation": "elapsed_ms"}, "right": {"const": 1500}},
+      {"predicate_id": "worker_dead", "operator": "EQUALS", "left": {"observation": "worker_alive_after_grace"}, "right": {"const": false}}
+    ]
+  },
+  "controls": {
+    "positive": [{"control_id": "external-supervisor", "subject_binding": "REFERENCE", "expected_terminal": "ACCEPT"}],
+    "negative": [
+      {"control_id": "cooperative-timeout-subject", "faulty_subject": "nova/基礎設施/裁定執行/參考執行封套.py::合作式監督", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["elapsed_bound", "worker_dead"]}
+    ]
+  },
+  "run_limits": {"wall_ms": 60000, "max_output_bytes": 1048576},
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {"retain": ["terminal", "elapsed_ms", "worker_alive_after_grace"], "record_kind": "EXECUTION_VERDICT"},
+  "feedback": {"to_candidate": "NONE"},
+  "cleanup": ["kill-worker-process-group"]
+}
