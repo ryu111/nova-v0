@@ -150,6 +150,14 @@
         "must_fail_exactly": [
           "exit_code_passed_through"
         ]
+      },
+      {
+        "control_id": "missing-claim-swallowed",
+        "faulty_subject": "nova/基礎設施/裁定執行/test_外部框架.py::test_缺檔被吞負控",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "exit_code_passed_through"
+        ]
       }
     ]
   },
