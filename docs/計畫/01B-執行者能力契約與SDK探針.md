@@ -16,6 +16,23 @@
 - 【推論】usage scope 固定 `ROOT_ONLY|DELEGATION_TREE_TOTAL|UNKNOWN`；`UNKNOWN` 不得冒充可核銷 tree total。
 - 【推論】CapabilityEvidence 綁 exact backend fingerprint、probe revision、observed/expiry、named controls；靜態 surface evidence TTL 最長 7 天、live readiness evidence TTL 最長 24 小時，fingerprint 改變立即失效，過期不得沿用。
 - 【推論】live smoke 有 wall time、turn、tool、output、spend 上限；不評模型聰明度，只驗可機械能力。
+- 【推論】四層重播界線：spec→plan 編譯必須決定性；live invocation→response 不要求決定性；
+  已完成 run→EvidenceBundle 必須 immutable；同 bundle→分析必須決定性。
+  **錄製義務不因後端非決定而免除。**
+- 【推論】輸出決定性家族封閉字彙：`SEEDED_REQUEST`、`SEEDED_OUTPUT_REPEATABILITY_OBSERVED`、
+  `CONTRACTUAL_OUTPUT_DETERMINISM_CLAIMED`、`OUTPUT_DETERMINISM`，後三者預設 unsupported。
+  `OUTPUT_DETERMINISM` 取中立名——純重播器不靠 seed 產生結果，seeded 語意只屬於
+  「對外部後端帶 seed 觀測」那兩條。`OUTPUT_DETERMINISM` 只能由 mechanism evidence 取得，
+  mechanism enum **v1 唯一成員 `PURE_REPLAYER`**（計畫 05 重播器）；evidence 必須引用
+  `execution.backend.replayer-output-deterministic`（05 Task 7）的 **exact revision、
+  claim digest 與已准入 predicate ids**，不得只引 `claim_id` 字串——一條沒有決定性負控的
+  claim 撐不起決定性能力的名字。`PINNED_DETERMINISTIC_ENGINE` 與
+  `BACKEND_CONTRACT_WITH_CONFORMANCE_SUITE` 不在 v1 可准入 enum——重入條件是各自具備
+  獨立 admission schema、checker 與固定負控後，以擴充點（加蓋動作②）加入。
+  外部 backend 目前最多取得 `SEEDED_OUTPUT_REPEATABILITY_OBSERVED` 或
+  `CONTRACTUAL_OUTPUT_DETERMINISM_CLAIMED`；後者是契約主張，
+  **不得滿足要求機械決定性的 claim 綁定**——有限 conformance suite 只證明 suite 範圍內
+  符合契約，不證明未來所有輸出決定性。
 
 ## File Structure
 
@@ -69,13 +86,29 @@ nova/領域/執行/
 
 **Interfaces:**
 - Produces: closed capability/tool class/typed outcome/usage scope unions and immutable refs。
+- Produces: 輸出決定性家族四條目（形狀見 Global Constraints）；`OUTPUT_DETERMINISM`
+  的 mechanism enum v1 唯一成員 `PURE_REPLAYER`。
 - Forbids: provider option names and unknown enum fallthrough。
+- Forbids: repeatability／contractual evidence 鑄出 `OUTPUT_DETERMINISM`。
 
 **ClaimSpec:** 【推論】`execution.backend-capability.closed-vocabulary` 從紅轉綠。
 
 **ClaimSpec落點:** `execution.backend-capability.closed-vocabulary` → `規格/執行/保證/能力/後端能力封閉.claim.json`（本 task Create）
 
-**固定負控:** 【推論】加入 capability `MAGIC_TOOL_BYPASS`、tool class `OTHER`、usage scope `BEST_EFFORT` 或 outcome free string；schema/compiler 必須 direct red。
+【推論】**`wrong-claim-ref` 不得實作成 claim-id 白名單**（審查條件，2026-08-28）——
+白名單只回答「名字在不在清單裡」，回答不了「那條 claim 到底驗了什麼」。必須這樣執法：
+①`PURE_REPLAYER` 的 capability policy **明確宣告所需的 predicate set**：
+`replay_order_stable`、`same_script_same_canonical_event_bytes`、`replay_ignores_ambient_time`。
+②resolver 從 `ProtectedClaimClosure` 解析出 **exact claim revision 與 digest**。
+③resolved claim 的**已准入 predicate set 必須涵蓋**上述集合。
+④`claim_id` 只是語義定位，**不能單獨取得資格**。
+⑤capability policy 本身必須是封閉、版本化、內容定址的資料，
+或由受保護程式碼連同它自己的 ClaimSpec 承載。
+
+如此這格負控問的不是「名字對不對」，而是
+**「這份已准入證據是否真的驗了能力要求的那三個 predicate」**。
+
+**固定負控:** 【推論】加入 capability `MAGIC_TOOL_BYPASS`、tool class `OTHER`、usage scope `BEST_EFFORT`、outcome free string，或把 `PINNED_DETERMINISTIC_ENGINE` 填進 determinism mechanism enum；schema/compiler 必須 direct red。
 
 - [ ] **Step 1: 寫 unknown enum 與缺 ref 的 schema red tests**
 - [ ] **Step 2: 跑 `uv run pytest -q nova/領域/執行/test_能力契約.py`**
@@ -171,12 +204,36 @@ git commit -m "test: 釘住 Claude SDK 的能力面"
 
 **Interfaces:**
 - Produces: `validate_capability_evidence(evidence, exact_fingerprint, now) -> VALID|EXPIRED|FINGERPRINT_MISMATCH|CONTROL_INCOMPLETE`。
+- Produces: repeatability evidence 必記 {`N`, 環境／backend fingerprint, request digest,
+  全部 N 份輸出 digest, TTL}；determinism evidence 必記 {`mechanism = PURE_REPLAYER`,
+  `claim_ref = {claim_id: execution.backend.replayer-output-deterministic, revision, digest,
+  predicate_ids}`}——ref 缺 revision／digest／predicate ids 任一即 `CONTROL_INCOMPLETE`；
+  contractual evidence 必記 {contract ref, conformance suite ref, pass record digest}。
+- Forbids: repeatability 或 contractual evidence 升格為 determinism——N 次逐 byte 相同
+  只證成「觀測到重複性」，第 N+1 次仍可能變。
 
 **ClaimSpec:** 【推論】`execution.backend-capability.evidence-fingerprint-ttl-bound` 從紅轉綠。
 
 **ClaimSpec落點:** `execution.backend-capability.evidence-fingerprint-ttl-bound` → `規格/執行/保證/能力/能力證據不可沿用.claim.json`（本 task Create）
 
 **固定負控:** 【推論】SDK/CLI/model/settings catalog 任一 digest 改變仍沿用舊 evidence，或 `now == expires_at` 仍 VALID；direct red。
+輸出決定性家族五格：`probe-upgraded-to-determinism`——把 N 次 probe evidence 直接寫成
+`OUTPUT_DETERMINISM` supported 的 faulty capability mapper，必須紅在
+`determinism_requires_mechanistic_evidence`。`nth-plus-one-differs`——`假能力後端.py`
+增一個前 N 次輸出逐 byte 相同、第 N+1 次改變的變體，其 evidence 記為 repeatability，
+faulty 檢查器據此讓要求 determinism 的綁定通過，必須紅在 `repeatability_is_not_determinism`。
+`forged-mechanistic-ref`——mechanism 填 `PURE_REPLAYER` 但 claim_ref 缺 revision／digest
+或指向不可驗來源的 evidence，必須紅在 `mechanistic_ref_must_resolve`。
+`wrong-claim-ref`——claim_ref 指到 `execution.backend.replayer-contract-parity`
+（一條負控只殺未知 event kind、沒有決定性負控的 claim）的 evidence，必須紅在
+`mechanistic_ref_targets_determinism_claim`——引用 claim 時要往下看它的負控殺的是什麼。
+`contract-claim-cannot-bind-mechanical`——持 `CONTRACTUAL_OUTPUT_DETERMINISM_CLAIMED`
+（含合法 contract ref 與 suite pass record）的後端綁定要求 `OUTPUT_DETERMINISM`
+的 claim，必須紅在 `contract_claim_is_not_mechanism`；fixture 內附 suite 外輸出改變的
+見證（suite 全過而 suite 外同 seed 輸出漂移），釘死「suite 過」不等於「機械決定」。
+防恆真格：計畫 05 純函式重播器以完整 `PURE_REPLAYER` claim_ref 取得
+`OUTPUT_DETERMINISM` supported——拒絕不是無條件；帶合規 N 次 probe 的後端
+取得 `SEEDED_OUTPUT_REPEATABILITY_OBSERVED` supported。
 
 - [ ] **Step 1: 寫 fingerprint one-field mutation 與 TTL boundary red**
 - [ ] **Step 2: 跑 `uv run pytest -q 驗收/執行者能力/測_能力證據.py`**
