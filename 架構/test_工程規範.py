@@ -16,6 +16,7 @@ from 工具.裝_git_鉤子 import 安裝 as 安裝鉤子
 from 工具.跑指定突變 import 跑批次
 from 工具.驗全部 import 跑, 閘清單
 from 架構.檢查工程規範 import (
+    讀_CI_步驟,
     check_fixture,
     命名規則檔,
     宣稱落點樣式,
@@ -324,9 +325,17 @@ def test_CI_跑的是同一組閘() -> None:
     # 【實測 2026-08-27】檔名一定要 ASCII：叫 驗收.yml 時 GitHub 會註冊成功、
     # 顯示 active、workflow_dispatch 也跑得起來，但 push／pull_request **一次都不觸發**。
     # UI 上完全看不出異常。改成 gates.yml 之後 push 立刻觸發。
-    文 = (專案根 / ".github" / "workflows" / "gates.yml").read_text(encoding="utf-8")
-    for 名, argv in 載入規則().閘們:
-        assert " ".join(argv) in 文, 名
+    #
+    # 【實測 2026-08-28】**只比對字串會假綠**：把兩個 `run:` 塞進同一個 step，
+    # YAML 解析後前者被覆蓋、那道閘在 CI 裡消失，而字串還在檔案裡。
+    # 現在驗的是 **`name → run` 的實際結構**，而且每個 step 恰一個 `run:`。
+    步驟 = 讀_CI_步驟()
+    對照 = {名: " ".join(argv) for 名, argv in 載入規則().閘們}
+    assert [名 for 名, _ in 步驟] == list(對照), (
+        f"CI 的閘名序列 {[名 for 名, _ in 步驟]} 與宣告清單 {list(對照)} 不符"
+    )
+    for 名, 指令 in 步驟:
+        assert 指令 == 對照[名], f"CI 的 {名} 跑的是 {指令!r}，宣告的是 {對照[名]!r}"
 
 
 def test_git_鉤子把非零_exit_傳出去(tmp_path: pathlib.Path) -> None:

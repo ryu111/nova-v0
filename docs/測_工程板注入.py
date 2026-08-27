@@ -7,7 +7,7 @@
 **每一輪我修的都是被回報的那個實例，而不是那個形狀。**
 這個檔的存在就是為了讓形狀有牙：**下一個人改注入器時，這些格會替 sol 說話。**
 
-七道閘裡的 `pytest` 會跑到這裡；另有 `board` 一閘直接跑 `--檢查`。
+八道閘裡的 `pytest` 會跑到這裡；另有 `board` 一閘直接跑 `--檢查`。
 """
 
 from __future__ import annotations
@@ -83,7 +83,40 @@ def 測試_乾淨板面注入後不再改動(板文: str, 料: dict) -> None:
             "計畫卡 pid 重複",
             lambda s: s.replace('<span class="pid">06</span>', '<span class="pid">05</span>', 1),
         ),
-        # ④ 錨在、內容格式壞掉——0 命中而靜默跳過的那一類
+        # ④ **完整合法集合，另加一列非法**——擷取若過濾格式就抓不到「多出」
+        (
+            "額外 Phase Z 列",
+            lambda s: (
+                s[
+                    : s.index("</tr>", s.index('<tr class="phase-row"><td class="ph">Phase D</td>'))
+                    + 5
+                ]
+                + s[
+                    s.index('<tr class="phase-row"><td class="ph">Phase D</td>') : s.index(
+                        "</tr>", s.index('<tr class="phase-row"><td class="ph">Phase D</td>')
+                    )
+                    + 5
+                ].replace("Phase D", "Phase Z")
+                + s[
+                    s.index("</tr>", s.index('<tr class="phase-row"><td class="ph">Phase D</td>'))
+                    + 5 :
+                ]
+            ),
+        ),
+        (
+            "額外 pid2=ZZ 列",
+            lambda s: (
+                s[: s.index("</tr>", s.index('<td class="pid2">20</td>')) + 5]
+                + s[
+                    s.rindex("<tr", 0, s.index('<td class="pid2">20</td>')) : s.index(
+                        "</tr>", s.index('<td class="pid2">20</td>')
+                    )
+                    + 5
+                ].replace(">20<", ">ZZ<")
+                + s[s.index("</tr>", s.index('<td class="pid2">20</td>')) + 5 :]
+            ),
+        ),
+        # ⑤ 錨在、內容格式壞掉——0 命中而靜默跳過的那一類
         (
             "pmeta 內容格式壞掉",
             lambda s: s.replace("</b> task · ", "</b> tasks · ", 1),

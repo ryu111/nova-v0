@@ -213,9 +213,20 @@ def 注入(文: str, 料: dict) -> str:
     """逐欄替換。每一條都以**結構為界**，不做全域數字取代。"""
     表 = {p["id"]: p for p in 料["計畫"]}
 
-    # **先驗四組 owned 結構的集合，再動任何一個字。**
-    驗集合(re.findall(r'<td class="ph">(Phase [A-D])</td>', 文), set(階段成員), "Phase 列")
-    驗集合(re.findall(r'<td class="pid2">([0-9]{2}[A-Z]?)</td>', 文), set(表), "計畫列")
+    # **先驗三組 owned 結構的集合，再動任何一個字。**
+    # **擷取不得過濾格式。** 第一版只抓 `Phase [A-D]` 與合法格式的計畫 id，
+    # 於是「多加一列 Phase Z」「多加一列 pid2=ZZ」都**不會被算成多出**
+    # ——sol 實測兩者皆不拒絕、注入前後相同，**又一個假綠**。
+    # 先按結構取**原始值**，格式對不對交給集合比對去說。
+    # 計畫列也有 `<td class="ph"></td>` 當佔位，所以 Phase 的擷取要**限定在 phase 列內**
+    # ——放寬格式過濾之後第一跑就被那些空格子打紅，那正是斷言在說「你的擷取面不對」。
+    階列 = re.findall(r'<tr class="phase-row">.*?</tr>', 文, flags=re.S)
+    驗集合(
+        [m for 列 in 階列 for m in re.findall(r'<td class="ph">([^<]*)</td>', 列)],
+        set(階段成員),
+        "Phase 列",
+    )
+    驗集合(re.findall(r'<td class="pid2">([^<]*)</td>', 文), set(表), "計畫列")
     卡們 = re.findall(卡樣式, 文, flags=re.S)
     驗集合(
         [
