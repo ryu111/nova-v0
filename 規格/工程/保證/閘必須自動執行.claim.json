@@ -30,7 +30,7 @@
     "negative": [
       {"control_id": "entry-stops-at-first-red", "faulty_subject": "工具/驗全部.py::跑[break-on-first-red]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["entry_runs_every_declared_gate"]},
       {"control_id": "entry-always-returns-zero", "faulty_subject": "工具/驗全部.py::跑[return-0]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["entry_fails_when_any_gate_fails"]},
-      {"control_id": "ci-drops-a-gate", "faulty_subject": ".github/workflows/驗收.yml::steps[types-removed]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["ci_runs_the_same_declared_gates"]},
+      {"control_id": "ci-drops-a-gate", "faulty_subject": ".github/workflows/gates.yml::steps[types-removed]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["ci_runs_the_same_declared_gates"]},
       {"control_id": "hook-swallows-exit", "faulty_subject": "工具/裝_git_鉤子.py::鉤子內容[exit-0]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["hook_propagates_nonzero_exit"]}
     ]
   },
