@@ -329,6 +329,25 @@ def 檢查_json_欄位(路徑: str, 原始碼: str) -> 檢查結果:
     return 檢查結果(通過, 路徑)
 
 
+TOML_鍵 = re.compile(r"^\s*(?:\[+\s*)?([^\s=\]\[#]+)\s*(?:=|\])", re.MULTILINE)
+
+
+def 檢查_toml_鍵(路徑: str, 原始碼: str) -> 檢查結果:
+    """TOML 的 bare key 只接受 ASCII——寫成中文不是風格問題，是**解析不了**。
+
+    【實測 2026-08-27】同一個 session 踩三次：`架構/目錄規則.toml` 的 `[頂層]`、
+    pyproject 的 `[dependency-groups] 開發`、突變批次的 `指令 =`，
+    每次都是 `TOMLDecodeError: Invalid statement (at line 1, column 1)`——
+    訊息不會告訴你是中文 key 的問題。這正是 CLAUDE.md 把 schema 欄位名列為
+    ASCII 例外的理由；`識別字雙軌` 那條 claim 也早就承諾了，只是閘先前只查 .json。
+    """
+    for 配對 in TOML_鍵.finditer(原始碼):
+        鍵 = 配對.group(1).strip().strip('"').strip("'")
+        if not 鍵.isascii():
+            return 檢查結果("NON_ASCII_TOML_KEY", 路徑, 鍵)
+    return 檢查結果(通過, 路徑)
+
+
 SQL_字串或註解 = re.compile(r"'(?:[^']|'')*'|--[^\n]*|/\*.*?\*/", re.DOTALL)
 
 
@@ -361,6 +380,7 @@ def 檢查規模(路徑: str, 樹: ast.Module, 原始碼: str, 規則: 規則集
 非_python_掃描器 = (
     (".sh", 檢查_shell_名),
     (".json", 檢查_json_欄位),
+    (".toml", 檢查_toml_鍵),
     (".sql", 檢查_sql_識別字),
 )
 

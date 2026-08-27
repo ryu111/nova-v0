@@ -1,0 +1,42 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "engineering.named-mutation.repeatable",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "一批事前命名的突變，任何人任何時候跑都得到同一份逐條結果。expect 在跑之前就宣告，實際與宣告不符即非零；目標字串不存在必須明講而不是靜靜跳過；跑完工作樹必須還原成跑之前的樣子。輸出沒有擊殺率——等價突變讓百分比不可用，唯一有意義的是事前命名的那一條實際結果與宣告是否相同。",
+  "sources": [
+    {"source_id": "plan.01.task.14", "kind": "PLAN_TASK", "locator": "docs/計畫/01-可執行保證語言.md#task-14"},
+    {"source_id": "plan.01.task.11", "kind": "PLAN_TASK", "locator": "docs/計畫/01-可執行保證語言.md#task-11"},
+    {"source_id": "claude-md.mutation-rule", "kind": "DECISION", "locator": "CLAUDE.md#不可違反"}
+  ],
+  "primitive_catalog": {"catalog_id": "named-mutation-runner.v1", "digest": null},
+  "subject": {"contract": "named-mutation-runner.v1", "operation": "run-batch", "binding_slot": "named-mutation-runner.repository"},
+  "parameters": {"batch_schema": "command + [[mutation]] name/file/old/new/expect", "expect_values": ["殺掉", "存活"]},
+  "setup": [],
+  "stimulus": [{"primitive": "mutation.run_batch", "arguments": {"batch": "$BATCH_PATH"}}],
+  "observations": [{"observation_id": "code", "source": "STIMULUS_RESULT", "path": "code", "type": "STRING"}],
+  "judge": {
+    "all_of": [
+      {"predicate_id": "declared_kill_that_survives_is_red", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "SURVIVED_BUT_DECLARED_KILLED"}},
+      {"predicate_id": "declared_survivor_that_dies_is_red", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "KILLED_BUT_DECLARED_SURVIVING"}},
+      {"predicate_id": "missing_target_is_reported", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "MUTATION_TARGET_MISSING"}},
+      {"predicate_id": "worktree_restored", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "WORKTREE_NOT_RESTORED"}},
+      {"predicate_id": "verdict_is_ok", "operator": "EQUALS", "left": {"observation": "code"}, "right": {"const": "OK"}}
+    ]
+  },
+  "controls": {
+    "positive": [{"control_id": "naming-gate-batch", "subject_binding": "NAMED_MUTATION_RUNNER_REPOSITORY", "expected_terminal": "ACCEPT"}],
+    "negative": [
+      {"control_id": "survivor-declared-killed", "faulty_subject": "架構/test_工程規範.py::test_突變宣告殺掉卻存活要回非零", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["declared_kill_that_survives_is_red"]},
+      {"control_id": "killed-declared-surviving", "faulty_subject": "架構/test_工程規範.py::test_突變宣告存活卻被殺也要回非零", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["declared_survivor_that_dies_is_red"]},
+      {"control_id": "target-string-absent", "faulty_subject": "架構/test_工程規範.py::test_突變目標字串不存在要明講", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["missing_target_is_reported"]}
+    ]
+  },
+  "run_limits": {"wall_ms": 900000, "max_output_bytes": 4194304},
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {"retain": ["code", "detail"], "record_kind": "NAMED_MUTATION_BATCH_RESULT"},
+  "feedback": {"to_candidate": "NONE"},
+  "cleanup": []
+}

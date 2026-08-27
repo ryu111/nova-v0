@@ -9,6 +9,7 @@ from dataclasses import replace
 import pytest
 
 from 工具.裝_git_鉤子 import 安裝 as 安裝鉤子
+from 工具.跑指定突變 import 跑批次
 from 工具.驗全部 import 跑, 閘清單
 from 架構.檢查工程規範 import (
     check_fixture,
@@ -37,6 +38,7 @@ from 架構.檢查工程規範 import (
     "NON_ASCII_SHELL_NAME": "shell_names_are_ascii",
     "INVALID_SHELL_NAME": "shell_names_are_valid_bash_names",
     "NON_ASCII_JSON_FIELD": "json_field_names_are_ascii",
+    "NON_ASCII_TOML_KEY": "toml_keys_are_ascii",
     "NON_ASCII_SQL_NAME": "sql_identifiers_are_ascii",
     "DYNAMIC_SHELL_NAME_UNVERIFIABLE": "dynamic_shell_name_rejected",
 }
@@ -332,3 +334,71 @@ def test_閘全綠時鉤子不擋正常_commit(tmp_path: pathlib.Path) -> None:
     倉 = 造臨時倉(tmp_path, 入口回傳=0)
     結果 = subprocess.run(["git", "commit", "-m", "好的"], cwd=倉, capture_output=True)
     assert 結果.returncode == 0, 結果.stderr.decode()
+
+
+def 造批次(
+    根: pathlib.Path, 目標: pathlib.Path, 期望: str, 舊: str, 新: str, 檢查字: str | None = None
+) -> pathlib.Path:
+    """寫一份最小的突變批次宣告。指令檢查的字串與被突變的字串是**兩件事**——
+
+    兩者相同時突變必然被殺，那樣的測試證明不了工具會不會分辨宣告與實際。
+    """
+    批 = 根 / "批.toml"
+    檢查器 = 根 / "檢查器.py"
+    找 = 檢查字 or 舊
+    檢查器.write_text(
+        "import pathlib, sys\n"
+        f"文 = pathlib.Path({str(目標)!r}).read_text(encoding='utf-8')\n"
+        f"sys.exit(0 if {找!r} in 文 else 1)\n",
+        encoding="utf-8",
+    )
+    指令 = ["python3", str(檢查器)]
+    批.write_text(
+        f"command = {json.dumps(指令, ensure_ascii=False)}\n\n"
+        f'[[mutation]]\nname = "試"\nfile = {json.dumps(str(目標), ensure_ascii=False)}\n'
+        f"old = {json.dumps(舊, ensure_ascii=False)}\nnew = {json.dumps(新, ensure_ascii=False)}\n"
+        f"expect = {json.dumps(期望, ensure_ascii=False)}\n",
+        encoding="utf-8",
+    )
+    return 批
+
+
+def test_突變宣告殺掉卻存活要回非零(tmp_path: pathlib.Path) -> None:
+    # 換掉的字串不影響指令 → 指令仍綠 → 該突變存活；宣告說殺掉，所以必須回非零。
+    目標 = tmp_path / "標.txt"
+    目標.write_text("關鍵字 與 無關字\n", encoding="utf-8")
+    批 = 造批次(tmp_path, 目標, "殺掉", 舊="無關字", 新="別的字", 檢查字="關鍵字")
+    assert 跑批次(批) != 0
+
+
+def test_突變宣告存活卻被殺也要回非零(tmp_path: pathlib.Path) -> None:
+    目標 = tmp_path / "標.txt"
+    目標.write_text("關鍵字\n", encoding="utf-8")
+    assert 跑批次(造批次(tmp_path, 目標, "存活", "關鍵字", "改掉了")) != 0
+
+
+def test_突變相符時回零而且還原原檔(tmp_path: pathlib.Path) -> None:
+    # 防恆真：一個永遠回非零的工具也能讓上面兩格通過。
+    目標 = tmp_path / "標.txt"
+    原文 = "關鍵字\n"
+    目標.write_text(原文, encoding="utf-8")
+    assert 跑批次(造批次(tmp_path, 目標, "殺掉", "關鍵字", "改掉了")) == 0
+    assert 目標.read_text(encoding="utf-8") == 原文
+
+
+def test_突變目標字串不存在要明講(tmp_path: pathlib.Path) -> None:
+    # 「找不到就跳過」會讓一條負控從此靜默消失，而且報告上還是綠的。
+    目標 = tmp_path / "標.txt"
+    目標.write_text("關鍵字\n", encoding="utf-8")
+    assert 跑批次(造批次(tmp_path, 目標, "殺掉", "根本沒有這段", "x")) != 0
+
+
+def test_中文_toml_鍵要被擋() -> None:
+    # 同一個 session 踩三次：[頂層]、dependency-groups 的 開發、突變批次的 指令。
+    # TOMLDecodeError 只會說 "Invalid statement"，不會告訴你是中文 key。
+    規則 = 載入規則()
+    for 原始碼 in ("指令 = [1]\n", "[頂層]\nx = 1\n", '[a]\n開發 = ["b"]\n'):
+        結果 = 檢查檔案("架構/x.toml", 原始碼, 規則, 查計畫目錄=False)
+        assert 結果.code == "NON_ASCII_TOML_KEY", 原始碼
+    綠 = '# 中文註解沒問題\nname = "中文值也沒問題"\n[[gate]]\nargv = ["架構/檢查工程規範.py"]\n'
+    assert 檢查檔案("架構/x.toml", 綠, 規則, 查計畫目錄=False).code == "OK"

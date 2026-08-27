@@ -101,6 +101,12 @@
         "right": {"const": "NON_ASCII_JSON_FIELD"}
       },
       {
+        "predicate_id": "toml_keys_are_ascii",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "NON_ASCII_TOML_KEY"}
+      },
+      {
         "predicate_id": "sql_identifiers_are_ascii",
         "operator": "NOT_EQUALS",
         "left": {"observation": "code"},

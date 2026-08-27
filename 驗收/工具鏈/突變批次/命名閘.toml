@@ -1,0 +1,71 @@
+# 命名閘的事前命名突變。欄位名一律 ASCII——TOML bare key 不接受別的。
+#
+# expect 是**跑之前就宣告**的，不是跑完看結果填的。這一批唯一的意義是
+# 「這些具體的改壞法，會不會被指定的測試抓到」；**沒有擊殺率**。
+# 其中 nfc_redundant 宣告 存活 並非疏漏：實測掃過全部 0x110000 個碼點，
+# 「NFKC 穩定但 NFC 不穩定」的字元數是 0，所以 NFC 那一項永遠不可能單獨發作。
+
+command = ["uv", "run", "pytest", "-q", "架構/test_工程規範.py"]
+
+[[mutation]]
+name = "識別字檢查整支停用"
+file = "架構/檢查工程規範.py"
+old = "    for 名 in 名字們:"
+new = "    for 名 in []:"
+expect = "殺掉"
+
+[[mutation]]
+name = "只驗第一段"
+file = "架構/檢查工程規範.py"
+old = "        for 段 in 名.split(規則.段分隔):"
+new = "        for 段 in 名.split(規則.段分隔)[:1]:"
+expect = "殺掉"
+
+[[mutation]]
+name = "見到不扣 NEUTRAL"
+file = "架構/檢查工程規範.py"
+old = '見到 = {字的_script(c) for c in 段} - {"NEUTRAL"}'
+new = "見到 = {字的_script(c) for c in 段}"
+expect = "殺掉"
+
+[[mutation]]
+name = "拿掉 CJK COMPATIBILITY 前綴"
+file = "架構/檢查工程規範.py"
+old = '("CJK UNIFIED", "CJK COMPATIBILITY")'
+new = '("CJK UNIFIED",)'
+expect = "殺掉"
+
+[[mutation]]
+name = "兩軌檢查停用"
+file = "架構/檢查工程規範.py"
+old = "            if 外 := 見到 - 規則.允許_script:"
+new = "            if 外 := 見到 - 見到:"
+expect = "殺掉"
+
+[[mutation]]
+name = "shell scanner 停用"
+file = "架構/檢查工程規範.py"
+old = "    for 行 in 原始碼.splitlines():"
+new = "    for 行 in ():"
+expect = "殺掉"
+
+[[mutation]]
+name = "動態記號清空"
+file = "架構/檢查工程規範.py"
+old = '''動態記號 = ("$", "`", '"', "'", "{")'''
+new = "動態記號 = ()"
+expect = "殺掉"
+
+[[mutation]]
+name = "toml 鍵檢查停用"
+file = "架構/檢查工程規範.py"
+old = "        if not 鍵.isascii():"
+new = "        if False:"
+expect = "殺掉"
+
+[[mutation]]
+name = "nfc_redundant：只留 NFKC 丟掉 NFC"
+file = "架構/命名規則.toml"
+old = 'normalization = ["NFC", "NFKC"]'
+new = 'normalization = ["NFKC"]'
+expect = "存活"
