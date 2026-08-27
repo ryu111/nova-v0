@@ -78,8 +78,12 @@ class ClaimSpec:
     claim_id: SemanticId
     revision: int
     subject: SubjectContract
+    stimulus: tuple[dict[str, Any], ...]
+    observations: tuple[dict[str, Any], ...]
+    judge_all_of: tuple[dict[str, Any], ...]
     controls: ControlSet
     run_limits: RunLimits
+    isolation: str
     effect_delivery: EffectDelivery | None
     canonical_bytes: bytes
     digest: Sha256Ref
@@ -179,6 +183,10 @@ class ClaimSpecLoader:
         return ClaimSpec(
             claim_id=SemanticId.parse(資料["claim_id"]),
             revision=資料["revision"],
+            stimulus=tuple(資料["stimulus"]),
+            observations=tuple(資料["observations"]),
+            judge_all_of=tuple(資料["judge"]["all_of"]),
+            isolation=資料["isolation"],
             subject=SubjectContract(
                 contract=SemanticId.parse(資料["subject"]["contract"]),
                 operation=SemanticId.parse(資料["subject"]["operation"]),
