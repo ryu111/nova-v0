@@ -317,7 +317,10 @@ def test_宣告的閘不是空的() -> None:
 
 
 def test_CI_跑的是同一組閘() -> None:
-    文 = (專案根 / ".github" / "workflows" / "驗收.yml").read_text(encoding="utf-8")
+    # 【實測 2026-08-27】檔名一定要 ASCII：叫 驗收.yml 時 GitHub 會註冊成功、
+    # 顯示 active、workflow_dispatch 也跑得起來，但 push／pull_request **一次都不觸發**。
+    # UI 上完全看不出異常。改成 gates.yml 之後 push 立刻觸發。
+    文 = (專案根 / ".github" / "workflows" / "gates.yml").read_text(encoding="utf-8")
     for 名, argv in 載入規則().閘們:
         assert " ".join(argv) in 文, 名
 

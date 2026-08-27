@@ -50,6 +50,7 @@ contexts = [
   "cli_executable",
   "failure_code",
   "shell_name",
+  "ci_workflow_filename",
 ]
 
 # ── shell name 的靜態宣告形式 ──
@@ -69,6 +70,13 @@ contexts = [
 # 那裡連續踩兩次：`碼=$?` 被 zsh 當成命令名（`command not found`，腳本照跑），
 # 以及 `${PIPESTATUS[0]}` 是 bash-ism，在 zsh 安靜給空字串。兩者都不讓命令失敗，
 # 只讓**證據消失**。臨時 shell 沒有機制擋得住，只能靠「拿不到證據就不准下結論」。
+# 【實測 2026-08-27】CI workflow 檔名一定要 ASCII，而且失敗方式極安靜：
+# `.github/workflows/驗收.yml` 被 GitHub 註冊成功、`state: active`、`name: gates` 都對，
+# `gh workflow run` 手動觸發也跑得起來而且全綠——但連續三次 push 到 main
+# **一次都沒觸發**，Actions 頁面上看不出任何異常。改名 `gates.yml` 後 push 立刻觸發。
+# 推測：手動觸發走 workflow id，push 事件走路徑比對，而後者對不上非 ASCII 路徑。
+# 這是「中文可以用，但不准裝作沒有成本」的一個實例，代價是三次無效 push。
+
 [shell_name]
 static_forms = [
   "assignment",

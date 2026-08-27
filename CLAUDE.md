@@ -112,7 +112,9 @@ plans／tests）。三處共讀，不各自維護：
   **不在第一個紅就停**（先停會讓後面的閘從此沒人跑過），任一紅即非零。
 - **pre-commit hook** —— 由 `工具/裝_git_鉤子.py` 安裝。`.git/` 不在版控裡，
   所以 clone 之後**必須有人跑那支裝**，否則等於沒裝。
-- **`.github/workflows/驗收.yml`** —— push 與 PR 都跑。
+- **`.github/workflows/gates.yml`** —— push 與 PR 都跑。**檔名必須 ASCII**：
+  實測叫 `驗收.yml` 時 GitHub 註冊成功、顯示 active、手動觸發也跑得起來，
+  但 `push`／`pull_request` **一次都不觸發**，而 UI 上完全看不出異常。
 
 **還是不准寫「不可能繞過」。** 三個確切的上限，寫在這裡是為了讓下一個人不必自己踩：
 

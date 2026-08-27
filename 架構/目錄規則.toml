@@ -159,7 +159,7 @@ owner = "架構"
 #
 # 【實測 2026-08-27】在一份拋棄式的 repo 複本上同時弄壞三樣東西，`git commit` **exit 0**
 # 照樣接受，而三道閘實際上全是 exit 1。閘存在不等於閘會被執行。
-# 這份清單由三處共讀：`工具/驗全部.py`、它裝的 pre-commit hook、與 `.github/workflows/驗收.yml`。
+# 這份清單由三處共讀：`工具/驗全部.py`、它裝的 pre-commit hook、與 `.github/workflows/gates.yml`。
 # 三處各留一份，遲早有一處漏掉而沒人發現；所以清單只有這一份。
 # mypy 的範圍是 `nova 架構 工具`，逐字取自計畫 01 的 Plan Exit Gate——
 # 不是全 repo：`docs/` 與 fixtures 不在那個範圍裡。
