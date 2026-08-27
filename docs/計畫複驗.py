@@ -3,10 +3,10 @@
 """計畫集的機械複驗閘。
 
 存在理由：2026-08-27 控制端對 21 份計畫做複驗，先用讀的找不到破綻，改用交叉比對才
-確認四項不變式成立。此後任何人改計畫（含插入 01B、擴充 05/07/13/14/20）都必須讓這
-四項仍然成立——讀不出來的東西，算得出來。
+確認不變式成立。此後任何人改計畫（含插入 01B、擴充 05/07/13/14/20）都必須讓它們
+仍然成立——讀不出來的東西，算得出來。
 
-四項不變式：
+十項不變式（下面逐條列出；I6 的說明在負控段）：
   I1 檔案所有權   同一路徑不得被兩份計畫 Create；Modify 的對象必須有人 Create。
   I2 依賴無環     Dependency Gate 構成的圖不得有多節點 SCC。
   I3 編號即拓撲序 沒有計畫依賴編號比自己大的計畫（否則照編號執行會違反依賴閘）。
@@ -14,6 +14,12 @@
   I5 修改方向     Modify 的對象必須由自己或**遞移**前置計畫 Create——否則就是一條沒有
                   宣告的隱含依賴，照宣告的順序執行時那個檔案還不存在。用遞移閉包而不是
                   直接邊：14 沒有直接宣告 01，但它宣告了 01B 而 01B 依賴 01。
+  I10 宣告與落點  每個已遷移 task 的 `**ClaimSpec落點:**` 行，id 集合必須與 `**ClaimSpec:**`
+                  行逐字相等；每個 id 恰對一條 `規格/**/*.claim.json`，該路徑必須由本 task 或
+                  更早（同計畫更前面的 task／遞移前置計畫）Create；全域一對一。
+                  未遷移的 task 數必須等於檔裡寫死的 baseline——多了紅，**少了也紅**。
+                  它**抓不到配錯人**：把兩個 id 的路徑對調，兩邊都存在也都一對一，I10 全綠。
+                  那要靠打開 .claim.json 比對 claim_id 的另一道閘（尚未建立）。
   I8 命名可通過   計畫在 code fence 裡宣告的 def／class 名，必須通過 `架構/檢查工程規範.py`
                   的識別字閘（NFC＋NFKC＋每個 `_` 段單一 script）。計畫宣告一個自家閘會判紅
                   的名字，實作者照著寫就撞紅，最可能的反應是**放寬閘**——那正好毀掉閘。
@@ -36,6 +42,8 @@
   I7 → 把任一 Run: 指令的檔名改掉一個字，或從 File Structure 挑一個檔刪掉它的 Create 條目。
   I8 → 把任一 `def test_x_中文` 的底線刪掉，變成 `def test_x中文`。
   I9 → 把任一 commit 訊息改回英文。
+  I10 → ①刪掉某已遷移 task 的落點行而不動 baseline；②把某 id 的路徑改一個字指到沒人 Create 的檔；
+        ③把兩個 id 指到同一條路徑；④落點行少寫一個 id；⑤把某 id 指到更晚的 task 才 Create 的檔。
   I6 → 把兩個 task 併成一個（commit 步會變成兩個）。
        註：ClaimSpec 上限 2 抓不到 1+1 合併（併完剛好是 2，仍在上限內），
        所以偵測合併靠的是 commit 步那條——每個 task 都恰好一次 commit。
@@ -256,6 +264,83 @@ def i9_訊息用中文(檔):
                 失敗.append(f'I9 {編號(f)} 第 {i} 條 commit 訊息沒有中文：{m}')
 
 
+BINDING_ID白名單 = frozenset({'execution-envelope.reference', 'execution-envelope.production'})
+未遷移基線 = 172  # 177 個 task 減掉已遷移的 01B 五個
+ID樣式 = re.compile(r'^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$')
+
+
+def 宣告的_id(區):
+    """從 `**ClaimSpec:**` 行取 claim id。反引號裡也會出現 binding id、failure code
+    與萬用字元，全部不是 claim id——實測 210 個 token 裡有 6 個不是。"""
+    m = re.search(r'\*\*ClaimSpec:\*\*(.*)', 區)
+    if not m:
+        return set()
+    return {t for t in re.findall(r'`([^`]+)`', m.group(1))
+            if ID樣式.match(t) and t not in BINDING_ID白名單}
+
+
+def i10_宣告與落點一對一(檔, 邊):
+    """claim id 與 .claim.json 路徑的綁定，在計畫層第一次變成可機械查核的東西。
+
+    存在理由：2026-08-27 量到 204 個宣告的 claim id 只有 139 份 Create 的 .claim.json，
+    至少 65 個 id 沒有檔可以住。但當時**寫不出誠實的閘**——實測全 21 份計畫裡，
+    同一行同時出現 claim 檔路徑與已宣告 claim id 的行數是 **0**：檔名是中文語意名，
+    id 是 ASCII，綁定只存在於檔案內部的 claim_id 欄位，而 139 份裡只有 3 份真的存在。
+    於是任何「claim 有落點」的閘都只能退化成「這個 task 有沒有 Create 至少一份 claim 檔」，
+    而那對 20 個建 ≥2 份檔的 task 刪掉一份仍然全綠——一道抓不到自己成立理由的閘就是恆真格。
+
+    所以先讓計畫把綁定寫出來（新增一行，舊的宣告行一個字不改），再談補哪 65 份檔。
+    新增而不改舊行還買到一件事：兩行的 id 集合必須逐字相等，抄錯一個 id 閘自己會抓到。
+    """
+    建於 = {}
+    for f in 檔:
+        n = 編號(f)
+        for i, b in enumerate(re.split(r'^### Task ', open(f, encoding='utf-8').read(), flags=re.M)[1:], 1):
+            for 路徑 in re.findall(r'^\s*-\s*Create:\s*`([^`]+)`', b, re.M):
+                建於.setdefault(路徑, (n, i))
+    全 = 閉包(邊)
+    id對路徑, 路徑對id, 未遷移 = {}, {}, []
+    for f in sorted(檔, key=lambda x: 序位(編號(x))):
+        n = 編號(f)
+        for i, b in enumerate(re.split(r'^### Task ', open(f, encoding='utf-8').read(), flags=re.M)[1:], 1):
+            名 = f'{n}-Task{i}'
+            m = re.search(r'^\*\*ClaimSpec落點:\*\*(.*?)(?=\n\s*\n)', b, re.S | re.M)
+            if not m:
+                未遷移.append(名)
+                continue
+            對 = re.findall(r'`([^`]+)`\s*→\s*`([^`]+)`', m.group(1))
+            落 = {}
+            for i2, (鍵, 路徑) in enumerate(對):
+                if 鍵 in 落:
+                    失敗.append(f'I10 {名} 的落點行把 {鍵} 指了兩條路徑')
+                落[鍵] = 路徑
+            if 落.keys() != 宣告的_id(b):
+                失敗.append(f'I10 {名} 落點行的 id 集合與宣告行不符：'
+                            f'落點 {sorted(落)} vs 宣告 {sorted(宣告的_id(b))}')
+            for 鍵, 路徑 in 落.items():
+                if not re.match(r'^規格/.+\.claim\.json$', 路徑):
+                    失敗.append(f'I10 {名} 的 {鍵} 指到不是 claim 檔的路徑：{路徑}')
+                    continue
+                if 路徑 not in 建於:
+                    失敗.append(f'I10 {名} 的 {鍵} 指到沒有任何 task Create 的 {路徑}')
+                    continue
+                擁計畫, 擁task = 建於[路徑]
+                太晚 = (擁計畫 == n and 擁task > i) or (
+                    擁計畫 != n and 擁計畫 not in 全.get(n, set()))
+                if 太晚:
+                    失敗.append(f'I10 {名} 的 {鍵} 指到 {擁計畫}-Task{擁task} 才 Create 的 {路徑}')
+                if 鍵 in id對路徑 and id對路徑[鍵] != 路徑:
+                    失敗.append(f'I10 {鍵} 被指到兩條路徑：{id對路徑[鍵]} 與 {路徑}')
+                if 路徑 in 路徑對id and 路徑對id[路徑] != 鍵:
+                    失敗.append(f'I10 {路徑} 被兩個 id 指名：{路徑對id[路徑]} 與 {鍵}')
+                id對路徑[鍵] = 路徑
+                路徑對id[路徑] = 鍵
+    if len(未遷移) != 未遷移基線:
+        失敗.append(f'I10 未遷移 {len(未遷移)} 個 task，baseline 寫的是 {未遷移基線}'
+                    f'——多了要補落點行，少了要把 baseline 改小')
+    return len(未遷移)
+
+
 def i8_命名可通過(檔):
     """計畫自己宣告的識別字必須通過命名閘——規則與 checker 共用同一支，不重寫一份。
 
@@ -301,14 +386,15 @@ def main():
     i7_引用可解析(檔)
     i8_命名可通過(檔)
     i9_訊息用中文(檔)
-    print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個')
+    未遷移 = i10_宣告與落點一對一(檔, 邊)
+    print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個 · ClaimSpec 落點未遷移 {未遷移} 個')
     for n in sorted(邊):
         print(f'  {n} ← {邊[n] or "（無前置）"}')
     if 失敗:
         print(f'\n不變式不成立（{len(失敗)}）：')
         for x in 失敗: print(f'  ✗ {x}')
         return 1
-    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過 · I9 訊息用中文　全部成立')
+    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過 · I9 訊息用中文 · I10 宣告與落點一對一　全部成立')
     return 0
 
 

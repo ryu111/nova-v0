@@ -73,6 +73,8 @@ nova/領域/執行/
 
 **ClaimSpec:** 【推論】`execution.backend-capability.closed-vocabulary` 從紅轉綠。
 
+**ClaimSpec落點:** `execution.backend-capability.closed-vocabulary` → `規格/執行/保證/能力/後端能力封閉.claim.json`（本 task Create）
+
 **固定負控:** 【推論】加入 capability `MAGIC_TOOL_BYPASS`、tool class `OTHER`、usage scope `BEST_EFFORT` 或 outcome free string；schema/compiler 必須 direct red。
 
 - [ ] **Step 1: 寫 unknown enum 與缺 ref 的 schema red tests**
@@ -103,6 +105,8 @@ git commit -m "feat: 宣告執行者能力契約"
 - Observes: denied tool handler call count、schema validation、delegation bounds、usage scope honesty。
 
 **ClaimSpec:** 【推論】`execution.backend-capability.tool-output-delegation-contract` 從紅轉綠。
+
+**ClaimSpec落點:** `execution.backend-capability.tool-output-delegation-contract` → `規格/執行/保證/能力/工具輸出代理契約.claim.json`（本 task Create）
 
 **固定負控:** 【推論】四個 named subjects 分別在 deny 後仍呼叫 handler、回 malformed structured output、越過 delegation depth、把 ROOT_ONLY 標成 tree total；各自指定 predicate direct red。
 
@@ -137,6 +141,8 @@ git commit -m "test: 強制執行者能力契約"
 
 **ClaimSpec:** 【推論】`execution.backend-capability.claude-sdk-static-surface` 從紅轉綠。
 
+**ClaimSpec落點:** `execution.backend-capability.claude-sdk-static-surface` → `規格/執行/保證/能力/SDK靜態介面存在.claim.json`（本 task Create）
+
 **固定負控:** 【推論】fixture SDK 刪除 `can_use_tool`、`PreToolUse`、structured output 或 result total/tree usage 任一 surface；probe 必須 nonzero 且指出 exact missing semantic capability。
 
 - [ ] **Step 1: 寫 one-surface-at-a-time missing SDK red**
@@ -168,6 +174,8 @@ git commit -m "test: 釘住 Claude SDK 的能力面"
 
 **ClaimSpec:** 【推論】`execution.backend-capability.evidence-fingerprint-ttl-bound` 從紅轉綠。
 
+**ClaimSpec落點:** `execution.backend-capability.evidence-fingerprint-ttl-bound` → `規格/執行/保證/能力/能力證據不可沿用.claim.json`（本 task Create）
+
 **固定負控:** 【推論】SDK/CLI/model/settings catalog 任一 digest 改變仍沿用舊 evidence，或 `now == expires_at` 仍 VALID；direct red。
 
 - [ ] **Step 1: 寫 fingerprint one-field mutation 與 TTL boundary red**
@@ -198,6 +206,8 @@ git commit -m "feat: 把能力證據綁到執行期指紋"
 - Probes: deny tool nonexecution、structured output schema、delegation tree total、cancel convergence、outbound payload/manifest binding。
 
 **ClaimSpec:** 【推論】`execution.backend-capability.claude-live-admission-bounded` 從紅轉綠。
+
+**ClaimSpec落點:** `execution.backend-capability.claude-live-admission-bounded` → `規格/執行/保證/能力/Claude有界live探針.claim.json`（本 task Create）
 
 **固定負控:** 【推論】fake live transport 在 deny 後碰 endpoint、漏 subagent cost、忽略 cancel、回錯 schema 或回顯不同 outbound digest；不得產生 admitted evidence。
 
