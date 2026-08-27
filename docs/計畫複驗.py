@@ -406,6 +406,63 @@ def i8_命名可通過(檔):
                     break
 
 
+def i13_task引用可解析(檔):
+    """跨計畫與計畫內的 `Task N` 引用必須指得到真的存在的 task。
+
+    **只驗 resolvable，不驗 semantically correct。** 改號之後「指錯但仍在範圍內」
+    的引用（resolvable-but-wrong）這條抓不到——那種只能靠人工逐處判歸屬。
+    I13 綠**不等於**引用都對，別這樣讀。
+
+    存在理由：T12 拆分要整體改號 12→13…19→20，而**沒有任何不變式管 task 之間的
+    文字引用**（I6 只管標題序號與位置，I7 只管 `Run:` 與 File Structure）。
+    改錯不會紅。實測當時的規模：跨計畫引用 4 處、01 內部 `Task 1[2-9]` 26 處。
+
+    **認得的引用形式全集**（其餘形式一律漏報，明講）：
+
+        跨計畫   `01 Task 15`、`plan 01 Task 1`、`計畫 08 Task 4`、`15 的 Task 8`
+        計畫內   裸 `Task 12`、`Tasks 3`
+
+    **這份全集是逐條列舉語料得來的，不是猜的。** 我第一版只測了以 `01` 開頭的樣式，
+    報「跨計畫引用只有 4 處」——實際是 **16 處、四種寫法**。
+    那是「全集來源太窄」在本檔的第一次發作，而且它**不只漏報**：
+    未認得的跨計畫形式會被下面裸 `Task N` 那條當成「本計畫的引用」再誤判一次，
+    **變成誤報**（`16:313` 的 `15 的 Task 8` 就是這樣被報成「16 只有 7 個 task」）。
+
+    不支援的形式（實測零命中）：`01 T15`、`01-可執行保證語言.md ... Task 15`。
+    哪天有人這樣寫，I13 看不見——**漏報比誤報糟**，新增形式要連同 fixture 一起加。
+
+    計畫識別沿用正式文法 `NN` 加選用大寫後綴（正則 ``\\d\\d[A-Z]?``），涵蓋 `01B`、`06B`；否則後綴計畫是系統性盲區。
+    先辨識並排除跨計畫引用的 span，再檢查裸 `Task N`——不然 `01 Task 15` 會被
+    當成「本計畫的 Task 15」再誤判一次。
+    """
+    任務數 = {}
+    for f in 檔:
+        任務數[編號(f)] = len(re.split(r'^### Task ', open(f, encoding='utf-8').read(), flags=re.M)[1:])
+
+    跨 = re.compile(r'(?:(?:計畫|plan)\s*)?(\d\d[A-Z]?)\s*(?:的)?\s*Tasks?\s*(\d+)')
+    內 = re.compile(r'Tasks?\s+(\d+)')
+
+    for f in 檔:
+        我 = 編號(f)
+        s = open(f, encoding='utf-8').read()
+        遮蔽 = []
+        for m in 跨.finditer(s):
+            他, n = m.group(1), int(m.group(2))
+            遮蔽.append(m.span())
+            if 他 not in 任務數:
+                失敗.append(f'I13 {我} 引用了不存在的計畫 {他}（`{m.group(0)}`）')
+            elif not 1 <= n <= 任務數[他]:
+                失敗.append(f'I13 {我} 的 `{m.group(0)}` 指到計畫 {他} 的 Task {n}，'
+                            f'但該計畫只有 {任務數[他]} 個 task')
+        for m in 內.finditer(s):
+            if any(a <= m.start() < b for a, b in 遮蔽):
+                continue
+            n = int(m.group(1))
+            if not 1 <= n <= 任務數[我]:
+                失敗.append(f'I13 {我} 的裸 `{m.group(0)}` 超出範圍：'
+                            f'本計畫只有 {任務數[我]} 個 task')
+
+
 def i4_任務完整(檔):
     總 = 0
     for f in 檔:
@@ -463,6 +520,7 @@ def main():
     i7_引用可解析(檔)
     i8_命名可通過(檔)
     i9_訊息用中文(檔)
+    i13_task引用可解析(檔)
     未遷移, 綁定 = i10_宣告與落點一對一(檔, 邊)
     實存claim = i11_檔內id相符(綁定)
     print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個 · ClaimSpec 落點未遷移 {未遷移} 個 · 實存 claim 檔 {實存claim} 份')
@@ -472,7 +530,7 @@ def main():
         print(f'\n不變式不成立（{len(失敗)}）：')
         for x in 失敗: print(f'  ✗ {x}')
         return 1
-    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過 · I9 訊息用中文 · I10 宣告與落點一對一 · I11 檔內id相符　全部成立')
+    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過 · I9 訊息用中文 · I10 宣告與落點一對一 · I11 檔內id相符 · I13 task引用可解析　全部成立')
     return 0
 
 
