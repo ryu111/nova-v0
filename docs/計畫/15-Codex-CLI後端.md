@@ -103,7 +103,7 @@ Expected: 【推論】PASS；all injected flags direct red。
 
 ```bash
 git add nova/介接/執行者後端/codex_cli/manifest.py nova/介接/執行者後端/codex_cli/argv.py 驗收/後端/codex_cli/fake_codex.py 驗收/後端/codex_cli/測_manifest與argv.py 規格/執行/保證/後端/codex-manifest完整.claim.json 規格/執行/保證/後端/codex-argv封閉.claim.json
-git commit -m "feat: fingerprint and constrain Codex CLI invocation"
+git commit -m "feat: 為 Codex CLI 的呼叫建立指紋並加約束"
 ```
 
 ---
@@ -157,7 +157,7 @@ Expected: 【推論】PASS；raw refs present even for faults。
 
 ```bash
 git add nova/介接/執行者後端/codex_cli/jsonl.py 驗收/後端/codex_cli/fixtures 驗收/後端/codex_cli/測_jsonl執行.py
-git commit -m "feat: decode Codex JSONL events"
+git commit -m "feat: 解碼 Codex 的 JSONL 事件"
 ```
 
 ---
@@ -209,7 +209,7 @@ Expected: 【推論】PASS；external envelope determines terminal。
 
 ```bash
 git add nova/介接/執行者後端/codex_cli/執行.py nova/介接/執行者後端/codex_cli/test_契約.py 驗收/後端/codex_cli/測_jsonl執行.py 規格/執行/保證/後端/codex-jsonl契約.claim.json
-git commit -m "feat: run Codex CLI through execution envelope"
+git commit -m "feat: 讓 Codex CLI 走執行封套"
 ```
 
 ---
@@ -260,7 +260,7 @@ Expected: 【推論】PASS；每bucket state由Resource Authority clock分類，
 
 ```bash
 git add nova/介接/執行者後端/codex_cli/額度.py 驗收/後端/codex_cli/測_額度.py 規格/資源/保證/codex額度逐bucket.claim.json
-git commit -m "feat: observe Codex quota buckets"
+git commit -m "feat: 觀測 Codex 的額度 bucket"
 ```
 
 ---
@@ -311,7 +311,7 @@ Expected: 【推論】PASS；auth可用但user config/rules/session state不可�
 
 ```bash
 git add nova/介接/執行者後端/codex_cli/上下文.py nova/介接/執行者後端/codex_cli/manifest.py 驗收/後端/codex_cli/測_上下文.py
-git commit -m "feat: isolate Codex CLI context and config"
+git commit -m "feat: 隔離 Codex CLI 的脈絡與設定"
 ```
 
 ---
@@ -363,7 +363,7 @@ Expected: 【推論】PASS；fake latest updater negative direct red。
 
 ```bash
 git add nova/介接/執行者後端/codex_cli/更新.py 驗收/後端/codex_cli/測_更新能力.py 規格/執行/保證/後端/codex上下文與更新誠實.claim.json
-git commit -m "feat: reject unpinned Codex self updates"
+git commit -m "feat: 拒絕沒釘住版本的 Codex 自我更新"
 ```
 
 ---
@@ -403,7 +403,7 @@ Expected: 【推論】PASS；actuals green, named negatives direct red。
 
 ```bash
 git add nova/介接/執行者後端/codex_cli/test_契約.py 驗收/後端/codex_cli/測_jsonl執行.py
-git commit -m "test: verify complete Codex CLI adapter contract"
+git commit -m "test: 驗證 Codex CLI adapter 的完整契約"
 ```
 
 ## Plan Exit Gate

@@ -106,7 +106,7 @@ Expected: 【推論】PASS；missing/UNKNOWN/fingerprint-insensitive controls di
 
 ```bash
 git add pyproject.toml uv.lock nova/介接/執行者後端/claude_agent_sdk/manifest.py 驗收/後端/claude_agent_sdk/假SDK.py 驗收/後端/claude_agent_sdk/測_manifest.py 規格/執行/保證/後端/claude-manifest完整.claim.json
-git commit -m "feat: fingerprint Claude Agent SDK backend"
+git commit -m "feat: 為 Claude Agent SDK 後端建立指紋"
 ```
 
 ---
@@ -162,7 +162,7 @@ Expected: 【推論】PASS；adapter沒有ExecutionTerminal writer。
 
 ```bash
 git add nova/介接/執行者後端/claude_agent_sdk 驗收/後端/claude_agent_sdk/測_執行.py 規格/執行/保證/後端/claude執行契約.claim.json
-git commit -m "feat: adapt Claude SDK execution events"
+git commit -m "feat: 轉接 Claude SDK 的執行事件"
 ```
 
 ---
@@ -214,7 +214,7 @@ Expected: 【推論】PASS；active task count回baseline。
 
 ```bash
 git add nova/介接/執行者後端/claude_agent_sdk/執行.py 驗收/後端/claude_agent_sdk/假SDK.py 驗收/後端/claude_agent_sdk/測_執行.py
-git commit -m "feat: cancel Claude SDK through execution envelope"
+git commit -m "feat: 經由執行封套取消 Claude SDK"
 ```
 
 ---
@@ -264,7 +264,7 @@ Expected: 【推論】PASS；event missing後仍cold/stale semantics，adapter�
 
 ```bash
 git add nova/介接/執行者後端/claude_agent_sdk/額度.py 驗收/後端/claude_agent_sdk/測_額度.py 規格/資源/保證/claude額度逐bucket.claim.json
-git commit -m "feat: observe Claude quota per bucket"
+git commit -m "feat: 逐 bucket 觀測 Claude 額度"
 ```
 
 ---
@@ -316,7 +316,7 @@ Expected: 【推論】PASS；無meter evidence時required advisory dispatch type
 
 ```bash
 git add nova/介接/執行者後端/claude_agent_sdk/上下文.py nova/介接/執行者後端/claude_agent_sdk/manifest.py 驗收/後端/claude_agent_sdk/測_上下文.py 規格/執行/保證/後端/claude上下文能力誠實.claim.json
-git commit -m "feat: declare Claude context capabilities honestly"
+git commit -m "feat: 誠實宣告 Claude 的脈絡能力"
 ```
 
 ---
@@ -369,7 +369,7 @@ Expected: 【推論】PASS；all shared backend cases與Claude-specific controls
 
 ```bash
 git add 驗收/後端/claude_agent_sdk/測_投影.py 規格/執行/保證/後端/claude不讀判準.claim.json nova/介接/執行者後端/claude_agent_sdk/test_契約.py
-git commit -m "test: verify Claude adapter isolation and parity"
+git commit -m "test: 驗證 Claude adapter 的隔離與平級"
 ```
 
 ---
@@ -408,7 +408,7 @@ Expected: 【推論】FAIL；SDK options 尚未映射 capability policies、ambi
 
 ```bash
 git add nova/介接/執行者後端/claude_agent_sdk 驗收/後端/claude_agent_sdk/假SDK.py 驗收/後端/claude_agent_sdk/測_工具輸出與成本.py 驗收/資源/測_代理樹成本.py 規格/執行/保證/後端/claude工具輸出契約.claim.json 規格/資源/保證/claude代理樹成本完整.claim.json
-git commit -m "feat: map Claude SDK capability and tree cost contracts"
+git commit -m "feat: 對映 Claude SDK 的能力與委派樹成本契約"
 ```
 
 ## Plan Exit Gate

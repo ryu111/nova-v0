@@ -18,6 +18,11 @@
                   的識別字閘（NFC＋NFKC＋每個 `_` 段單一 script）。計畫宣告一個自家閘會判紅
                   的名字，實作者照著寫就撞紅，最可能的反應是**放寬閘**——那正好毀掉閘。
                   實測一次掃出 30 個（全在 01–04，後面的計畫用散文寫測試名）。
+  I9 訊息用中文   每個 task 的 `git commit -m` 訊息必須含漢字。CLAUDE.md 最高原則第 2 條要求
+                  commit message 一律繁體中文，而計畫原本 177 條裡有 176 條是英文——
+                  Tasks 1-4 的實作者都默默照 CLAUDE.md 走而偏離計畫文字，那正是
+                  「規範只活在文件裡」的形狀。conventional-commit 的型別前綴
+                  （feat:／test:／build:／perf:）保持 ASCII，它是跨工具的 semantic id。
   I7 引用可解析   `Run:` 指令引用的檔案必須在該 task 或更早被 Create；File Structure
                   宣告的檔案必須有人 Create。I1 只查 Create/Modify 條目的所有權，
                   查不到指令引用——實測一次掃出 22 處。
@@ -30,6 +35,7 @@
   I5 → 讓 05 去 Modify 一個由 14 Create 的檔案。
   I7 → 把任一 Run: 指令的檔名改掉一個字，或從 File Structure 挑一個檔刪掉它的 Create 條目。
   I8 → 把任一 `def test_x_中文` 的底線刪掉，變成 `def test_x中文`。
+  I9 → 把任一 commit 訊息改回英文。
   I6 → 把兩個 task 併成一個（commit 步會變成兩個）。
        註：ClaimSpec 上限 2 抓不到 1+1 合併（併完剛好是 2，仍在上限內），
        所以偵測合併靠的是 commit 步那條——每個 task 都恰好一次 commit。
@@ -238,6 +244,18 @@ def i7_引用可解析(檔):
                 失敗.append(f'I7 {編號(f)} 的 File Structure 宣告了 {路徑} 但沒有任何 task Create')
 
 
+def i9_訊息用中文(檔):
+    """commit 訊息必須含漢字。判準是「有沒有漢字」而不是「有沒有非 ASCII」——
+
+    後者會把 emoji、法文重音符號都算成通過。漢字判定與命名閘共用 字的_script。
+    """
+    訊息 = re.compile(r'git commit -m "([^"]+)"')
+    for f in 檔:
+        for i, m in enumerate(訊息.findall(open(f, encoding='utf-8').read()), 1):
+            if not any(字的_script(c) == 'HAN' for c in m):
+                失敗.append(f'I9 {編號(f)} 第 {i} 條 commit 訊息沒有中文：{m}')
+
+
 def i8_命名可通過(檔):
     """計畫自己宣告的識別字必須通過命名閘——規則與 checker 共用同一支，不重寫一份。
 
@@ -282,6 +300,7 @@ def main():
     i6_任務口徑(檔)
     i7_引用可解析(檔)
     i8_命名可通過(檔)
+    i9_訊息用中文(檔)
     print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個')
     for n in sorted(邊):
         print(f'  {n} ← {邊[n] or "（無前置）"}')
@@ -289,7 +308,7 @@ def main():
         print(f'\n不變式不成立（{len(失敗)}）：')
         for x in 失敗: print(f'  ✗ {x}')
         return 1
-    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過　全部成立')
+    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過 · I9 訊息用中文　全部成立')
     return 0
 
 

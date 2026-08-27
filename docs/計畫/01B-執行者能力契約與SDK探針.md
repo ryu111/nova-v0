@@ -86,7 +86,7 @@ Expected: 【推論】FAIL；schemas/module 尚不存在，或 unknown enum 被�
 
 ```bash
 git add 規格/執行/BackendCapability.schema.json 規格/執行/ToolAuthorizationPolicy.schema.json 規格/執行/StructuredOutputContract.schema.json 規格/執行/DelegationPolicy.schema.json 規格/執行/UsageEvidence.schema.json 規格/執行/保證/能力/後端能力封閉.claim.json nova/領域/執行/能力.py nova/領域/執行/test_能力契約.py
-git commit -m "feat: declare executor capability contracts"
+git commit -m "feat: 宣告執行者能力契約"
 ```
 
 ---
@@ -117,7 +117,7 @@ Expected: 【推論】FAIL；至少四個 faulty subjects 尚未被 contract sui
 
 ```bash
 git add 驗收/執行者能力/fixtures/假能力後端.py 驗收/執行者能力/測_工具輸出代理契約.py 規格/執行/保證/能力/工具輸出代理契約.claim.json
-git commit -m "test: enforce executor capability contract"
+git commit -m "test: 強制執行者能力契約"
 ```
 
 ---
@@ -150,7 +150,7 @@ Expected: 【推論】FAIL；probe 尚不存在，或缺 surface 的 fixture 被
 
 ```bash
 git add pyproject.toml uv.lock 工具/探ClaudeSDK介面.py 驗收/執行者能力/測_SDK靜態介面.py 規格/執行/保證/能力/SDK靜態介面存在.claim.json
-git commit -m "test: pin Claude SDK capability surface"
+git commit -m "test: 釘住 Claude SDK 的能力面"
 ```
 
 ---
@@ -181,7 +181,7 @@ Expected: 【推論】FAIL；舊 evidence 尚會跨 fingerprint／expiry 被接�
 
 ```bash
 git add 規格/執行/CapabilityEvidence.schema.json nova/領域/執行/能力.py 驗收/執行者能力/測_能力證據.py 規格/執行/保證/能力/能力證據不可沿用.claim.json
-git commit -m "feat: bind capability evidence to runtime fingerprint"
+git commit -m "feat: 把能力證據綁到執行期指紋"
 ```
 
 ---
@@ -212,7 +212,7 @@ Expected: 【推論】FAIL；runner 尚不存在，或 failure/缺外部條件�
 
 ```bash
 git add 工具/跑ClaudeSDK煙霧.py 驗收/執行者能力/測_Claude_live探針.py 規格/執行/保證/能力/Claude有界live探針.claim.json
-git commit -m "test: gate Claude admission with bounded live probe"
+git commit -m "test: 用有界真跑探針把關 Claude 准入"
 ```
 
 ## Plan Exit Gate

@@ -123,7 +123,7 @@ Expected: 【推論】PASS；five fixed controls direct red。
 
 ```bash
 git add 規格/語言/CliBackendSpec.schema.json 規格/介面/CLI事件.schema.json nova/介接/執行者後端/通用_cli/公開契約.py nova/介接/執行者後端/通用_cli/載入.py 驗收/後端/通用_cli/fixtures/fixture-jsonl.backend.json 驗收/後端/通用_cli/測_宣告語言.py 規格/執行/保證/後端/通用cli宣告封閉.claim.json
-git commit -m "feat: define closed generic CLI backend specs"
+git commit -m "feat: 定義封閉的通用 CLI 後端規格"
 ```
 
 ---
@@ -174,7 +174,7 @@ Expected: 【推論】PASS；injected semicolon從未被shell執行。
 
 ```bash
 git add nova/介接/執行者後端/通用_cli/argv.py nova/介接/執行者後端/通用_cli/manifest.py 驗收/後端/通用_cli/測_宣告語言.py
-git commit -m "feat: compile literal CLI argv templates"
+git commit -m "feat: 編譯 literal 的 CLI argv 樣板"
 ```
 
 ---
@@ -229,7 +229,7 @@ Expected: 【推論】PASS；FINAL capability set是JSONL fixture真子集。
 
 ```bash
 git add nova/介接/執行者後端/通用_cli/protocol.py nova/介接/執行者後端/通用_cli/執行.py nova/介接/執行者後端/通用_cli/test_契約.py 驗收/後端/通用_cli 規格/執行/保證/後端/通用cli執行契約.claim.json
-git commit -m "feat: run typed generic CLI protocols"
+git commit -m "feat: 執行帶型別的通用 CLI 協定"
 ```
 
 ---
@@ -283,7 +283,7 @@ Expected: 【推論】PASS；local budget reserve仍適用所有mode。
 
 ```bash
 git add nova/介接/執行者後端/通用_cli/額度.py 驗收/後端/通用_cli/fixtures/fixture-rejection.backend.json 驗收/後端/通用_cli/測_能力降級.py 規格/執行/保證/後端/通用cli能力誠實.claim.json
-git commit -m "feat: bind generic CLI quota capabilities"
+git commit -m "feat: 綁定通用 CLI 的額度能力"
 ```
 
 ---
@@ -333,7 +333,7 @@ Expected: 【推論】PASS；backend never sees registry/scope/priority logic。
 
 ```bash
 git add nova/介接/執行者後端/通用_cli/上下文.py nova/介接/執行者後端/通用_cli/manifest.py 驗收/後端/通用_cli/測_能力降級.py
-git commit -m "feat: bind generic CLI context capabilities"
+git commit -m "feat: 綁定通用 CLI 的脈絡能力"
 ```
 
 ---
@@ -383,7 +383,7 @@ Expected: 【推論】PASS；mismatch remains QUARANTINED, no old Pursuit rebase
 
 ```bash
 git add nova/介接/執行者後端/通用_cli/更新.py 驗收/後端/通用_cli/fixtures/fixture-updater.backend.json 驗收/後端/通用_cli/測_固定更新.py 規格/執行/保證/後端/通用cli固定更新.claim.json
-git commit -m "feat: support verified pinned CLI updates"
+git commit -m "feat: 支援可驗證且釘住版本的 CLI 更新"
 ```
 
 ---
@@ -425,7 +425,7 @@ Expected: 【推論】PASS；兩fixture runtime modes與四quota branches都有c
 
 ```bash
 git add nova/介接/執行者後端/通用_cli/載入.py nova/介接/執行者後端/通用_cli/test_契約.py 驗收/後端/通用_cli/測_宣告語言.py
-git commit -m "feat: admit generic CLI backends by evidence"
+git commit -m "feat: 通用 CLI 後端憑證據准入"
 ```
 
 ## Plan Exit Gate
