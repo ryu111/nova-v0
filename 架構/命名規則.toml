@@ -64,6 +64,11 @@ contexts = [
 # 其餘全部被 bash 自己擋掉（"not a valid identifier"），**除了裸賦值**——
 # `本次路徑=/tmp/x` 被當成命令名，stderr 有錯而 script exit 0，那是唯一會靜默放行的。
 # `mapfile`／`readarray`／`coproc` 在 bash 3.2 不存在（4.0+ 才有），所以不列。
+# **這道閘掃不到什麼（寫在這裡才不會有人以為它全包）**：它只掃 repo 裡的 `.sh` 檔。
+# 實作者在工具呼叫裡臨時打的 shell **完全不在覆蓋範圍內**——2026-08-27 我自己就在
+# 那裡連續踩兩次：`碼=$?` 被 zsh 當成命令名（`command not found`，腳本照跑），
+# 以及 `${PIPESTATUS[0]}` 是 bash-ism，在 zsh 安靜給空字串。兩者都不讓命令失敗，
+# 只讓**證據消失**。臨時 shell 沒有機制擋得住，只能靠「拿不到證據就不准下結論」。
 [shell_name]
 static_forms = [
   "assignment",
