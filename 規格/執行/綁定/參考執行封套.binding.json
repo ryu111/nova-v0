@@ -1,0 +1,12 @@
+{
+  "manifest_id": "execution-envelope.reference",
+  "revision": 1,
+  "bindings": [
+    {
+      "binding_slot": "execution-envelope.reference",
+      "capability_digest": "sha256:e72663de8d6f99dd96f42350a8874a88cd43c52a4472ee8c4cc6bbd0679ba1cb",
+      "isolation": "COOPERATIVE_PROCESS",
+      "note": "bootstrap 綁定：digest 取自 contract/operation/能力名三者，不是真後端的 fingerprint。真的能力指紋要等計畫 01B 的探針；在那之前這個欄位證明的是「換一份綁定就換 plan_digest」，不是「這台機器真的有這個能力」。"
+    }
+  ]
+}
