@@ -14,6 +14,10 @@
   I5 修改方向     Modify 的對象必須由自己或**遞移**前置計畫 Create——否則就是一條沒有
                   宣告的隱含依賴，照宣告的順序執行時那個檔案還不存在。用遞移閉包而不是
                   直接邊：14 沒有直接宣告 01，但它宣告了 01B 而 01B 依賴 01。
+  I8 命名可通過   計畫在 code fence 裡宣告的 def／class 名，必須通過 `架構/檢查工程規範.py`
+                  的識別字閘（NFC＋NFKC＋每個 `_` 段單一 script）。計畫宣告一個自家閘會判紅
+                  的名字，實作者照著寫就撞紅，最可能的反應是**放寬閘**——那正好毀掉閘。
+                  實測一次掃出 30 個（全在 01–04，後面的計畫用散文寫測試名）。
   I7 引用可解析   `Run:` 指令引用的檔案必須在該 task 或更早被 Create；File Structure
                   宣告的檔案必須有人 Create。I1 只查 Create/Modify 條目的所有權，
                   查不到指令引用——實測一次掃出 22 處。
@@ -25,13 +29,17 @@
   I4 → 刪掉任一 task 的「**固定負控:**」段。
   I5 → 讓 05 去 Modify 一個由 14 Create 的檔案。
   I7 → 把任一 Run: 指令的檔名改掉一個字，或從 File Structure 挑一個檔刪掉它的 Create 條目。
+  I8 → 把任一 `def test_x_中文` 的底線刪掉，變成 `def test_x中文`。
   I6 → 把兩個 task 併成一個（commit 步會變成兩個）。
        註：ClaimSpec 上限 2 抓不到 1+1 合併（併完剛好是 2，仍在上限內），
-       所以偵測合併靠的是 commit 步那條——164/164 個 task 都恰好一次 commit。
+       所以偵測合併靠的是 commit 步那條——每個 task 都恰好一次 commit。
 
 exit 0 全過；非零＝有不變式不成立，逐條明講。
 """
 import re, sys, glob, os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from 架構.檢查工程規範 import 字的_script, 載入規則  # noqa: E402
 
 根 = (sys.argv[1] if len(sys.argv) > 1
      else os.path.join(os.path.dirname(os.path.abspath(__file__)), '計畫'))
@@ -230,6 +238,23 @@ def i7_引用可解析(檔):
                 失敗.append(f'I7 {編號(f)} 的 File Structure 宣告了 {路徑} 但沒有任何 task Create')
 
 
+def i8_命名可通過(檔):
+    """計畫自己宣告的識別字必須通過命名閘——規則與 checker 共用同一支，不重寫一份。
+
+    存在理由：Task 4 建好識別字閘後，01–04 的 code fence 裡有 30 個 `def` 名
+    （`test_相同bytes同ref` 這種）在同一個 `_` 段裡黏 Latin 與 Han，正是閘要擋的形狀。
+    計畫要求實作者寫出自家閘會判紅的名字，實作者最省事的出路是把閘改鬆。
+    """
+    分隔 = 載入規則().段分隔
+    宣告 = re.compile(r'^\s*(?:def|class)\s+([^\s(:]+)', re.M)
+    for f in 檔:
+        for 名 in 宣告.findall(open(f, encoding='utf-8').read()):
+            for 段 in 名.split(分隔):
+                if len({字的_script(c) for c in 段} - {'NEUTRAL'}) > 1:
+                    失敗.append(f'I8 {編號(f)} 宣告了黏寫的識別字 {名}（段 {段}）')
+                    break
+
+
 def i4_任務完整(檔):
     總 = 0
     for f in 檔:
@@ -256,6 +281,7 @@ def main():
     任務數 = i4_任務完整(檔)
     i6_任務口徑(檔)
     i7_引用可解析(檔)
+    i8_命名可通過(檔)
     print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個')
     for n in sorted(邊):
         print(f'  {n} ← {邊[n] or "（無前置）"}')
@@ -263,7 +289,7 @@ def main():
         print(f'\n不變式不成立（{len(失敗)}）：')
         for x in 失敗: print(f'  ✗ {x}')
         return 1
-    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析　全部成立')
+    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過　全部成立')
     return 0
 
 
