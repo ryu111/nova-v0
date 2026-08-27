@@ -113,24 +113,46 @@ def 注入(文: str, 料: dict) -> str:
 
     文 = re.sub(r'<tr(?! class="phase-row").*?</tr>', 換列, 文, flags=re.S)
 
+    # **逐 `<details class="plan">` 處理，並斷言結構完整。**
+    # 第一版用 `pid` 加 `.*?` 找下一個 `pmeta`，**沒有以卡為邊界**——
+    # sol 實測把 05 的錨改壞後，05 的數字被寫進 06，而**第二次注入不再改動、
+    # `--檢查` 判成一致：穩定的假綠**。那比一次性寫錯更糟。
+    # 這是「全域替換不看結構邊界」在本檔的第二次發作（第一次是 `進行中 N／M`
+    # 的分母被跨列覆蓋），所以這裡除了收邊界，還要**驗結構本身**。
+    卡們 = re.findall(r'<details class="plan">.*?</details>', 文, flags=re.S)
+    if len(卡們) != len(表):
+        raise SystemExit(
+            f"工程板有 {len(卡們)} 張計畫卡，資料有 {len(表)} 份計畫——結構不符，拒絕注入"
+        )
+    見過: set[str] = set()
+
     def 換卡(m: re.Match[str]) -> str:
-        pid = m.group(1)
+        卡 = m.group(0)
+        ids = re.findall(r'<span class="pid">([0-9]{2}[A-Z]?)</span>', 卡)
+        metas = re.findall(r'<span class="pmeta">', 卡)
+        if len(ids) != 1 or len(metas) != 1:
+            raise SystemExit(
+                f"一張卡有 {len(ids)} 個 pid、{len(metas)} 個 pmeta——結構不符，拒絕注入"
+            )
+        pid = ids[0]
+        if pid in 見過:
+            raise SystemExit(f"計畫 {pid} 出現在兩張卡——結構不符，拒絕注入")
+        見過.add(pid)
         if pid not in 表:
-            return m.group(0)
+            raise SystemExit(f"卡上的計畫 {pid} 不在資料裡——結構不符，拒絕注入")
         p = 表[pid]
-        return (
-            f"{m.group(0)[: m.group(0).index('<span class="pmeta">')]}"
+        return re.sub(
+            r'<span class="pmeta"><b>\d+</b> task · <b>\d+</b> step · <b>\d+</b> 負控</span>',
             f'<span class="pmeta"><b>{len(p["tasks"])}</b> task · '
-            f"<b>{p['步']}</b> step · <b>{p['neg']}</b> 負控</span>"
+            f"<b>{p['步']}</b> step · <b>{p['neg']}</b> 負控</span>",
+            卡,
+            count=1,
         )
 
-    文 = re.sub(
-        r'<span class="pid">([0-9]{2}[A-Z]?)</span>.*?'
-        r'<span class="pmeta"><b>\d+</b> task · <b>\d+</b> step · <b>\d+</b> 負控</span>',
-        換卡,
-        文,
-        flags=re.S,
-    )
+    文 = re.sub(r'<details class="plan">.*?</details>', 換卡, 文, flags=re.S)
+    缺 = set(表) - 見過
+    if 缺:
+        raise SystemExit(f"這些計畫沒有卡：{sorted(缺)}——結構不符，拒絕注入")
     return 文
 
 

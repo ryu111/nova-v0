@@ -151,7 +151,7 @@ footer{border-top:1px solid var(--線);color:var(--次);font-size:12.5px;
 
 <header><div class="wrap">
 <div class="head"><h1>nova 工程板</h1>
-<span class="sub">22 子系統 · 194 任務 · 已交付 12／194 · 生成自 docs/計畫複驗.py @ 3a61a14</span></div>
+<span class="sub">22 子系統 · 194 任務 · 已交付 12／194 · 生成自 docs/計畫複驗.py @ f392f55</span></div>
 <nav role="tablist">
 <button role="tab" aria-selected="true" aria-controls="t1" id="b1">進度</button>
 <button role="tab" aria-selected="false" aria-controls="t2" id="b2">計畫</button>
@@ -201,8 +201,12 @@ footer{border-top:1px solid var(--線);color:var(--次);font-size:12.5px;
 <td class="neg">框架把 direct red 轉成 xfail；把 HARNESS_ERROR 轉成 skip</td><td><span class="chip chip-ok">綠</span></td></tr>
 <tr><td class="mono">10</td><td><b>第一份驗行為而非驗語言的 claim</b>：wall limit 必須由封套外面的監督者真的殺掉 worker。三個觀察值全部 <code>source: VERIFIER</code><span class="dep">先紅證據：actual 直接紅在 elapsed_bound 與 worker_dead，不是缺檔也不是 harness error</span></td>
 <td class="neg"><code>cooperative-timeout-subject</code> 只自報 TIMED_OUT 不動手殺，必須<b>恰好</b>紅在 <code>elapsed_bound</code> 與 <code>worker_dead</code>——而 <code>terminal_is_timed_out</code> 必須仍然綠，那正是「自報跟真的長得一樣」的證據</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">11</td><td>禁止 raw mutation score 取得驗收權：只有事前命名、內容定址且帶 <code>must_fail_exactly</code> 的 control 能決定驗收結果；raw sweep 的 killed／survived 只是診斷 evidence<span class="dep">Google ICSE-SEIP '18 明講不把 mutation score 當指標或閘</span></td>
+<td class="neg">1/3 門檻判 fail、3/3 分數判 pass——兩格都用真的會算比例的壞 evaluator，不是餵不同 evidence 給同一個 reference</td><td><span class="chip chip-ok">綠</span></td></tr>
 <tr><td class="mono">12</td><td><b>接通 claim_id 到 evidence 的執行鏈</b>：<code>claim_id → ClaimSpec → catalog/binding → TestPlan → case runtime → evidence</code>；同時把 <code>比對</code> 的封閉運算集合補齊 <code>NOT_IN</code>、<code>NOT_CONTAINS</code>、<code>DISJOINT</code>——四份工程 claim 有兩份用到它們，缺實作時會紅在「運算沒實作」而看起來像「保證垮了」<span class="dep">拆分自原 Task 12：原本同時要求產生 evidence、整體 PASS、不改任何程式檔，三者不可能同時成立</span></td>
 <td class="neg">合法 claim 仍回 UNSUPPORTED；harness fault 被算成 CLAIM_REJECTED；未知運算回 True 而非 False。防恆真格：positional pytest 路徑照常可用</td><td><span class="chip chip-wait">未開始</span></td></tr>
+<tr><td class="mono">13</td><td>補跑 Tasks 1–4 的工程 ClaimSpec 閘：四份分兩批——兩份接線即跑，兩份待 Task 12 補齊運算。<b>「待」只是排序不是豁免</b>，本 task 不得以兩份 evidence 完成<span class="dep">拆分自原 Task 12 的 evidence-only 那一半</span></td>
+<td class="neg">把 <code>engineering.rules.day-one-enforced</code> 的四項 <code>must_fail_exactly</code> 縮成一項；negative control 回 HARNESS_ERROR 而非 CLAIM_REJECTED</td><td><span class="chip chip-wait">未開始</span></td></tr>
 <tr><td class="mono">14</td><td>六道閘接上自動執行點：本地入口 <code>工具/驗全部.py</code>（跑完每一道才回報，<b>不在第一個紅就停</b>）、pre-commit hook、CI required check，三處共讀同一份宣告清單<span class="dep">先紅證據：在拋棄式複本上同時弄壞三樣東西，git commit 仍 exit 0</span></td>
 <td class="neg">入口第一紅就停；入口永遠回零；CI 漏跑一道；hook 吞掉非零 exit。外加防恆真格：全綠時 hook 不擋正常 commit</td><td><span class="chip chip-ok">綠</span></td></tr>
 <tr><td class="mono">15</td><td>把「跑一批指定突變」包成有測試的工具：逐條套用事前命名的突變、比對宣告，<b>沒有百分比</b><span class="dep">先紅證據：ModuleNotFoundError: 工具.跑指定突變</span></td>
@@ -233,7 +237,7 @@ bash 3.2.57 下 <code>本次路徑=/tmp/x</code> 根本不是賦值而是命令�
 <div class="find" style="border-left-color:var(--綠)"><div class="find-h"><span class="fnum">已轉化</span><h4>計畫 01 的 bootstrap 缺陷</h4><span class="chip chip-ok">已補機制</span></div>
 <p class="fd">ClaimSpec runner <code>工具/跑驗收.py</code> 在計畫 01 只被 <b>Task 9</b> <code>Create:</code>，卻被 Tasks 1–4 呼叫；Task 1 的 claim 更是<b>沒有任何落點</b>。
 <b>這不是排錯序</b>——<code>跑驗收.py</code> 需要 T5–T8 的編譯器與直譯器才能存在，而 T1–4 也不能往後搬（總覽 §6.6：Task 4 綠後才開始任何領域 production code，而 ClaimSpec 語言本身就是 production code）。</p>
-<p class="ff"><span class="flabel">處置</span>Tasks 1–4 移除當下不可能跑的命令；<b>新增計畫 01 Task 12</b> 一次補跑四條，並建立 Task 1 原本缺的 <code>規格/工程/保證/工具鏈首日探針.claim.json</code>。欠帳不再只活在一張表上——它是一個有 commit 步、會被 I4／I6／I7 檢查的 task。</p></div>
+<p class="ff"><span class="flabel">處置</span>Tasks 1–4 移除當下不可能跑的命令；<b>新增計畫 01 Task 12／13</b>——12 接通執行鏈、13 補跑四條，並建立 Task 1 原本缺的 <code>規格/工程/保證/工具鏈首日探針.claim.json</code>。欠帳不再只活在一張表上——它是一個有 commit 步、會被 I4／I6／I7 檢查的 task。</p></div>
 
 </section>
 
