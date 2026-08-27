@@ -1,0 +1,173 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "claimspec.framework.no-verdict-rewrite",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "外部測試框架只轉譯、不改判定。四種獨立結果一律是 pytest 的 error，不是 fail 更不是 xfail——xfail 的意思是「預期會失敗所以沒關係」，而 HARNESS_ERROR 的意思是「根本沒驗到」，把後者顯示成前者就是把沒驗到說成驗過了。negative 依宣告直接紅時那一格對 pytest 是 pass，但證據裡必須留著 direct red：只看 pytest 綠而證據裡沒有紅過，等於沒有負控。框架能表達的判定集合裡沒有 XFAIL 這個值——不是不回傳它，是它不存在。薄殼原樣透傳 exit code，不吞、不重試、不把 error 降級成 warning。",
+  "sources": [
+    {
+      "source_id": "plan.01.task.9",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-9"
+    },
+    {
+      "source_id": "plan.20.task.12",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/20-整體組裝與跨系統驗收.md#task-12"
+    }
+  ],
+  "primitive_catalog": {
+    "catalog_id": "claimspec-framework.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "claimspec-framework.v1",
+    "operation": "expose-cases",
+    "binding_slot": "claimspec-framework.pytest"
+  },
+  "parameters": {
+    "verdicts": [
+      "PASS",
+      "FAIL",
+      "ERROR"
+    ],
+    "xfail_is_absent": true,
+    "case_id_shapes": [
+      "<claim_id>::actual",
+      "<claim_id>::positive::<id>",
+      "<claim_id>::negative::<id>"
+    ]
+  },
+  "setup": [],
+  "stimulus": [
+    {
+      "primitive": "framework.translate",
+      "arguments": {
+        "case_result": "$SUBJECT_RESULT"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "code",
+      "source": "STIMULUS_RESULT",
+      "path": "code",
+      "type": "STRING"
+    }
+  ],
+  "judge": {
+    "all_of": [
+      {
+        "predicate_id": "independent_result_is_error",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "INDEPENDENT_RESULT_NOT_ERROR"
+        }
+      },
+      {
+        "predicate_id": "xfail_is_not_expressible",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "XFAIL_EXPRESSIBLE"
+        }
+      },
+      {
+        "predicate_id": "direct_red_kept_in_evidence",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "DIRECT_RED_LOST"
+        }
+      },
+      {
+        "predicate_id": "exit_code_passed_through",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "EXIT_CODE_REWRITTEN"
+        }
+      },
+      {
+        "predicate_id": "verdict_is_ok",
+        "operator": "EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "OK"
+        }
+      }
+    ]
+  },
+  "controls": {
+    "positive": [
+      {
+        "control_id": "three-colour-plan-under-pytest",
+        "subject_binding": "CLAIMSPEC_FRAMEWORK_PYTEST",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
+    "negative": [
+      {
+        "control_id": "harness-error-shown-as-xfail",
+        "faulty_subject": "nova/基礎設施/裁定執行/test_外部框架.py::test_harness_error_不能變成_xfail",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "independent_result_is_error"
+        ]
+      },
+      {
+        "control_id": "xfail-value-exists",
+        "faulty_subject": "nova/基礎設施/裁定執行/test_外部框架.py::test_判定裡根本沒有_xfail",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "xfail_is_not_expressible"
+        ]
+      },
+      {
+        "control_id": "negative-direct-red-dropped",
+        "faulty_subject": "nova/基礎設施/裁定執行/test_外部框架.py::test_證據行留著_direct_red",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "direct_red_kept_in_evidence"
+        ]
+      },
+      {
+        "control_id": "negative-accepted-shown-as-pass",
+        "faulty_subject": "nova/基礎設施/裁定執行/test_外部框架.py::test_negative_被接受是_fail",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "exit_code_passed_through"
+        ]
+      }
+    ]
+  },
+  "run_limits": {
+    "wall_ms": 300000,
+    "max_output_bytes": 4194304
+  },
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {
+    "retain": [
+      "code",
+      "detail"
+    ],
+    "record_kind": "FRAMEWORK_TRANSLATION"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
+  "cleanup": []
+}
