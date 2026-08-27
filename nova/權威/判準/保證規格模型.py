@@ -13,6 +13,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from nova.基礎設施.裁定執行.案例執行 import CaseResult, CaseTerminal
 from nova.核心.摘要 import Sha256Ref, canonical_json_bytes, sha256_ref
 from nova.核心.識別 import SemanticId
 from nova.核心.錯誤 import 核心錯誤
@@ -227,3 +228,110 @@ class ClaimSpecLoader:
             # InvalidSemanticId 也是 核心錯誤 的子類別：一條 except 就夠，
             # 而且 code 直接沿用，不在這裡再翻譯一次。
             return ClaimSpecStructuralError(誤.code, "/", 誤.細節)
+
+
+@dataclass(frozen=True, slots=True)
+class MutationControlRef:
+    """事前命名的突變負控參照，帶內容定址與精確期望失敗判準。"""
+
+    control_id: str
+    subject_digest: Sha256Ref | str
+    semantic_anchor: str
+    must_fail_exactly: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MutationSweepEvidence:
+    """突變掃描證據：具名驗收負控與純診斷用的掃描結果分開保存。
+
+    封閉設計：
+    - 不得提供 passed、kill_rate_passed、minimum_kill_rate 等自報欄位。
+    - decision_basis 留在 evidence 中，由外部裁定器檢驗。
+    """
+
+    named_controls: tuple[MutationControlRef, ...]
+    named_control_results: dict[str, Any]
+    killed_diagnostic_ids: tuple[str, ...]
+    survived_diagnostic_ids: tuple[str, ...]
+    decision_basis: str
+
+
+def _驗_dict_結果(control: MutationControlRef, res: dict[str, Any]) -> bool:
+    """檢查 dict 格式的突變執行結果。"""
+    if "subject_digest" in res:
+        期望 = (
+            control.subject_digest.hex
+            if isinstance(control.subject_digest, Sha256Ref)
+            else str(control.subject_digest)
+        )
+        實際 = (
+            res["subject_digest"].hex
+            if isinstance(res["subject_digest"], Sha256Ref)
+            else str(res["subject_digest"])
+        )
+        if 實際 != 期望:
+            return False
+    if "semantic_anchor" in res and res["semantic_anchor"] != control.semantic_anchor:
+        return False
+    if "killed" in res and not res["killed"]:
+        return False
+    if "terminal" in res:
+        t = res["terminal"]
+        t_val = t.value if isinstance(t, CaseTerminal) else str(t)
+        if t_val != "CLAIM_REJECTED":
+            return False
+    return not (
+        "failed_predicates" in res
+        and set(res["failed_predicates"]) != set(control.must_fail_exactly)
+    )
+
+
+def _驗_具名結果(control: MutationControlRef, res: object) -> bool:
+    """檢查單一具名突變的執行結果是否相符且取得直接紅。"""
+    if isinstance(res, dict):
+        return _驗_dict_結果(control, res)
+    if isinstance(res, CaseResult):
+        return res.terminal is CaseTerminal.CLAIM_REJECTED and res.failed_predicates == frozenset(
+            control.must_fail_exactly
+        )
+    return res is True
+
+
+def evaluate_named_controls(evidence: MutationSweepEvidence) -> CaseResult:
+    """以事前命名的負控裁定突變驗收結果，禁止以 raw mutation score 作為依據。
+
+    約束：
+    - 不得計算除法、百分比或 threshold。
+    - decision_basis 合法值只能是 NAMED_CONTROLS，違規回 acceptance_authority_is_named_controls。
+    - named control 未取得指定 direct red 或 digest／anchor 不符回 named_control_killed。
+    """
+    失敗: list[str] = []
+
+    # 1. 檢驗裁定權限依據：只有 NAMED_CONTROLS 具備驗收權
+    if evidence.decision_basis != "NAMED_CONTROLS":
+        失敗.append("acceptance_authority_is_named_controls")
+
+    # 2. 檢驗每一條事前命名的 control 是否確實取得指定 direct red
+    for control in evidence.named_controls:
+        if control.control_id not in evidence.named_control_results:
+            失敗.append("named_control_killed")
+            break
+        res = evidence.named_control_results[control.control_id]
+        if not _驗_具名結果(control, res):
+            失敗.append("named_control_killed")
+            break
+
+    if 失敗:
+        return CaseResult(
+            case_id="mutation.evaluate_named_controls",
+            kind="MUTATION_EVALUATION",
+            terminal=CaseTerminal.CLAIM_REJECTED,
+            failed_predicates=frozenset(失敗),
+        )
+
+    return CaseResult(
+        case_id="mutation.evaluate_named_controls",
+        kind="MUTATION_EVALUATION",
+        terminal=CaseTerminal.ACCEPT,
+        failed_predicates=frozenset(),
+    )

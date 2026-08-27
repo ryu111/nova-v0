@@ -1,0 +1,128 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "claimspec.mutation.named-control-only",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "只有事前命名、內容定址且帶 must_fail_exactly 的 control 能決定驗收結果。raw mutation sweep 的 killed／survived 數量只能成為診斷 evidence，不得計算或使用 mutation kill rate 作為 ACCEPT／CLAIM_REJECTED 的依據。",
+  "sources": [
+    {
+      "source_id": "plan.01.task.11",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-11"
+    },
+    {
+      "source_id": "claude-md.mutation-authority",
+      "kind": "DECISION",
+      "locator": "CLAUDE.md#不可違反"
+    }
+  ],
+  "primitive_catalog": {
+    "catalog_id": "claimspec-mutation.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "claimspec-mutation.v1",
+    "operation": "evaluate-named-controls",
+    "binding_slot": "claimspec-mutation.in-process"
+  },
+  "parameters": {
+    "decision_basis": "NAMED_CONTROLS",
+    "raw_mutation_score_cannot_decide_acceptance": true
+  },
+  "setup": [],
+  "stimulus": [
+    {
+      "primitive": "mutation.evaluate_named_controls",
+      "arguments": {
+        "evidence": "$SUBJECT_EVIDENCE"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "code",
+      "source": "STIMULUS_RESULT",
+      "path": "code",
+      "type": "STRING"
+    }
+  ],
+  "judge": {
+    "all_of": [
+      {
+        "predicate_id": "acceptance_authority_is_named_controls",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "AUTHORITY_NOT_NAMED_CONTROLS"
+        }
+      },
+      {
+        "predicate_id": "named_control_killed",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "NAMED_CONTROL_SURVIVED"
+        }
+      },
+      {
+        "predicate_id": "verdict_is_ok",
+        "operator": "EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "OK"
+        }
+      }
+    ]
+  },
+  "controls": {
+    "positive": [
+      {
+        "control_id": "named-control-evaluation-reference",
+        "subject_binding": "MUTATION_EVALUATOR_IN_PROCESS",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
+    "negative": [
+      {
+        "control_id": "one-of-three-threshold-rejects",
+        "faulty_subject": "驗收/保證規格語言/測_指定突變.py::測試_固定負控一_三分之一門檻拒絕為越權",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "acceptance_authority_is_named_controls"
+        ]
+      },
+      {
+        "control_id": "three-of-three-score-grants",
+        "faulty_subject": "驗收/保證規格語言/測_指定突變.py::測試_固定負控二_三比三分數核准為越權",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "acceptance_authority_is_named_controls"
+        ]
+      }
+    ]
+  },
+  "run_limits": {
+    "wall_ms": 60000,
+    "max_output_bytes": 1048576
+  },
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {
+    "retain": [
+      "code",
+      "detail"
+    ],
+    "record_kind": "MUTATION_EVALUATION_VERDICT"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
+  "cleanup": []
+}

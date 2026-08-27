@@ -26,9 +26,9 @@ python_classes = ["測_*", "Test*"]
 pythonpath = ["."]
 
 [tool.mutmut]
-source_paths = ["nova/核心"]
-tests_dir = ["驗收/工具鏈"]
-also_copy = ["驗收", "nova"]
+source_paths = ["nova/核心", "nova/權威/判準", "nova/基礎設施/裁定執行"]
+tests_dir = ["驗收/保證規格語言", "驗收/工具鏈", "nova/核心", "nova/權威/判準", "nova/基礎設施/裁定執行"]
+also_copy = ["驗收", "規格", "nova"]
 use_git_change_detection = false
 
 [tool.ruff]
