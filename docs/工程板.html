@@ -1,0 +1,1077 @@
+<meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+
+<title>nova 工程板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --紙:#F3F4F7; --面:#FFFFFF; --面2:#FAFBFC; --墨:#15181E; --次:#59616F;
+  --線:#DDE0E6; --線2:#EAECF1; --靛:#2B4AA8; --靛淡:#E8ECFA;
+  --綠:#17703F; --綠淡:#E3F2E9; --琥:#8C5D08; --琥淡:#FAF0DC; --緋:#A32236; --緋淡:#FBE7EA;
+  --襯:'Noto Serif TC',Georgia,'Songti TC',serif;
+  --正:'Noto Sans TC',-apple-system,'PingFang TC','Microsoft JhengHei',sans-serif;
+  --等:'IBM Plex Mono','SF Mono',Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --紙:#0F1218; --面:#171B23; --面2:#1C212B; --墨:#E5E9F0; --次:#98A1B1;
+  --線:#252B37; --線2:#1F242E; --靛:#8CA2F7; --靛淡:#1B2340;
+  --綠:#4FBE84; --綠淡:#14301F; --琥:#DCA847; --琥淡:#33270D; --緋:#F0788E; --緋淡:#3A1520;
+}}
+:root[data-theme="dark"]{
+  --紙:#0F1218; --面:#171B23; --面2:#1C212B; --墨:#E5E9F0; --次:#98A1B1;
+  --線:#252B37; --線2:#1F242E; --靛:#8CA2F7; --靛淡:#1B2340;
+  --綠:#4FBE84; --綠淡:#14301F; --琥:#DCA847; --琥淡:#33270D; --緋:#F0788E; --緋淡:#3A1520;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--紙);color:var(--墨);font-family:var(--正);
+  font-size:15px;line-height:1.72;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+header{border-bottom:1px solid var(--線);background:var(--面);position:sticky;top:0;z-index:20}
+.head{display:flex;flex-wrap:wrap;align-items:baseline;gap:14px;padding:20px 0 14px}
+h1{font-family:var(--襯);font-weight:700;font-size:23px;margin:0;letter-spacing:.01em}
+.sub{color:var(--次);font-size:13px;font-family:var(--等)}
+nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{appearance:none;background:none;border:0;border-bottom:2px solid transparent;
+  color:var(--次);font-family:var(--正);font-size:14.5px;font-weight:500;
+  padding:9px 15px 11px;cursor:pointer;white-space:nowrap;letter-spacing:.03em}
+nav button:hover{color:var(--墨)}
+nav button[aria-selected=true]{color:var(--靛);border-bottom-color:var(--靛);font-weight:700}
+nav button:focus-visible{outline:2px solid var(--靛);outline-offset:-2px;border-radius:3px}
+main{padding:34px 0 90px}
+section[hidden]{display:none}
+h2{font-family:var(--襯);font-size:19px;font-weight:700;margin:44px 0 6px;letter-spacing:.01em}
+h2:first-child{margin-top:0}
+.lede{color:var(--次);font-size:14px;margin:0 0 20px;max-width:66ch}
+h3.ph-h{font-family:var(--等);font-size:12px;font-weight:600;letter-spacing:.14em;
+  color:var(--次);text-transform:uppercase;margin:34px 0 10px;
+  padding-bottom:7px;border-bottom:1px solid var(--線)}
+/* 指標 */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(126px,1fr));gap:1px;
+  background:var(--線);border:1px solid var(--線);border-radius:7px;overflow:hidden;margin-bottom:26px}
+.stat{background:var(--面);padding:15px 16px}
+.stat b{display:block;font-family:var(--等);font-size:26px;font-weight:600;
+  line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat span{display:block;color:var(--次);font-size:12px;margin-top:3px}
+.stat.acc b{color:var(--靛)}
+/* 表 */
+.tw{overflow-x:auto;border:1px solid var(--線);border-radius:7px;background:var(--面)}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
+th{text-align:left;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:var(--次);
+  text-transform:uppercase;padding:10px 12px;border-bottom:1px solid var(--線);background:var(--面2)}
+td{padding:9px 12px;border-bottom:1px solid var(--線2);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.num{font-family:var(--等);text-align:right;font-variant-numeric:tabular-nums;width:58px}
+.mono{font-family:var(--等);font-weight:600;color:var(--靛);width:42px}
+.phase-row td{background:var(--面2);font-weight:700;font-size:13px}
+.phase-row .ph{font-family:var(--等);color:var(--靛);letter-spacing:.06em}
+.ph{width:74px}
+.pid2{font-family:var(--等);font-weight:600;color:var(--次);width:46px}
+.dep{display:block;font-family:var(--等);font-size:11px;color:var(--次);opacity:.8;margin-top:1px}
+.neg{color:var(--次);font-size:13px}
+/* 標籤 */
+.chip{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:11px;
+  font-family:var(--正);white-space:nowrap;letter-spacing:.02em}
+.chip-wait{background:var(--線2);color:var(--次);border:1px solid var(--線)}
+.chip-red{background:var(--緋淡);color:var(--緋)}
+.chip-amber{background:var(--琥淡);color:var(--琥)}
+.chip-ind{background:var(--靛淡);color:var(--靛)}
+.chip-ok{background:var(--綠淡);color:var(--綠)}
+/* 計畫卡 */
+details.plan{background:var(--面);border:1px solid var(--線);border-radius:7px;margin-bottom:7px}
+details.plan summary{cursor:pointer;padding:11px 14px;display:flex;align-items:baseline;
+  gap:11px;flex-wrap:wrap;list-style:none}
+details.plan summary::-webkit-details-marker{display:none}
+details.plan summary::before{content:'▸';color:var(--次);font-size:11px;transition:transform .12s}
+details.plan[open] summary::before{transform:rotate(90deg)}
+details.plan summary:focus-visible{outline:2px solid var(--靛);outline-offset:-2px;border-radius:6px}
+.pid{font-family:var(--等);font-weight:600;color:var(--靛);font-size:13px;min-width:32px}
+.pname{font-weight:700;font-size:15px}
+.pmeta{margin-left:auto;font-family:var(--等);font-size:12px;color:var(--次);
+  font-variant-numeric:tabular-nums}
+.pmeta b{color:var(--墨);font-weight:600}
+.pbody{padding:2px 16px 15px 40px;border-top:1px solid var(--線2)}
+.goal{margin:12px 0 8px;font-size:14px;color:var(--墨)}
+.deps{margin:0 0 12px;font-size:12.5px;color:var(--次);font-family:var(--等)}
+ol.tasks{margin:0;padding-left:20px;font-size:13.5px;color:var(--次)}
+ol.tasks li{margin:3px 0;padding-left:3px}
+/* 發現 */
+.find{background:var(--面);border:1px solid var(--線);border-left:3px solid var(--緋);
+  border-radius:7px;padding:14px 17px;margin-bottom:9px}
+.find-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.fnum{font-family:var(--等);font-size:12px;color:var(--次);font-weight:600}
+.find h4{margin:0;font-size:15.5px;font-weight:700;font-family:var(--襯)}
+.find-h .chip{margin-left:auto}
+.fd{margin:7px 0 9px;font-size:14px;color:var(--次)}
+.ff{margin:0;font-size:13.5px;padding:8px 11px;background:var(--面2);border-radius:5px}
+.flabel{font-family:var(--等);font-size:11px;font-weight:600;color:var(--綠);
+  letter-spacing:.08em;margin-right:9px}
+/* 裁定 */
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(288px,1fr));gap:9px}
+.dec{background:var(--面);border:1px solid var(--線);border-radius:7px;padding:13px 16px}
+.dec h4{margin:0 0 5px;font-size:14.5px;font-weight:700;font-family:var(--襯)}
+.dec p{margin:0;font-size:13.5px;color:var(--次)}
+code{font-family:var(--等);font-size:.9em;background:var(--面2);
+  border:1px solid var(--線2);border-radius:3px;padding:.5px 4px}
+.dec code,.ff code,.fd code{background:var(--紙)}
+/* 圖 */
+figure{margin:0 0 26px;background:var(--面);border:1px solid var(--線);
+  border-radius:7px;padding:20px 20px 14px;overflow-x:auto}
+figure svg{display:block;max-width:100%;height:auto;color:var(--墨);margin:0 auto}
+figcaption{margin-top:13px;padding-top:11px;border-top:1px solid var(--線2);
+  font-size:13px;color:var(--次);text-align:left}
+.acc{color:var(--靛)}
+.warn{color:var(--緋)}
+.good{color:var(--綠)}
+.box{fill:var(--面2);stroke:currentColor;stroke-width:1.2}
+.lay-done{fill:var(--綠淡);stroke:var(--綠);stroke-width:1.7}
+.lay-ing{fill:var(--琥淡);stroke:var(--琥);stroke-width:1.7}
+.lay-wait{fill:var(--面2);stroke:var(--線);stroke-width:1.2}
+.bar-bg{fill:var(--線)}
+.bar-done{fill:var(--綠)}
+.bar-ing{fill:var(--琥)}
+.mod-done{stroke:var(--綠);stroke-width:2.1}
+.mod-ing{stroke:var(--琥);stroke-width:2.1}
+.mod-none{stroke-dasharray:4 3;opacity:.55}
+.lay-n{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600}
+.boxa{fill:var(--靛淡);stroke:var(--靛);stroke-width:1.4}
+.lbl{font-family:'Noto Sans TC',sans-serif;font-size:13px;fill:currentColor}
+.lbl-b{font-family:'Noto Sans TC',sans-serif;font-size:13.5px;font-weight:700;fill:currentColor}
+.lbl-s{font-family:'IBM Plex Mono',monospace;font-size:11px;fill:currentColor;opacity:.72}
+.ed{stroke:currentColor;stroke-width:1.3;fill:none}
+.note{background:var(--面);border:1px solid var(--線);border-left:3px solid var(--靛);
+  border-radius:7px;padding:13px 17px;margin:0 0 24px;font-size:14px}
+.note b{color:var(--靛)}
+footer{border-top:1px solid var(--線);color:var(--次);font-size:12.5px;
+  font-family:var(--等);padding:18px 0 34px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media(max-width:640px){.head{padding:15px 0 10px}h1{font-size:19px}.pbody{padding-left:16px}}
+</style>
+
+<header><div class="wrap">
+<div class="head"><h1>nova 工程板</h1>
+<span class="sub">22 子系統 · 188 任務 · 已交付 12／188 · 生成自 docs/計畫複驗.py @ 2c2bec1</span></div>
+<nav role="tablist">
+<button role="tab" aria-selected="true" aria-controls="t1" id="b1">進度</button>
+<button role="tab" aria-selected="false" aria-controls="t2" id="b2">計畫</button>
+<button role="tab" aria-selected="false" aria-controls="t3" id="b3">架構</button>
+<button role="tab" aria-selected="false" aria-controls="t4" id="b4">流程</button>
+<button role="tab" aria-selected="false" aria-controls="t5" id="b5">決策</button>
+</nav></div></header>
+
+<main class="wrap">
+
+<section id="t1" role="tabpanel" aria-labelledby="b1">
+<h2>目前狀態</h2>
+<p class="lede">每個任務的驗收單位是它自己那條 ClaimSpec 由紅轉綠，外加事前固定的負控維持會紅——執行者自報完成不算完成。<b>這一欄不再是手寫的</b>：下列每個數字都由 <code>docs/計畫複驗.py</code> 印出，而它印出數字之前，<b>十一項不變式必須全部成立</b>。「已交付」的判定也是機械的——該 task 宣告要建的檔案<b>全部存在</b>才算。</p>
+<div class="stats">
+<div class="stat"><b>22</b><span>子系統計畫</span></div>
+<div class="stat"><b>188</b><span>任務</span></div>
+<div class="stat"><b>1000</b><span>步驟</span></div>
+<div class="stat"><b>761</b><span>待建檔案</span></div>
+<div class="stat acc"><b>12</b><span>已交付任務</span></div>
+<div class="stat"><b>188</b><span>固定負控</span></div>
+<div class="stat"><b>13</b><span>實存 claim 檔</span></div>
+<div class="stat"><b>131</b><span>落點未遷移</span></div>
+</div>
+<div class="note"><b>紅是資產</b>　188 個任務配 188 格固定負控，一格不多一格不少——
+那是不變式 <b>I4</b> 逼出來的：沒有「必須紅」的那一格，一個任務不算寫完。</div>
+</div>
+<div class="tw"><table>
+<thead><tr><th>階段</th><th>編號</th><th>子系統 · 前置</th><th class="num">任務</th><th class="num">步驟</th><th>狀態</th></tr></thead>
+<tbody><tr class="phase-row"><td class="ph">Phase A</td><td colspan="2">能力假設、三個信任根與持久證據</td><td class="num">47</td><td class="num">268</td><td><span class="chip chip-ind">進行中 12／47</span></td></tr><tr><td class="ph"></td><td class="pid2">01</td><td>可執行保證語言<span class="dep">無</span></td><td class="num">18</td><td class="num">100</td><td><span class="chip chip-ind">進行中 12／18</span></td></tr><tr><td class="ph"></td><td class="pid2">01B</td><td>執行者能力契約與SDK探針<span class="dep">01</span></td><td class="num">5</td><td class="num">25</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">02</td><td>宣告式狀態機<span class="dep">01</span></td><td class="num">7</td><td class="num">42</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">03</td><td>權威狀態與事件日誌<span class="dep">01 02</span></td><td class="num">8</td><td class="num">48</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">04</td><td>內容證據與分層儲存<span class="dep">03</span></td><td class="num">9</td><td class="num">53</td><td><span class="chip chip-wait">未開始</span></td></tr><tr class="phase-row"><td class="ph">Phase B</td><td colspan="2">可工作的領域核心</td><td class="num">73</td><td class="num">373</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">05</td><td>執行封套與重播器<span class="dep">01 01B 02 03 04</span></td><td class="num">8</td><td class="num">42</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">06</td><td>判準評估與隔離回饋<span class="dep">01 02 03 04 05</span></td><td class="num">8</td><td class="num">42</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">06B</td><td>技術效益評測<span class="dep">01 02 03 04 05 06</span></td><td class="num">3</td><td class="num">15</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">07</td><td>資源預算與供應商額度<span class="dep">01 02 03 04 05</span></td><td class="num">9</td><td class="num">45</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">08</td><td>目標追求生命週期<span class="dep">01 02 03 04 05 06 07</span></td><td class="num">8</td><td class="num">44</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">09</td><td>持久工作協調與選拔<span class="dep">01 02 03 04 05 06 07 08</span></td><td class="num">8</td><td class="num">40</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">10</td><td>知識治理與快照<span class="dep">01 02 03 04 09</span></td><td class="num">9</td><td class="num">45</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">11</td><td>外部效果與後端更新<span class="dep">01 02 03 04 05 06 07 08 09</span></td><td class="num">8</td><td class="num">40</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">12</td><td>可宣告約束與權威閘<span class="dep">01 02 03 04 05 06 07 08 09 10 11</span></td><td class="num">12</td><td class="num">60</td><td><span class="chip chip-wait">未開始</span></td></tr><tr class="phase-row"><td class="ph">Phase C</td><td colspan="2">單一入口、外部世界與 view</td><td class="num">44</td><td class="num">219</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">13</td><td>應用服務與外部介面<span class="dep">01 02 03 04 05 06 07 08 09 10 11 12</span></td><td class="num">10</td><td class="num">50</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">14</td><td>Claude-Agent-SDK後端<span class="dep">01B 05 06 07 12 13</span></td><td class="num">7</td><td class="num">35</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">15</td><td>Codex-CLI後端<span class="dep">05 06 07 11 12 13</span></td><td class="num">7</td><td class="num">34</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">16</td><td>通用CLI後端<span class="dep">05 06 07 11 12 13</span></td><td class="num">7</td><td class="num">34</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">17</td><td>本地模型後端<span class="dep">04 05 06 07 11 12 13</span></td><td class="num">6</td><td class="num">30</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">18</td><td>前端視覺事件流<span class="dep">02 03 07 09 12 13</span></td><td class="num">7</td><td class="num">36</td><td><span class="chip chip-wait">未開始</span></td></tr><tr class="phase-row"><td class="ph">Phase D</td><td colspan="2">反向力量與總驗收</td><td class="num">24</td><td class="num">140</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">19</td><td>定期整併<span class="dep">01 02 03 04 05 06 07 08 09 10 11 12 13</span></td><td class="num">11</td><td class="num">63</td><td><span class="chip chip-wait">未開始</span></td></tr><tr><td class="ph"></td><td class="pid2">20</td><td>整體組裝與跨系統驗收<span class="dep">01 01B 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19</span></td><td class="num">13</td><td class="num">77</td><td><span class="chip chip-wait">未開始</span></td></tr></tbody></table></div>
+<h2>已交付</h2>
+<p class="lede">每個 task 都走完「先寫會紅的測試 → 實際跑到指定失敗 → 最小實作 → 跑綠 → commit」。下表的每個負控都是<b>實跑過的</b>，而且都反過來驗證過非恆真——餵給它不該通過的輸入時它會轉紅。</p>
+<div class="tw"><table>
+<thead><tr><th>Task</th><th>交付</th><th>固定負控（實跑）</th><th>狀態</th></tr></thead>
+<tbody>
+<tr><td class="mono">1</td><td>鎖定 CPython 3.14.7 · pytest 9.1.1 · xdist 3.8.0 · mutmut 3.7.0 · hypothesis 6.165.10；中文與英文雙軌 discovery<span class="dep">先紅證據：python3 -m pytest → No module named pytest</span></td><td class="neg"><code>收窄</code> 換成直接回傳輸入 → property test direct red；拿掉 mutmut 的 <code>also_copy</code> → typed <code>MUTATION_TESTS_NOT_COPIED</code>，不當成功</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">2</td><td>Ruff 0.16.4 ＋ mypy 2.3.1，全部既定上限（py314 · 行寬 100 · McCabe 10 · args 6 · branches 12 · statements 60 · strict）<span class="dep">先紅證據：NameError: validate_engineering_config</span></td><td class="neg">錯誤設定 fixture 同時放寬三處（拿掉 mypy strict、關掉 Ruff 的 D、McCabe 提到 20）→ <code>ENGINEERING_GATE_WEAKENED</code> 且必須逐一列出三項</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">3</td><td><code>架構/目錄規則.toml</code> 宣告六頂層、nova 十三層、import 方向與 400／250／60 規模上限；<code>架構/檢查工程規範.py</code> 只執行不解釋<span class="dep">先紅證據：No module named 架構.檢查工程規範</span></td><td class="neg">repository 錯放 <code>nova/應用/</code> → <code>PLACEMENT_LAYER_MISMATCH</code>；61 行函式 → <code>FUNCTION_TOO_LARGE</code>；另七個指定突變全部被殺</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">4</td><td><code>架構/命名規則.toml</code> 宣告雙軌：Python 識別字可全中文或全 ASCII、必須同時是 NFC 與 NFKC、每個 <code>_</code> 段單一 script；跨程序的 shell name／JSON 欄位／SQL 識別字一律 ASCII<span class="dep">先紅證據：assert 'OK' == 'MIXED_SCRIPT_IDENTIFIER'——壞東西被接受</span></td><td class="neg"><code>claim狀態</code> → <code>MIXED_SCRIPT_IDENTIFIER</code>；<code>本次路徑=/tmp/x</code> → <code>NON_ASCII_SHELL_NAME</code>；同檔的 <code>claim_ref</code>／<code>target_dir</code> 必須不被誤殺</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">5</td><td><code>nova/核心</code> 四支值型別：識別（SemanticId／BindingSlot／ClaimRef）、摘要（canonical JSON ＋ SHA-256）、時間（Duration／Instant，這一層沒有時鐘）、錯誤（CaseFailureKind 封閉 enum）<span class="dep">先紅證據：ModuleNotFoundError: nova.核心.時間</span></td><td class="neg">拿掉 <code>sort_keys</code> → 鍵順序測試紅；拿掉 NFC 檢查 → NFD 碰撞測試紅；語義識別樣式放行任何字 → 中文 id 測試紅。21 個突變 16 個當場殺、補 5 個測試後全殺</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">6</td><td>ClaimSpec 0.2.0 封閉 meta-schema ＋ 效果契約 ＋ 綁定清單三份 schema；<code>保證規格模型.py</code> 只執行不解釋，且不碰檔案系統（權威層 <code>allow_io=false</code>）<span class="dep">先紅證據：ModuleNotFoundError: nova.權威.判準.保證規格模型</span></td><td class="neg"><code>passed</code>→UNKNOWN_FIELD、清空負控→MIN_ITEMS、<code>wall_ms</code> 寫成字串→TYPE_MISMATCH、效果原語配 null→EFFECT_DELIVERY_REQUIRED、非效果 claim 配契約→EFFECT_DELIVERY_FORBIDDEN、<code>EXACTLY_ONCE</code>→UNSUPPORTED_DELIVERY_SEMANTICS。25 個突變全殺</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">7</td><td>確定性編譯：<code>compile_claim(spec, catalog, binding, offer)</code>，
+<code>plan_digest</code> 綁<b>四個輸入</b>而不只綁 claim——只綁 claim 等於宣稱在別的環境上驗的是同一件事<span class="dep">先紅證據：ModuleNotFoundError: nova.權威.判準.保證規格編譯</span></td>
+<td class="neg">DURATION_MS 與 BYTES 相比 → <code>TYPE_MISMATCH</code>；目錄外原語 → <code>UNKNOWN_PRIMITIVE</code>；被測者自報的 DURATION_MS → <code>UNTRUSTED_OBSERVATION</code></td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">8</td><td>三色矩陣與直接紅：<b>四種獨立結果一律不算負控成立</b>——negative subject 自己爆掉不是「抓到錯」，是根本沒驗到<span class="dep">先紅證據：ModuleNotFoundError: nova.權威.判準.保證規格執行</span></td>
+<td class="neg">constant-true judge 讓 negative 變 ACCEPT；negative 紅在別的 predicate；四種獨立結果各一格</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">9</td><td>pytest framework 只轉譯不改判定：<code>判定</code> enum 是 <code>{PASS, FAIL, ERROR}</code>，<b>沒有 XFAIL</b>；獨立結果在 <code>setup()</code> 拋出，pytest 記成 error 而非 skip<span class="dep">層閘在此逼出拆檔：基礎設施不得 import 權威</span></td>
+<td class="neg">框架把 direct red 轉成 xfail；把 HARNESS_ERROR 轉成 skip</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">10</td><td><b>第一份驗行為而非驗語言的 claim</b>：wall limit 必須由封套外面的監督者真的殺掉 worker。三個觀察值全部 <code>source: VERIFIER</code><span class="dep">先紅證據：actual 直接紅在 elapsed_bound 與 worker_dead，不是缺檔也不是 harness error</span></td>
+<td class="neg"><code>cooperative-timeout-subject</code> 只自報 TIMED_OUT 不動手殺，必須<b>恰好</b>紅在 <code>elapsed_bound</code> 與 <code>worker_dead</code>——而 <code>terminal_is_timed_out</code> 必須仍然綠，那正是「自報跟真的長得一樣」的證據</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">13</td><td>六道閘接上自動執行點：本地入口 <code>工具/驗全部.py</code>（跑完每一道才回報，<b>不在第一個紅就停</b>）、pre-commit hook、CI required check，三處共讀同一份宣告清單<span class="dep">先紅證據：在拋棄式複本上同時弄壞三樣東西，git commit 仍 exit 0</span></td>
+<td class="neg">入口第一紅就停；入口永遠回零；CI 漏跑一道；hook 吞掉非零 exit。外加防恆真格：全綠時 hook 不擋正常 commit</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">14</td><td>把「跑一批指定突變」包成有測試的工具：逐條套用事前命名的突變、比對宣告，<b>沒有百分比</b><span class="dep">先紅證據：ModuleNotFoundError: 工具.跑指定突變</span></td>
+<td class="neg">宣告殺掉卻存活；宣告存活卻被殺；目標字串不存在時必須明講而不是當成通過。防恆真格：跑完工作樹與跑前逐位元組相同</td><td><span class="chip chip-ok">綠</span></td></tr>
+</tbody></table></div>
+<div class="note"><b>三筆欠帳的現況</b>　① <code>mypy</code> 的 <code>strict=true</code> 已接上閘，
+範圍是計畫 01 Plan Exit Gate 逐字宣告的 <code>nova 架構 工具</code>——不是全 repo，<code>docs/</code> 與 fixtures 不在裡面。
+② 176 條英文 commit 訊息已改中文並加 <b>I9</b>。
+③ claim 落點已從「宣告了卻沒有檔」變成可機械查核：新增 <b>I10 宣告與落點一對一</b> 與 <b>I11 檔內 id 相符</b>，
+目前<b>還有 131 個 task 沒補落點行</b>，而基線寫死在 <code>計畫複驗.py</code> 裡——多了少了閘自己都會紅。</div>
+<div class="note"><b>176 條 commit 訊息改回中文</b>　計畫原本 177 條 <code>git commit -m</code> 裡有 <b>176 條是英文</b>，與 CLAUDE.md 最高原則第 2 條直接衝突；
+Tasks 1–4 的實際 commit 都寫中文——<b>每個實作者都在默默偏離計畫文字</b>。已全部改寫，並補上 <b>I9 訊息用中文</b>。
+conventional-commit 型別前綴（<code>feat:</code>／<code>test:</code>／<code>build:</code>／<code>perf:</code>）保持 ASCII：它是跨工具的 semantic id。
+判準寫成「含漢字」而非「含非 ASCII」，否則 emoji 與法文重音符號都會算通過。<b>每個 task 要做什麼、驗什麼、什麼算綠完全沒有改動。</b></div>
+<div class="note"><b>恆真格清掃</b>　Task 4 綠之後另開唯讀 session 當「恆真格獵人」找「拿掉哪一行仍然全綠」。逐條實跑驗證，
+<b>17 個突變確實存活</b>——那些行為當時完全沒有測試背書。最貴的一條：<code>claim.json</code> 的 <code>claimed_path</code> 從頭到尾沒人讀，
+真正被檢查的位置來自 fixture 檔內的 <code>宣稱落點:</code> 註解，<b>兩份拷貝可以無聲漂移</b>而負控從此不再驗證規格宣告的那個位置。
+補 12 個測試後重跑 <b>33 個事前命名的突變，殺掉 32 個</b>。唯一存活的是「normalization 只留 NFKC」——
+掃過全部 0x110000 個碼點，「NFKC 穩定但 NFC 不穩定」的字元數是 <b>0</b>，那一項永遠不可能單獨發作。
+這件事寫進 <code>命名規則.toml</code>，不假裝有測試。</div>
+<div class="note"><b>閘先咬到自己</b>　命名閘一上線就把 repo 內 <b>25 個</b>、計畫 01–04 內 <b>30 個</b>黏寫識別字判紅（<code>掃描repo</code>、<code>test_相同bytes同ref</code>…）。
+處置是<b>改名</b>不是放寬——並補上 <code>計畫複驗.py</code> 的 <b>I8</b>，讓計畫不能再宣告自家閘會判紅的名字。
+三個實測寫進了 docstring：<code>ast.parse</code> 會先 NFKC 正規化（所以查 NFC 必須走 <code>tokenize</code>）；碼點區間判 Han 會漏 CJK Ext B；
+bash 3.2.57 下 <code>本次路徑=/tmp/x</code> 根本不是賦值而是命令名，script 仍 <b>exit 0</b>——只看 exit code 的 CI 會全綠放行。</div>
+<div class="note"><b>陷阱出佇列一條</b>　<code>docs/陷阱.md</code> 的「動態 import 會讓分層依賴掃描器全綠通過」已轉化為機制：literal 的
+<code>importlib.import_module</code>／<code>__import__</code> 解析成普通 edge，非 literal 一律 <code>DYNAMIC_IMPORT_UNVERIFIABLE</code>。
+負控證明它抓得到——把 <code>ast.Call</code> 分支關掉，兩個測試同時轉紅。發作情況與代價已搬進 checker 的 docstring，佇列那條刪掉。</div>
+<div class="find" style="border-left-color:var(--綠)"><div class="find-h"><span class="fnum">已轉化</span><h4>計畫 01 的 bootstrap 缺陷</h4><span class="chip chip-ok">已補機制</span></div>
+<p class="fd">ClaimSpec runner <code>工具/跑驗收.py</code> 在計畫 01 只被 <b>Task 9</b> <code>Create:</code>，卻被 Tasks 1–4 呼叫；Task 1 的 claim 更是<b>沒有任何落點</b>。
+<b>這不是排錯序</b>——<code>跑驗收.py</code> 需要 T5–T8 的編譯器與直譯器才能存在，而 T1–4 也不能往後搬（總覽 §6.6：Task 4 綠後才開始任何領域 production code，而 ClaimSpec 語言本身就是 production code）。</p>
+<p class="ff"><span class="flabel">處置</span>Tasks 1–4 移除當下不可能跑的命令；<b>新增計畫 01 Task 12</b> 一次補跑四條，並建立 Task 1 原本缺的 <code>規格/工程/保證/工具鏈首日探針.claim.json</code>。欠帳不再只活在一張表上——它是一個有 commit 步、會被 I4／I6／I7 檢查的 task。</p></div>
+
+</section>
+
+<section id="t2" role="tabpanel" aria-labelledby="b2" hidden>
+<h2>子系統計畫</h2>
+<p class="lede">每份計畫是一個可獨立交付、獨立驗收的子系統。展開看該計畫的目標、宣告的前置與逐項任務。這裡只放摘要——全文在 <code>docs/計畫/</code>，每份 17–42KB。</p>
+<h3 class="ph-h">Phase A　能力假設、三個信任根與持久證據</h3>
+<details class="plan"><summary><span class="pid">01</span>
+<span class="pname">可執行保證語言</span>
+<span class="pmeta"><b>18</b> task · <b>100</b> step · <b>18</b> 負控</span></summary>
+<div class="pbody"><p class="goal">建立最小信任根：一份 ClaimSpec 可確定性編成外部 TestPlan，對 actual／正控接受，對事前固定錯誤 subject 產生指定 direct red，且 harness fault 永不冒充候選失敗。</p>
+<p class="deps">前置計畫　<code>無</code></p>
+<ol class="tasks"><li>固定 CPython 與中文測試／mutation 工具鏈 <span class="chip chip-ok">已交付</span></li><li>建立格式、lint、docstring與strict型別閘 <span class="chip chip-ok">已交付</span></li><li>建立唯一落點、依賴與規模閘 <span class="chip chip-ok">已交付</span></li><li>建立Python Unicode與跨程序ASCII雙軌閘 <span class="chip chip-ok">已交付</span></li><li>建立 canonical identity、digest 與 typed failure union <span class="chip chip-ok">已交付</span></li><li>封閉 ClaimSpec 0.2.0 meta-schema、效果條件與 typed model <span class="chip chip-ok">已交付</span></li><li>確定性編譯 PrimitiveCatalog、predicate 與 TestPlan <span class="chip chip-ok">已交付</span></li><li>執行 actual／positive／negative 並保留 direct red <span class="chip chip-ok">已交付</span></li><li>讓外部 pytest framework 只轉譯、不改判定 <span class="chip chip-ok">已交付</span></li><li>寫第一份 wall-limit ClaimSpec 並真的紅／綠 <span class="chip chip-ok">已交付</span></li><li>禁止 raw mutation score 取得驗收權</li><li>補跑 Tasks 1–4 的工程 ClaimSpec 閘</li><li>把工程閘接上自動執行點 <span class="chip chip-ok">已交付</span></li><li>把「跑一批指定突變」包成有測試的工具 <span class="chip chip-ok">已交付</span></li><li>只准用已准入的原語目錄</li><li>已准入保證的閉包不可被實作者原地改弱</li><li>新增准入要憑外部可查、一次性的授權收據</li><li>准入職責分離要比對到 attested actor</li></ol></div></details>
+<details class="plan"><summary><span class="pid">01B</span>
+<span class="pname">執行者能力契約與SDK探針</span>
+<span class="pmeta"><b>5</b> task · <b>25</b> step · <b>5</b> 負控</span></summary>
+<div class="pbody"><p class="goal">在任何 state owner、budget ledger 或付費 adapter 之前，先把執行者的工具授權、結構化輸出、子代理與成本證據能力做成可執行契約，並用 pinned Claude Agent SDK 的靜態探針與有界 live smoke 及早推翻錯誤假設。</p>
+<p class="deps">前置計畫　<code>01</code></p>
+<ol class="tasks"><li>固定 provider-neutral capability、tool、output、delegation 與 usage schemas</li><li>建立 deny、structured output、delegation 與 usage scope 共用契約套件</li><li>對 pinned Claude Agent SDK 做必跑靜態 surface probe</li><li>讓 CapabilityEvidence 綁 exact fingerprint、controls 與 TTL</li><li>建立有界 live smoke 與 Claude NOT_ADMITTED 規則</li></ol></div></details>
+<details class="plan"><summary><span class="pid">02</span>
+<span class="pname">宣告式狀態機</span>
+<span class="pmeta"><b>7</b> task · <b>42</b> step · <b>7</b> 負控</span></summary>
+<div class="pbody"><p class="goal">讓 MachineSpec／FlowSpec 成為 runtime 與圖的單一 source，編譯期證明 guard 互斥完備與結構可達性，執行期只准走 declared transition。</p>
+<p class="deps">前置計畫　<code>01</code></p>
+<ol class="tasks"><li>載入封閉 MachineSpec／FlowSpec model</li><li>實作 Guard v1 型別與 proof cells</li><li>完成 MachineSpec structural／liveness lints</li><li>編譯 MachinePlan 並只執行唯一 declared edge</li><li>DecisionTable 與 CustomDecision escape budget</li><li>編譯 FlowSpec 與跨層 GraphIR</li><li>生成不可手改的 DOT／SVG 並固定 migration 語意</li></ol></div></details>
+<details class="plan"><summary><span class="pid">03</span>
+<span class="pname">權威狀態與事件日誌</span>
+<span class="pmeta"><b>8</b> task · <b>48</b> step · <b>8</b> 負控</span></summary>
+<div class="pbody"><p class="goal">建立唯一 state owner、declared-transition journal與可獨立尾隨 replica；任一 transaction boundary SIGKILL 後只靠持久 bytes 恢復，不遺失 committed event、不接受非法 edge、不產生兩個有效 lease。</p>
+<p class="deps">前置計畫　<code>01 02</code></p>
+<ol class="tasks"><li>固定事件 envelope 與 canonical bytes</li><li>建 SQLite migration 與 declared-transition composite FK</li><li>建 single-owner command loop 與唯一 writer connection</li><li>原子 append event、head 與 command idempotency</li><li>建 lease renew／takeover fencing</li><li>發布完全相同 event bytes 到可重建 WAL tail</li><li>跑 transaction-boundary SIGKILL recovery matrix</li><li>機械禁止 DB bypass</li></ol></div></details>
+<details class="plan"><summary><span class="pid">04</span>
+<span class="pname">內容證據與分層儲存</span>
+<span class="pmeta"><b>9</b> task · <b>53</b> step · <b>9</b> 負控</span></summary>
+<div class="pbody"><p class="goal">建立 domain-neutral CAS、不可覆寫 EvidenceRecord、hot／warm／cold retention、recovery checkpoint與可驗 backup，使 hot SQLite 可 prune 而 event truth、active Work replay與稽核證據不變弱。</p>
+<p class="deps">前置計畫　<code>03</code></p>
+<ol class="tasks"><li>建 ContentRef 與 filesystem CAS contract</li><li>建 append-only EvidenceRecord 與 correction semantics</li><li>寫 event segment、驗證後再 commit manifest</li><li>建 recovery checkpoint＋suffix 等價證明</li><li>只有 seal＋checkpoint＋tail＋24h 全滿足才 prune</li><li>retention pins 與 capacity hard stops</li><li>保持segment與tail跨層cursor連續</li><li>建可驗 backup／empty-root restore</li><li>量實際 page charge 與 v1 envelope</li></ol></div></details>
+<h3 class="ph-h">Phase B　可工作的領域核心</h3>
+<details class="plan"><summary><span class="pid">05</span>
+<span class="pname">執行封套與重播器</span>
+<span class="pmeta"><b>8</b> task · <b>42</b> step · <b>8</b> 負控</span></summary>
+<div class="pbody"><p class="goal">建立一次執行的外部權威邊界：後端只能產生事件與候選產物，不能延長 wall time／回合／輸出／核准花費，也不能指定自己的權威終態；純函式重播器以零付費跑完整契約。</p>
+<p class="deps">前置計畫　<code>01 01B 02 03 04</code></p>
+<ol class="tasks"><li>宣告 Execution machine 與封閉終態</li><li>定義跨後端 request/event contract 與重播器</li><li>由父程序強制 wall deadline 與 process-tree kill</li><li>強制回合、工具呼叫與輸出 byte 上限</li><li>接上不可由執行者改寫的預算保留 port</li><li>封死「執行者裁定自己的終態」</li><li>證明重播、重送與 crash recovery 確定性</li><li>消費能力契約並攔截工具、輸出、代理與效果路徑</li></ol></div></details>
+<details class="plan"><summary><span class="pid">06</span>
+<span class="pname">判準評估與隔離回饋</span>
+<span class="pmeta"><b>8</b> task · <b>42</b> step · <b>8</b> 負控</span></summary>
+<div class="pbody"><p class="goal">讓判準定義與候選執行彼此隔離、讓裁定輸出有受控梯度，並確保任何一次揭露都不可逆地燒掉該 sealed case；宿主能力不足時 typed fail，絕不靜默降級。</p>
+<p class="deps">前置計畫　<code>01 02 03 04 05</code></p>
+<ol class="tasks"><li>宣告 CriterionDefinition 與 Evaluation lifecycle</li><li>建立 isolation capability 協商且拒絕降級</li><li>產生互斥 candidate/evaluator projection</li><li>產生 typed verdict 並區分 harness fault</li><li>只輸出 clause-level gated feedback</li><li>實作「揭露即燒掉」且 crash-safe</li><li>驗證目前威脅聲明沒有越界</li><li>揭露帳是 state owner 管的持久 aggregate</li></ol></div></details>
+<details class="plan"><summary><span class="pid">06B</span>
+<span class="pname">技術效益評測</span>
+<span class="pmeta"><b>3</b> task · <b>15</b> step · <b>3</b> 負控</span></summary>
+<div class="pbody"><p class="goal">回答「某項技術值不值得用」——對 baseline 與 treatment 做成對實驗，</p>
+<p class="deps">前置計畫　<code>01 02 03 04 05 06</code></p>
+<ol class="tasks"><li>凍結實驗設計並拒絕事後改端點</li><li>決定性分析器——釘版統計實作，兩端點各自有牙</li><li>薄殼與證據重播</li></ol></div></details>
+<details class="plan"><summary><span class="pid">07</span>
+<span class="pname">資源預算與供應商額度</span>
+<span class="pmeta"><b>9</b> task · <b>45</b> step · <b>9</b> 負控</span></summary>
+<div class="pbody"><p class="goal">對所有執行者後端提供同一套先保留後花費的硬帳，誠實處理供應商 push-observed 額度的 per-bucket 證據，並以版本化 soft allocation policy 加 live hard eligibility gate 決定可派工後端。</p>
+<p class="deps">前置計畫　<code>01 02 03 04 05</code></p>
+<ol class="tasks"><li>宣告 BudgetReservation machine 與整數帳</li><li>釘住每筆 reservation 的 RateCard revision</li><li>建立 per-bucket 五態且不捏造 reset 後餘額</li><li>實作 metric gate 與 bucket topology</li><li>讓 stale/rolled/cold observation probe 單飛且可恢復</li><li>保留無 observation capability 的 blind fallback</li><li>版本化 allocation policy 並對 Work 釘版</li><li>合成 live hard eligibility 並發布誠實事件</li><li>對 delegation tree 做完整 reserve 與核銷</li></ol></div></details>
+<details class="plan"><summary><span class="pid">08</span>
+<span class="pname">目標追求生命週期</span>
+<span class="pmeta"><b>8</b> task · <b>44</b> step · <b>8</b> 負控</span></summary>
+<div class="pbody"><p class="goal">建立 Work 與 Execution 之間獨立的 Pursuit 生命週期：同一搜尋策略可有最多 16 次執行、由外部判準回饋反覆改進、非終態暫停後換合格後端接手，且任何停止路徑都有外部界線。</p>
+<p class="deps">前置計畫　<code>01 02 03 04 05 06 07</code></p>
+<ol class="tasks"><li>宣告 Pursuit machine、identity 與 terminal union</li><li>固定 attempt policy 與單調停止 measure</li><li>串起 Execution、CandidateBundle 與外部 Evaluation</li><li>暫停、checkpoint 與換後端接手</li><li>固定 identity 變更矩陣與 supersedes 逃生路徑</li><li>隔離平行 Pursuit 的 workspace 與 evidence lineage</li><li>讓 Pursuit lease/replay 在 crash 後不多生 attempt</li><li>停滯只回報觀測——凍結順序下的最佳候選</li></ol></div></details>
+<details class="plan"><summary><span class="pid">09</span>
+<span class="pname">持久工作協調與選拔</span>
+<span class="pmeta"><b>8</b> task · <b>40</b> step · <b>8</b> 負控</span></summary>
+<div class="pbody"><p class="goal">建立跨程序、跨崩潰的 Work portfolio：持久排程最多八個 Pursuit、在明確 cutoff 前收集合格候選、以釘版 ranking schema 確定性選最好，並在 7 天／8,192 operational events／總預算等界線內必然終止。</p>
+<p class="deps">前置計畫　<code>01 02 03 04 05 06 07 08</code></p>
+<ol class="tasks"><li>宣告 Work machine、bounds 與 pinned creation contract</li><li>用 FlowSpec 封死父子基數並拒絕一般 DAG</li><li>實作 portfolio fan-out 與原子 budget slicing</li><li>建立 deterministic BEST_BEFORE_DEADLINE 選拔</li><li>固定 cutoff、取消 losers 與 5 秒 kill grace</li><li>強制 7 天 absolute deadline 與 8,192 event terminal reserve</li><li>實作持久佇列、公平租約與全程序恢復</li><li>讓健康缺陷只能提案普通維護 Work</li></ol></div></details>
+<details class="plan"><summary><span class="pid">10</span>
+<span class="pname">知識治理與快照</span>
+<span class="pmeta"><b>9</b> task · <b>45</b> step · <b>9</b> 負控</span></summary>
+<div class="pbody"><p class="goal">建立跨 Work 的知識治理權威：執行者只能提案，唯一 admission writer 決定 ACTIVE／過期／撤銷／取代；Work 只綁 immutable KnowledgeSnapshot，來源失效會沿完整衍生圖傳播而不改寫歷史。</p>
+<p class="deps">前置計畫　<code>01 02 03 04 09</code></p>
+<ol class="tasks"><li>宣告 KnowledgeAssertion machine 與封閉 schema</li><li>封死執行者自我准入</li><li>建立可追溯的來源與衍生圖</li><li>只從 ACTIVE assertions 建立 immutable snapshot</li><li>傳遞來源撤銷並通知在途 Work</li><li>讓索引可丟棄重建且不成第二份真相</li><li>機械阻止知識跨權威越寫</li><li>固定 deterministic query policy 與索引重建語義</li><li>拒絕context截斷、限制cache並建立retrieval反轉閘</li></ol></div></details>
+<details class="plan"><summary><span class="pid">11</span>
+<span class="pname">外部效果與後端更新</span>
+<span class="pmeta"><b>8</b> task · <b>40</b> step · <b>8</b> 負控</span></summary>
+<div class="pbody"><p class="goal">讓資料庫狀態與外部世界之間的不可原子性成為明示契約：每個效果先有持久 intent，再依 endpoint operation 選 at-least-once idempotent 或 at-most-once，所有 crash gap 有 typed 結果；CLI 更新以 drain→pinned install→fingerprint verify 完成，不偷換在途 Pursuit。</p>
+<p class="deps">前置計畫　<code>01 02 03 04 05 06 07 08 09</code></p>
+<ol class="tasks"><li>驗收 EffectDelivery 0.2.0 並准入 endpoint semantics</li><li>宣告 EffectIntent machine 並與 domain event 原子落盤</li><li>實作 at-least-once idempotent relay crash gap</li><li>實作 at-most-once premark 與明示 loss gap</li><li>驗證 typed receipt/postcondition 並誠實處理 timeout</li><li>宣告 backend update phase 與跨權威 interlock</li><li>實作 pinned convergent updater endpoint contract</li><li>封住 outbox fan-out/backlog 並維持 state command 公平</li></ol></div></details>
+<details class="plan"><summary><span class="pid">12</span>
+<span class="pname">可宣告約束與權威閘</span>
+<span class="pmeta"><b>12</b> task · <b>60</b> step · <b>12</b> 負控</span></summary>
+<div class="pbody"><p class="goal">把跨工作重用的「提醒」與不可違反的「邊界」做成同一封閉宣告語言的兩種強度，卻不創造中央萬能權威：ADVISORY 由知識治理並可驗送達，ENFORCED 由被限制操作的既有權威擁有並在不可繞過的 system gate 執法。</p>
+<p class="deps">前置計畫　<code>01 02 03 04 05 06 07 08 09 10 11</code></p>
+<ol class="tasks"><li>寫 ConstraintSpec 1.0.0 schema 與 neutral kernel</li><li>Admission 必須閉合到事前 direct-red evidence</li><li>各 owner 擁有自己的 ENFORCED lifecycle且不自動續期</li><li>建立 owner-specific gates與 capability fail-closed</li><li>capability不足時強制fail closed</li><li>把 ADVISORY constraint納入知識治理與16條 overlap cap</li><li>在Execution前精確計量、pack並拒絕required overflow</li><li>三處揭露省略與真compaction重掛</li><li>snapshot失效後必須顯式rebase</li><li>只能提案，啟用要10分鐘one-use ApprovalEnvelope</li><li>有界偵測重複失敗並只建立普通authoring Work</li><li>機械驗證owner/path/gate與禁止中央約束桶</li></ol></div></details>
+<h3 class="ph-h">Phase C　單一入口、外部世界與 view</h3>
+<details class="plan"><summary><span class="pid">13</span>
+<span class="pname">應用服務與外部介面</span>
+<span class="pmeta"><b>10</b> task · <b>50</b> step · <b>10</b> 負控</span></summary>
+<div class="pbody"><p class="goal">提供 CLI、Python caller、HTTP、MCP 與前端共用的唯一 use-case boundary：相同 typed command得到相同 decision/error/events；外部介面不能取得 repository/SQL/權威寫口，view只可訂閱事件與按digest取GraphBundle。</p>
+<p class="deps">前置計畫　<code>01 02 03 04 05 06 07 08 09 10 11 12</code></p>
+<ol class="tasks"><li>固定public command/result/event/GraphBundle schemas</li><li>建立ports-only CommandBus與UnitOfWork boundary</li><li>登錄每個command的唯一owner handler</li><li>實作command idempotency、digest conflict與capability ACL</li><li>實作digest-only GraphBundle服務與tail-only訂閱</li><li>實作typed Python API facade</li><li>實作ASCII executable的中文命令列adapter</li><li>實作OpenAPI commands、GraphBundle與SSE</li><li>證明CLI/Python/HTTP同決策且依賴只向內</li><li>加入 MCP transport 並證明四介面同決策</li></ol></div></details>
+<details class="plan"><summary><span class="pid">14</span>
+<span class="pname">Claude-Agent-SDK後端</span>
+<span class="pmeta"><b>7</b> task · <b>35</b> step · <b>7</b> 負控</span></summary>
+<div class="pbody"><p class="goal">把 Claude Agent SDK 接成與重播器相同的 ExecutorBackend：manifest/fingerprint完整、SDK typed events正規化、工具授權／結構輸出／delegation契約不降級、外部封套仍掌握限額與終態、RateLimitEvent逐bucket寫入資源證據、上下文能力不誇大。</p>
+<p class="deps">前置計畫　<code>01B 05 06 07 12 13</code></p>
+<ol class="tasks"><li>釘SDK依賴並建立完整capability fingerprint</li><li>將SDK typed stream正規化成共用BackendEvent</li><li>讓外部封套可取消SDK且限額仍由父層掌握</li><li>將RateLimitEvent逐bucket寫成誠實quota evidence</li><li>誠實宣告初始上下文、meter與不支援重掛/更新</li><li>證明candidate projection不含判準並跑完整adapter matrix</li><li>映射 SDK 工具、輸出、代理成本並封閉 ambient settings</li></ol></div></details>
+<details class="plan"><summary><span class="pid">15</span>
+<span class="pname">Codex-CLI後端</span>
+<span class="pmeta"><b>7</b> task · <b>34</b> step · <b>7</b> 負控</span></summary>
+<div class="pbody"><p class="goal">以固定argv與JSONL protocol把Codex CLI接成ExecutorBackend，逐bucket解析`token_count.rate_limits`、隔離使用者設定與session副作用、保留外部限額/終態權，並誠實拒絕不符合pinned-target契約的內建self-update。</p>
+<p class="deps">前置計畫　<code>05 06 07 11 12 13</code></p>
+<ol class="tasks"><li>建立executable fingerprint與closed argv builder</li><li>寫closed JSONL decoder與raw evidence保存</li><li>實作process adapter並通過共用execution/cancel契約</li><li>解析token_count.rate_limits成per-bucket evidence</li><li>隔離config/session並誠實宣告context能力</li><li>把無target的self-update固定為unsupported</li><li>跑完整Codex adapter contract/negative matrix</li></ol></div></details>
+<details class="plan"><summary><span class="pid">16</span>
+<span class="pname">通用CLI後端</span>
+<span class="pmeta"><b>7</b> task · <b>34</b> step · <b>7</b> 負控</span></summary>
+<div class="pbody"><p class="goal">以可准入的BackendSpec支援agy等其他CLI型agent，而不為每個CLI複製領域語義：固定executable digest、closed argv token template、typed event/exit grammar、明示quota/context/update capability，任何無法觀測的能力都走既有typed弱路徑。</p>
+<p class="deps">前置計畫　<code>05 06 07 11 12 13</code></p>
+<ol class="tasks"><li>寫closed CliBackendSpec schema與loader</li><li>編譯literal argv templates且runtime不重新PATH lookup</li><li>實作JSONL_SCHEMA與FINAL_STDOUT兩種protocol</li><li>讓quota四種capability走唯一typed branch</li><li>綁定context meter/reassert能力而不讓CLI自行選規則</li><li>只准exact-target convergent updater</li><li>建立BackendSpec admission與named-fault matrix</li></ol></div></details>
+<details class="plan"><summary><span class="pid">17</span>
+<span class="pname">本地模型後端</span>
+<span class="pmeta"><b>6</b> task · <b>30</b> step · <b>6</b> 負控</span></summary>
+<div class="pbody"><p class="goal">支援不依賴供應商額度的本地模型執行者：模型權重/runtime/tokenizer/prompt template/sampler全進fingerprint，provider quota明示NOT_APPLICABLE，金額核銷為有證據的零而非繞過帳，外部wall/round/output限制與其他後端完全相同。</p>
+<p class="deps">前置計畫　<code>04 05 06 07 11 12 13</code></p>
+<ol class="tasks"><li>定義LocalInferenceEngine與完整manifest fingerprint</li><li>將local engine stream正規化且不取得terminal權</li><li>提供可強制cancel的supervised process bridge</li><li>明示NOT_APPLICABLE quota與zero-money ledger</li><li>以同tokenizer/template精確計量outbound context</li><li>禁止本地品牌推導不存在的能力並跑完整matrix</li></ol></div></details>
+<details class="plan"><summary><span class="pid">18</span>
+<span class="pname">前端視覺事件流</span>
+<span class="pmeta"><b>7</b> task · <b>36</b> step · <b>7</b> 負控</span></summary>
+<div class="pbody"><p class="goal">交付「像流程圖一樣看到現在走到哪一格」的visual-log UI：只靠GraphBundle與事件流純函式重建三層tokens、系統健康、per-bucket額度、constraint context與低頻控制結果，永遠不向領域發額外查詢。</p>
+<p class="deps">前置計畫　<code>02 03 07 09 12 13</code></p>
+<ol class="tasks"><li>固定TypeScript/Vite/Vitest中文工具鏈與public schema validation</li><li>實作event catch-up/live連線與pure reducer</li><li>載入generated GraphBundle並高亮三層tokens</li><li>誠實顯示系統健康與per-bucket quota</li><li>顯示constraint delivery/omission/lifecycle而不冒充保證</li><li>低頻controls只送typed application commands</li><li>組裝Web Components、繁中詞典與production build</li></ol></div></details>
+<h3 class="ph-h">Phase D　反向力量與總驗收</h3>
+<details class="plan"><summary><span class="pid">19</span>
+<span class="pname">定期整併</span>
+<span class="pmeta"><b>11</b> task · <b>63</b> step · <b>11</b> 負控</span></summary>
+<div class="pbody"><p class="goal">把「系統只會累積」的反向力量做成普通 Work：整併可替換保證的可執行表示，但不能縮減不可變的行為義務、遺失任何固定負控、增加 Guard 逃生使用量，review 與訊號都只能提案。</p>
+<p class="deps">前置計畫　<code>01 02 03 04 05 06 07 08 09 10 11 12 13</code></p>
+<ol class="tasks"><li>建立不可變 GuaranteeObligation 與 ClaimCoverage</li><li>封閉 ClaimMergeSpec 的表達力與 blast radius</li><li>驗證 obligation inclusion 與固定 controls 原封承接</li><li>指定突變不得被raw擊殺率取代</li><li>原子啟用 successor 並把 sources 轉成可解析 alias</li><li>封住一 Work 一 merge 與 Guard 逃生非增加預算</li><li>只記錄 structural signals，手動階段邊界才提案</li><li>review與ApplicationBoundary只能提出typed整併工作</li><li>把真正的需求撤銷隔離成短效授權工作</li><li>將需求變更commands綁exact Work revision</li><li>跑完整 SimplificationWork 與兩 claim 合一固定案例</li></ol></div></details>
+<details class="plan"><summary><span class="pid">20</span>
+<span class="pname">整體組裝與跨系統驗收</span>
+<span class="pmeta"><b>13</b> task · <b>77</b> step · <b>13</b> 負控</span></summary>
+<div class="pbody"><p class="goal">把前 19 個已各自驗收的子系統組成單機 production topology，證明三層生命週期、四權威、五種 executor backend、CAS／分層事件、effects、constraints、UI 與自我維護在真實邊界及全程序崩潰下仍共同成立；本計畫不新增任何單一 owner 的領域規則。</p>
+<p class="deps">前置計畫　<code>01 01B 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19</code></p>
+<ol class="tasks"><li>建立 exact-digest spec catalog 與 bootstrap closure</li><li>組裝 production process roots 並禁止 fake 注入</li><li>將Application與CLI接到同一production root</li><li>對五種 ExecutorBackend 跑同一契約矩陣</li><li>跑一個四策略 Work 的三層可信收斂</li><li>對全部程序做 total SIGKILL 與持久重建矩陣</li><li>驗外部效果 crash gaps 與 backend update 誠實能力</li><li>驗判準、知識、約束、資源跨面不靜默降級</li><li>實測 admission caps、soak、burst與事件發布 SLO</li><li>驗 checkpoint／segment／tail／backup 的跨層連續</li><li>驗 browser 只靠 GraphBundle＋跨層事件流重建</li><li>建立不會恆綠的 release gate 與交付證據</li><li>組合 core deployability 與 exact-backend live readiness</li></ol></div></details>
+</section>
+
+<section id="t3" role="tabpanel" aria-labelledby="b3" hidden>
+<h2>nova 與 Claude 的關係</h2>
+<p class="lede">nova 本體就是產品：它是<b>宿主引擎</b>，claude 與 codex、gemini、本地模型平級，都只是後端的一種。
+Claude 在這套系統裡出現<b>三次</b>，位置完全不同——把它們混成一個「Claude 在跑 nova」，就會把驗收權還給被驗收者。</p>
+<figure>
+<svg viewBox="0 0 900 648" role="img" aria-label="Claude 在 nova 中的三個位置：外部實作者、命令發起者、五種執行者後端之一；三者都沒有驗收權">
+<defs><marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+<marker id="c2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--靛)"/></marker></defs>
+
+<text class="lbl-s" x="24" y="16" opacity=".7">外部 · 不在 nova 裡</text>
+<rect x="24" y="24" width="852" height="52" rx="5" fill="none" stroke="var(--琥)" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text class="lbl-b" x="40" y="46" fill="var(--琥)">① Claude Code —— 實作 nova 的外部執行者（我現在的位置）</text>
+<text class="lbl-s" x="40" y="65" fill="var(--琥)">寫 code、跑測試、commit。受 ClaimSpec 閘裁定；自報完成不算完成，也不能改已准入的題目。</text>
+
+<line class="ed" x1="200" y1="76" x2="200" y2="102" marker-end="url(#c1)"/>
+<text class="lbl-s" x="212" y="94" opacity=".72">產出原始碼與綠 commit</text>
+
+<rect x="14" y="104" width="872" height="512" rx="6" fill="none" stroke="var(--靛)" stroke-width="1.8"/>
+<text class="lbl-b" x="28" y="124" fill="var(--靛)">nova（宿主引擎）</text>
+<text class="lbl-s" x="150" y="124" opacity=".7">權限逐層收窄：往下每一手能說的話都比上一手窄</text>
+
+<rect class="box" x="24" y="134" width="852" height="44" rx="4"/>
+<text class="lbl-b" x="40" y="152">使用者</text>
+<text class="lbl-s" x="40" y="169" opacity=".62">說出意圖與判準。<tspan font-weight="700">唯一能改題目的人</tspan>；不以口頭覆寫成功。</text>
+
+<line class="ed" x1="200" y1="178" x2="200" y2="200" marker-end="url(#c2)" stroke="var(--靛)"/>
+<text class="lbl-s" x="212" y="194" fill="var(--靛)">① 自然語言意圖</text>
+
+<rect class="boxa" x="24" y="200" width="852" height="52" rx="4"/>
+<text class="lbl-b" x="40" y="221" fill="var(--靛)">② Claude 會話 —— 命令發起者</text>
+<text class="lbl-s" x="40" y="240" fill="var(--靛)">只能送命令目錄裡已有的 13 個 typed command。能做什麼由 catalog 與 ACL 決定，不由它的措辭決定。</text>
+
+<line class="ed" x1="200" y1="252" x2="200" y2="274" marker-end="url(#c2)" stroke="var(--靛)"/>
+<text class="lbl-s" x="212" y="268" fill="var(--靛)">② CommandEnvelope（封閉 schema · 附冪等鍵）</text>
+
+<rect class="box" x="24" y="274" width="852" height="48" rx="4"/>
+<text class="lbl-b" x="40" y="294">nova 應用邊界</text>
+<text class="lbl-s" x="40" y="312" opacity=".62">CLI／Python／HTTP／MCP 四個 transport 共用的唯一入口——<tspan font-weight="700">但沒有任何領域終態權</tspan>。</text>
+
+<line class="ed" x1="200" y1="322" x2="200" y2="344" marker-end="url(#c2)" stroke="var(--靛)"/>
+<text class="lbl-s" x="212" y="338" fill="var(--靛)">③ 一次交易內完成或整筆不算</text>
+
+<rect class="boxa" x="24" y="344" width="852" height="58" rx="4"/>
+<text class="lbl-b" x="40" y="365" fill="var(--靛)">領域（Work → Pursuit → Execution）　·　四權威（判準 · 資源 · 效果 · 知識）</text>
+<text class="lbl-s" x="40" y="384" fill="var(--靛)"><tspan font-weight="700">唯一能宣告終態的地方。</tspan>生命週期只產生宣告；判準權威才能說「符合凍結的定義」。</text>
+
+<line class="ed" x1="160" y1="402" x2="160" y2="428" marker-end="url(#c2)" stroke="var(--靛)"/>
+<text class="lbl-s" x="172" y="420" fill="var(--靛)">④ ExecutionRequest</text>
+<line class="ed" x1="520" y1="428" x2="520" y2="402" marker-end="url(#c1)"/>
+<text class="lbl-s" x="532" y="420" opacity=".72">⑤ 只回報觀察</text>
+<line class="ed" x1="768" y1="402" x2="768" y2="428" marker-end="url(#c1)"/>
+<text class="lbl-s" x="656" y="420" opacity=".72">⑥ 已提交轉移事件</text>
+
+<rect class="box" x="24" y="428" width="616" height="80" rx="4"/>
+<text class="lbl-s" x="36" y="446" opacity=".62">五種 ExecutorBackend · 同一份契約 · 完全平級</text>
+<rect class="box" x="34" y="452" width="112" height="34" rx="3"/><text class="lbl" x="90" y="473" text-anchor="middle" font-size="11">重播器</text>
+<rect class="boxa" x="154" y="452" width="112" height="34" rx="3"/><text class="lbl" x="210" y="473" text-anchor="middle" font-size="11" fill="var(--靛)">③ Claude SDK</text>
+<rect class="box" x="274" y="452" width="112" height="34" rx="3"/><text class="lbl" x="330" y="473" text-anchor="middle" font-size="11">Codex CLI</text>
+<rect class="box" x="394" y="452" width="112" height="34" rx="3"/><text class="lbl" x="450" y="473" text-anchor="middle" font-size="11">通用 CLI</text>
+<rect class="box" x="514" y="452" width="112" height="34" rx="3"/><text class="lbl" x="570" y="473" text-anchor="middle" font-size="11">本地模型</text>
+<text class="lbl-s" x="36" y="501" fill="var(--緋)">連「成功」都不能說。終態由封套依外部五軸計數器寫：牆鐘／回合／輸出 bytes／工具呼叫／核准花費。</text>
+
+<rect class="box" x="660" y="428" width="216" height="80" rx="4"/>
+<text class="lbl-b" x="672" y="450">事件日誌（只增）</text>
+<text class="lbl-s" x="672" y="469" opacity=".62">唯一讀取面 · 可丟棄重建</text>
+<text class="lbl-s" x="672" y="486" opacity=".62">沒有第二份 domain query API</text>
+<line class="ed" x1="768" y1="508" x2="768" y2="530" marker-end="url(#c1)"/>
+<text class="lbl-s" x="600" y="524" opacity=".72">⑦ 同一份 tail</text>
+
+<rect class="box" x="660" y="530" width="216" height="52" rx="4"/>
+<text class="lbl-b" x="672" y="551">② Claude 會話　·　UI</text>
+<text class="lbl-s" x="672" y="570" opacity=".62">兩個消費者讀同一份，不可能各看到不同事實</text>
+
+<text class="lbl-s" x="36" y="552" fill="var(--緋)">三個 Claude 位置，<tspan font-weight="700">沒有一個有驗收權</tspan>——這是整套架構存在的理由。</text>
+<text class="lbl-s" x="36" y="572" opacity=".62">不可靠的執行者最擅長的事，就是讓「我跑完了」看起來像「我做對了」。</text>
+<text class="lbl-s" x="36" y="600" opacity=".7">換掉任一後端（含 Claude），上層三個生命週期與四個權威一行都不用改——這是「後端只是能力適配器」的可測形式。</text>
+</svg>
+<figcaption>往下每一手的權限都比上一手窄：使用者能改需求，Claude 會話只能送目錄裡的命令，應用邊界不能宣告終態，後端<b>連成敗都不能說</b>。
+往上只有事實：後端回報觀察，權威做裁定，全部落成只增事件——而 Claude 會話與 UI 讀的是同一份，不是兩套查詢介面。</figcaption>
+</figure>
+<div class="tw"><table>
+<thead><tr><th class="num">#</th><th>Claude 出現的位置</th><th>能做</th><th>絕對不能做</th></tr></thead>
+<tbody>
+<tr><td class="mono">①</td><td><b>Claude Code</b><span class="dep">外部實作者 · 不在 nova 內</span></td><td>寫 code、跑測試、commit；提出規格修訂</td><td class="neg">宣告自己完成；改已准入的 ClaimSpec、固定負控、<code>must_fail_exactly</code></td></tr>
+<tr><td class="mono">②</td><td><b>Claude 會話</b><span class="dep">命令發起者 · 應用邊界的 client</span></td><td>送 13 個 bootstrap command 之一；訂閱事件 tail；按 digest 取 GraphBundle</td><td class="neg">送目錄外的命令；代寫 terminal／verdict／ledger 餘額／ACTIVE 狀態／delivery receipt</td></tr>
+<tr><td class="mono">③</td><td><b>Claude Agent SDK</b><span class="dep">nova/介接/執行者後端/claude_agent_sdk/</span></td><td>產生 BackendEvent 觀察、候選產物、逐 bucket RateLimitEvent</td><td class="neg">宣告執行終態；延長任一外部限額；改預算；直接碰 endpoint（只能寫 EffectIntent 交 relay）</td></tr>
+</tbody></table></div>
+<div class="note"><b>計畫 14 對 Claude SDK 特別封住的七處</b>——它們不是「多塞幾個 SDK 欄位」，每一條都對應一個已知會靜默出錯的形狀：
+① manifest fingerprint 對 SDK／CLI／model／protocol 版本敏感，不留 <code>UNKNOWN</code> capability；
+② 未知 SDK message 是 <code>PROTOCOL_FAULT</code> 而不是被 drop，<code>result.success</code> 只是觀察；
+③ 外部封套可取消 SDK，限額仍由父層掌握（<b>SDK 官方文件自己承認沒有 top-level session timeout</b>）；
+④ <code>RateLimitEvent</code> 逐 bucket 保存（five_hour／seven_day／model-specific／overage 不得合成單一狀態）；
+⑤ 只宣告 <code>INVOCATION_START</code>；沒有 turn-boundary 重掛能力就明說 unsupported，不冒充「壓縮後仍在」；
+⑥ 候選可見的 projection 不含 sealed criterion 或任何 registry；
+⑦ 工具授權／結構化輸出／代理樹成本逐一映射，<code>setting_sources=[]</code> 封閉 ambient config——
+因為 <code>usage</code> <b>不含子代理</b>，核銷必須走 <code>total_cost_usd</code>／<code>model_usage</code> 並標明 scope，否則凡是委派的執行都少算。</div>
+<h2>分層</h2>
+<p class="lede">十三層，橫軸是同層平行的模組，縱軸是依賴方向。依賴只能向下——上層可用下層，下層不得知道上層。<b>2026-08-27 起這條不再靠自律</b>：<code>架構/目錄規則.toml</code> 宣告、<code>架構/檢查工程規範.py</code> 執法，動態 <code>importlib.import_module</code> 寫的違規邊也抓得到。</p><div class="note"><b>與總覽 §6.6 的兩處出入</b>　總覽表寫「設施／」且只列九層；21 份計畫一致寫 <code>nova/基礎設施/</code>（159 比 0），且實際用到十三個第一層目錄。2026-08-27 裁定以計畫實際用法為準——多出的 <code>約束</code>／<code>維護</code>／<code>內容庫</code>／<code>證據庫</code> 的 predicate 逐字引用各自擁有計畫（12／19／04）的 Architecture 段。</div>
+<figure>
+<div class="note"><b>顏色＝進度</b>　每層左側標籤盒的底色與進度條表示「這一層在 21 份計畫裡宣告要建的檔案，已經建出幾個」。
+<span style="color:var(--綠);font-weight:700">綠＝該層全部建完</span>、<span style="color:var(--琥);font-weight:700">琥＝已開工未完</span>、灰＝尚未開工。
+分母是計畫的 <code>Create:</code> 條目數，分子是那些路徑目前真的存在於 repo。滑過標籤盒可看是哪幾份計畫在建這一層。<b>右邊每一格模組也用邊框上色</b>，分母是路徑對應到那一格的檔數；<b>十三層每一層的格子加起來都剛好等於該層總數</b>——縱軸與橫軸量的是同一件事，不是兩套口徑。
+全體 <b>7／273</b>；工程規範、pyproject、規格與驗收檔不在這個分母裡（它們不住在 <code>nova/</code>）。查證日 2026-08-27。</div>
+<svg viewBox="0 0 900 695" role="img" aria-label="nova 的十三個分層與每層的模組，左側標籤盒的顏色與進度條表示該層已建檔案數與計畫宣告檔案數的比例">
+<text class="lbl-b" x="24" y="24">[ nova ]</text>
+<text class="lbl-s" x="120" y="24" opacity=".7">依賴只能向下——上層可用下層，下層不得知道上層。由 架構/目錄規則.toml 宣告、架構/檢查工程規範.py 執法。</text>
+<rect class="lay-wait" x="24" y="44" width="126" height="40" rx="4"><title>介面：計畫宣告 11 個檔，已建立 0 個 · 由計畫 13 建立</title></rect>
+<text class="lbl-b" x="38" y="62" fill="currentColor">介面</text>
+<text class="lay-n" x="140" y="62" text-anchor="end" fill="currentColor" opacity=".82">0/11</text>
+<rect class="bar-bg" x="38" y="69" width="98" height="4" rx="2"/>
+<rect class="box" x="164" y="44" width="174" height="40" rx="4"><title>介面／命令列：計畫宣告 2 個檔，已建立 0 個 · 對應 nova/介面/命令列/</title></rect>
+<text class="lbl" x="251" y="61" text-anchor="middle" font-size="12" fill="currentColor">命令列</text>
+<text class="lay-n" x="329" y="61" text-anchor="end" fill="currentColor" opacity=".5">0/2</text>
+<rect class="box" x="344" y="44" width="174" height="40" rx="4"><title>介面／程式介面：計畫宣告 2 個檔，已建立 0 個 · 對應 nova/介面/程式介面/</title></rect>
+<text class="lbl" x="430" y="61" text-anchor="middle" font-size="12" fill="currentColor">程式介面</text>
+<text class="lay-n" x="509" y="61" text-anchor="end" fill="currentColor" opacity=".5">0/2</text>
+<rect class="box" x="523" y="44" width="174" height="40" rx="4"><title>介面／HTTP：計畫宣告 4 個檔，已建立 0 個 · 對應 nova/介面/HTTP/</title></rect>
+<text class="lbl" x="610" y="61" text-anchor="middle" font-size="12" fill="currentColor">HTTP</text>
+<text class="lay-n" x="688" y="61" text-anchor="end" fill="currentColor" opacity=".5">0/4</text>
+<rect class="box" x="702" y="44" width="174" height="40" rx="4"><title>介面／MCP：計畫宣告 3 個檔，已建立 0 個 · 對應 nova/介面/MCP/</title></rect>
+<text class="lbl" x="789" y="61" text-anchor="middle" font-size="12" fill="currentColor">MCP</text>
+<text class="lay-n" x="867" y="61" text-anchor="end" fill="currentColor" opacity=".5">0/3</text>
+<text class="lbl-s" x="170" y="78" opacity=".62">transport encoding 與 result mapping</text>
+<rect class="lay-wait" x="24" y="91" width="126" height="40" rx="4"><title>應用：計畫宣告 52 個檔，已建立 0 個 · 由計畫 03 05 06 07 08 09 10 11 12 13 19 建立</title></rect>
+<text class="lbl-b" x="38" y="109" fill="currentColor">應用</text>
+<text class="lay-n" x="140" y="109" text-anchor="end" fill="currentColor" opacity=".82">0/52</text>
+<rect class="bar-bg" x="38" y="116" width="98" height="4" rx="2"/>
+<rect class="box" x="164" y="91" width="353" height="40" rx="4"><title>應用／處理（CommandBus）：計畫宣告 12 個檔，已建立 0 個 · 對應 nova/應用/處理/、nova/應用/命令.py、nova/應用/登錄.py、nova/應用/邊界.py、nova/應用/test_邊界.py</title></rect>
+<text class="lbl" x="340" y="108" text-anchor="middle" font-size="12" fill="currentColor">處理（CommandBus）</text>
+<text class="lay-n" x="508" y="108" text-anchor="end" fill="currentColor" opacity=".5">0/12</text>
+<rect class="box" x="523" y="91" width="353" height="40" rx="4"><title>應用／工作單元：計畫宣告 40 個檔，已建立 0 個 · 對應 該層其餘檔案</title></rect>
+<text class="lbl" x="700" y="108" text-anchor="middle" font-size="12" fill="currentColor">工作單元</text>
+<text class="lay-n" x="867" y="108" text-anchor="end" fill="currentColor" opacity=".5">0/40</text>
+<text class="lbl-s" x="170" y="125" opacity=".62">唯一命令匯流排與工作單元邊界</text>
+<rect class="lay-wait" x="24" y="138" width="126" height="40" rx="4"><title>領域：計畫宣告 30 個檔，已建立 0 個 · 由計畫 01B 05 08 09 12 19 建立</title></rect>
+<text class="lbl-b" x="38" y="156" fill="currentColor">領域</text>
+<text class="lay-n" x="140" y="156" text-anchor="end" fill="currentColor" opacity=".82">0/30</text>
+<rect class="bar-bg" x="38" y="163" width="98" height="4" rx="2"/>
+<rect class="boxa" x="164" y="138" width="233" height="40" rx="4"><title>領域／工作：計畫宣告 13 個檔，已建立 0 個 · 對應 nova/領域/工作/</title></rect>
+<text class="lbl" x="281" y="155" text-anchor="middle" font-size="12" fill="var(--靛)">工作</text>
+<text class="lay-n" x="388" y="155" text-anchor="end" fill="currentColor" opacity=".5">0/13</text>
+<rect class="boxa" x="403" y="138" width="233" height="40" rx="4"><title>領域／追求：計畫宣告 7 個檔，已建立 0 個 · 對應 nova/領域/追求/</title></rect>
+<text class="lbl" x="520" y="155" text-anchor="middle" font-size="12" fill="var(--靛)">追求</text>
+<text class="lay-n" x="627" y="155" text-anchor="end" fill="currentColor" opacity=".5">0/7</text>
+<rect class="boxa" x="643" y="138" width="233" height="40" rx="4"><title>領域／執行：計畫宣告 10 個檔，已建立 0 個 · 對應 nova/領域/執行/</title></rect>
+<text class="lbl" x="759" y="155" text-anchor="middle" font-size="12" fill="var(--靛)">執行</text>
+<text class="lay-n" x="867" y="155" text-anchor="end" fill="currentColor" opacity=".5">0/10</text>
+<text class="lbl-s" x="170" y="172" opacity=".62">三個生命週期</text>
+<rect class="lay-ing" x="24" y="185" width="126" height="40" rx="4"><title>權威：計畫宣告 44 個檔，已建立 1 個 · 由計畫 01 06 07 10 11 12 19 建立</title></rect>
+<text class="lbl-b" x="38" y="203" fill="var(--琥)">權威</text>
+<text class="lay-n" x="140" y="203" text-anchor="end" fill="var(--琥)" opacity=".82">1/44</text>
+<rect class="bar-bg" x="38" y="210" width="98" height="4" rx="2"/>
+<rect class="bar-ing" x="38" y="210" width="2" height="4" rx="2"/>
+<rect class="boxa mod-ing" x="164" y="185" width="174" height="40" rx="4"><title>權威／判準：計畫宣告 15 個檔，已建立 1 個 · 對應 nova/權威/判準/</title></rect>
+<text class="lbl" x="251" y="202" text-anchor="middle" font-size="12" fill="var(--靛)">判準</text>
+<text class="lay-n" x="329" y="202" text-anchor="end" fill="var(--琥)" opacity=".9">1/15</text>
+<rect class="boxa" x="344" y="185" width="174" height="40" rx="4"><title>權威／資源：計畫宣告 9 個檔，已建立 0 個 · 對應 nova/權威/資源/</title></rect>
+<text class="lbl" x="430" y="202" text-anchor="middle" font-size="12" fill="var(--靛)">資源</text>
+<text class="lay-n" x="509" y="202" text-anchor="end" fill="currentColor" opacity=".5">0/9</text>
+<rect class="boxa" x="523" y="185" width="174" height="40" rx="4"><title>權威／效果：計畫宣告 8 個檔，已建立 0 個 · 對應 nova/權威/效果/</title></rect>
+<text class="lbl" x="610" y="202" text-anchor="middle" font-size="12" fill="var(--靛)">效果</text>
+<text class="lay-n" x="688" y="202" text-anchor="end" fill="currentColor" opacity=".5">0/8</text>
+<rect class="boxa" x="702" y="185" width="174" height="40" rx="4"><title>權威／知識：計畫宣告 12 個檔，已建立 0 個 · 對應 nova/權威/知識/</title></rect>
+<text class="lbl" x="789" y="202" text-anchor="middle" font-size="12" fill="var(--靛)">知識</text>
+<text class="lay-n" x="867" y="202" text-anchor="end" fill="currentColor" opacity=".5">0/12</text>
+<text class="lbl-s" x="170" y="219" opacity=".62">四個裁定面</text>
+<rect class="lay-wait" x="24" y="232" width="126" height="40" rx="4"><title>維護：計畫宣告 3 個檔，已建立 0 個 · 由計畫 19 建立</title></rect>
+<text class="lbl-b" x="38" y="250" fill="currentColor">維護</text>
+<text class="lay-n" x="140" y="250" text-anchor="end" fill="currentColor" opacity=".82">0/3</text>
+<rect class="bar-bg" x="38" y="257" width="98" height="4" rx="2"/>
+<rect class="box" x="164" y="232" width="353" height="40" rx="4"><title>維護／複雜度訊號：計畫宣告 2 個檔，已建立 0 個 · 對應 nova/維護/複雜度訊號.py、nova/維護/test_訊號與提案.py</title></rect>
+<text class="lbl" x="340" y="249" text-anchor="middle" font-size="12" fill="currentColor">複雜度訊號</text>
+<text class="lay-n" x="508" y="249" text-anchor="end" fill="currentColor" opacity=".5">0/2</text>
+<rect class="box" x="523" y="232" width="353" height="40" rx="4"><title>維護／審查提案：計畫宣告 1 個檔，已建立 0 個 · 對應 nova/維護/審查提案.py</title></rect>
+<text class="lbl" x="700" y="249" text-anchor="middle" font-size="12" fill="currentColor">審查提案</text>
+<text class="lay-n" x="867" y="249" text-anchor="end" fill="currentColor" opacity=".5">0/1</text>
+<text class="lbl-s" x="170" y="266" opacity=".62">只算 immutable signal，沒有任何狀態寫權</text>
+<rect class="lay-wait" x="24" y="279" width="126" height="40" rx="4"><title>狀態機：計畫宣告 12 個檔，已建立 0 個 · 由計畫 02 20 建立</title></rect>
+<text class="lbl-b" x="38" y="297" fill="currentColor">狀態機</text>
+<text class="lay-n" x="140" y="297" text-anchor="end" fill="currentColor" opacity=".82">0/12</text>
+<rect class="bar-bg" x="38" y="304" width="98" height="4" rx="2"/>
+<rect class="box" x="164" y="279" width="233" height="40" rx="4"><title>狀態機／編譯：計畫宣告 7 個檔，已建立 0 個 · 對應 nova/狀態機/編譯.py、nova/狀態機/載入.py、nova/狀態機/模型.py、nova/狀態機/檢查.py、nova/狀態機/test_檢查.py、nova/狀態機/遷移.py、nova/狀態機/決策表.py</title></rect>
+<text class="lbl" x="281" y="296" text-anchor="middle" font-size="12" fill="currentColor">編譯</text>
+<text class="lay-n" x="388" y="296" text-anchor="end" fill="currentColor" opacity=".5">0/7</text>
+<rect class="box" x="403" y="279" width="233" height="40" rx="4"><title>狀態機／轉移目錄：計畫宣告 4 個檔，已建立 0 個 · 對應 nova/狀態機/目錄.py、nova/狀態機/test_目錄.py、nova/狀態機/執行.py、nova/狀態機/test_執行.py</title></rect>
+<text class="lbl" x="520" y="296" text-anchor="middle" font-size="12" fill="currentColor">轉移目錄</text>
+<text class="lay-n" x="627" y="296" text-anchor="end" fill="currentColor" opacity=".5">0/4</text>
+<rect class="box" x="643" y="279" width="233" height="40" rx="4"><title>狀態機／GraphIR：計畫宣告 1 個檔，已建立 0 個 · 對應 nova/狀態機/組圖.py</title></rect>
+<text class="lbl" x="759" y="296" text-anchor="middle" font-size="12" fill="currentColor">GraphIR</text>
+<text class="lay-n" x="867" y="296" text-anchor="end" fill="currentColor" opacity=".5">0/1</text>
+<text class="lbl-s" x="170" y="313" opacity=".62">MachineSpec 編譯與 GraphIR 產生</text>
+<rect class="lay-wait" x="24" y="326" width="126" height="40" rx="4"><title>約束：計畫宣告 5 個檔，已建立 0 個 · 由計畫 12 建立</title></rect>
+<text class="lbl-b" x="38" y="344" fill="currentColor">約束</text>
+<text class="lay-n" x="140" y="344" text-anchor="end" fill="currentColor" opacity=".82">0/5</text>
+<rect class="bar-bg" x="38" y="351" width="98" height="4" rx="2"/>
+<rect class="box" x="164" y="326" width="174" height="40" rx="4"><title>約束／公開契約：計畫宣告 1 個檔，已建立 0 個 · 對應 nova/約束/公開契約.py</title></rect>
+<text class="lbl" x="251" y="343" text-anchor="middle" font-size="12" fill="currentColor">公開契約</text>
+<text class="lay-n" x="329" y="343" text-anchor="end" fill="currentColor" opacity=".5">0/1</text>
+<rect class="box" x="344" y="326" width="174" height="40" rx="4"><title>約束／載入：計畫宣告 1 個檔，已建立 0 個 · 對應 nova/約束/載入.py</title></rect>
+<text class="lbl" x="430" y="343" text-anchor="middle" font-size="12" fill="currentColor">載入</text>
+<text class="lay-n" x="509" y="343" text-anchor="end" fill="currentColor" opacity=".5">0/1</text>
+<rect class="box" x="523" y="326" width="174" height="40" rx="4"><title>約束／範圍：計畫宣告 1 個檔，已建立 0 個 · 對應 nova/約束/範圍.py</title></rect>
+<text class="lbl" x="610" y="343" text-anchor="middle" font-size="12" fill="currentColor">範圍</text>
+<text class="lay-n" x="688" y="343" text-anchor="end" fill="currentColor" opacity=".5">0/1</text>
+<rect class="box" x="702" y="326" width="174" height="40" rx="4"><title>約束／編譯：計畫宣告 2 個檔，已建立 0 個 · 對應 nova/約束/編譯.py、nova/約束/test_語言.py</title></rect>
+<text class="lbl" x="789" y="343" text-anchor="middle" font-size="12" fill="currentColor">編譯</text>
+<text class="lay-n" x="867" y="343" text-anchor="end" fill="currentColor" opacity=".5">0/2</text>
+<text class="lbl-s" x="170" y="360" opacity=".62">只載入、驗 scope、編 plan，沒有 ACTIVE 寫口</text>
+<rect class="lay-wait" x="24" y="373" width="126" height="40" rx="4"><title>介接：計畫宣告 45 個檔，已建立 0 個 · 由計畫 05 11 12 14 15 16 17 建立</title></rect>
+<text class="lbl-b" x="38" y="391" fill="currentColor">介接</text>
+<text class="lay-n" x="140" y="391" text-anchor="end" fill="currentColor" opacity=".82">0/45</text>
+<rect class="bar-bg" x="38" y="398" width="98" height="4" rx="2"/>
+<rect class="box" x="164" y="373" width="353" height="40" rx="4"><title>介接／執行者後端：計畫宣告 43 個檔，已建立 0 個 · 對應 nova/介接/執行者後端/</title></rect>
+<text class="lbl" x="340" y="390" text-anchor="middle" font-size="12" fill="currentColor">執行者後端</text>
+<text class="lay-n" x="508" y="390" text-anchor="end" fill="currentColor" opacity=".5">0/43</text>
+<rect class="box" x="523" y="373" width="353" height="40" rx="4"><title>介接／效果端點：計畫宣告 2 個檔，已建立 0 個 · 對應 nova/介接/效果端點/</title></rect>
+<text class="lbl" x="700" y="390" text-anchor="middle" font-size="12" fill="currentColor">效果端點</text>
+<text class="lay-n" x="867" y="390" text-anchor="end" fill="currentColor" opacity=".5">0/2</text>
+<text class="lbl-s" x="170" y="407" opacity=".62">外部世界的 adapter</text>
+<rect class="lay-wait" x="24" y="420" width="126" height="40" rx="4"><title>基礎設施：計畫宣告 45 個檔，已建立 0 個 · 由計畫 01 03 04 05 06 09 10 11 建立</title></rect>
+<text class="lbl-b" x="38" y="438" fill="currentColor">基礎設施</text>
+<text class="lay-n" x="140" y="438" text-anchor="end" fill="currentColor" opacity=".82">0/45</text>
+<rect class="bar-bg" x="38" y="445" width="98" height="4" rx="2"/>
+<rect class="box" x="164" y="420" width="74" height="40" rx="4"><title>基礎設施／狀態庫：計畫宣告 13 個檔，已建立 0 個 · 對應 nova/基礎設施/狀態庫/</title></rect>
+<text class="lbl" x="201" y="437" text-anchor="middle" font-size="10.5" fill="currentColor">狀態庫</text>
+<rect class="box" x="244" y="420" width="74" height="40" rx="4"><title>基礎設施／事件流：計畫宣告 6 個檔，已建立 0 個 · 對應 nova/基礎設施/事件流/</title></rect>
+<text class="lbl" x="281" y="437" text-anchor="middle" font-size="10.5" fill="currentColor">事件流</text>
+<rect class="box" x="324" y="420" width="74" height="40" rx="4"><title>基礎設施／內容庫：計畫宣告 1 個檔，已建立 0 個 · 對應 nova/基礎設施/內容庫/</title></rect>
+<text class="lbl" x="360" y="437" text-anchor="middle" font-size="10.5" fill="currentColor">內容庫</text>
+<rect class="box" x="403" y="420" width="74" height="40" rx="4"><title>基礎設施／知識索引：計畫宣告 3 個檔，已建立 0 個 · 對應 nova/基礎設施/知識索引/</title></rect>
+<text class="lbl" x="440" y="437" text-anchor="middle" font-size="10.5" fill="currentColor">知識索引</text>
+<rect class="box" x="483" y="420" width="74" height="40" rx="4"><title>基礎設施／排程：計畫宣告 3 個檔，已建立 0 個 · 對應 nova/基礎設施/排程/</title></rect>
+<text class="lbl" x="520" y="437" text-anchor="middle" font-size="10.5" fill="currentColor">排程</text>
+<rect class="box" x="563" y="420" width="74" height="40" rx="4"><title>基礎設施／效果轉送：計畫宣告 4 個檔，已建立 0 個 · 對應 nova/基礎設施/效果轉送/</title></rect>
+<text class="lbl" x="600" y="437" text-anchor="middle" font-size="10.5" fill="currentColor">效果轉送</text>
+<rect class="box" x="643" y="420" width="74" height="40" rx="4"><title>基礎設施／備份：計畫宣告 4 個檔，已建立 0 個 · 對應 nova/基礎設施/備份/</title></rect>
+<text class="lbl" x="680" y="437" text-anchor="middle" font-size="10.5" fill="currentColor">備份</text>
+<rect class="box" x="722" y="420" width="74" height="40" rx="4"><title>基礎設施／裁定執行：計畫宣告 8 個檔，已建立 0 個 · 對應 nova/基礎設施/裁定執行/</title></rect>
+<text class="lbl" x="759" y="437" text-anchor="middle" font-size="10.5" fill="currentColor">裁定執行</text>
+<rect class="box" x="802" y="420" width="74" height="40" rx="4"><title>基礎設施／系統：計畫宣告 3 個檔，已建立 0 個 · 對應 nova/基礎設施/系統/</title></rect>
+<text class="lbl" x="839" y="437" text-anchor="middle" font-size="10.5" fill="currentColor">系統</text>
+<text class="lbl-s" x="170" y="454" opacity=".62">可丟棄重建，不得成為第二份真相</text>
+<rect class="lay-wait" x="24" y="467" width="126" height="40" rx="4"><title>內容庫：計畫宣告 3 個檔，已建立 0 個 · 由計畫 04 建立</title></rect>
+<text class="lbl-b" x="38" y="485" fill="currentColor">內容庫</text>
+<text class="lay-n" x="140" y="485" text-anchor="end" fill="currentColor" opacity=".82">0/3</text>
+<rect class="bar-bg" x="38" y="492" width="98" height="4" rx="2"/>
+<rect class="box" x="164" y="467" width="353" height="40" rx="4"><title>內容庫／參照：計畫宣告 2 個檔，已建立 0 個 · 對應 nova/內容庫/參照.py、nova/內容庫/test_契約.py</title></rect>
+<text class="lbl" x="340" y="484" text-anchor="middle" font-size="12" fill="currentColor">參照</text>
+<text class="lay-n" x="508" y="484" text-anchor="end" fill="currentColor" opacity=".5">0/2</text>
+<rect class="box" x="523" y="467" width="353" height="40" rx="4"><title>內容庫／端口：計畫宣告 1 個檔，已建立 0 個 · 對應 nova/內容庫/端口.py</title></rect>
+<text class="lbl" x="700" y="484" text-anchor="middle" font-size="12" fill="currentColor">端口</text>
+<text class="lay-n" x="867" y="484" text-anchor="end" fill="currentColor" opacity=".5">0/1</text>
+<text class="lbl-s" x="170" y="501" opacity=".62">ContentRef 與 adapter-neutral port</text>
+<rect class="lay-wait" x="24" y="514" width="126" height="40" rx="4"><title>證據庫：計畫宣告 3 個檔，已建立 0 個 · 由計畫 04 建立</title></rect>
+<text class="lbl-b" x="38" y="532" fill="currentColor">證據庫</text>
+<text class="lay-n" x="140" y="532" text-anchor="end" fill="currentColor" opacity=".82">0/3</text>
+<rect class="bar-bg" x="38" y="539" width="98" height="4" rx="2"/>
+<rect class="box" x="164" y="514" width="353" height="40" rx="4"><title>證據庫／紀錄：計畫宣告 2 個檔，已建立 0 個 · 對應 nova/證據庫/紀錄.py、nova/證據庫/test_不可覆寫.py</title></rect>
+<text class="lbl" x="340" y="531" text-anchor="middle" font-size="12" fill="currentColor">紀錄</text>
+<text class="lay-n" x="508" y="531" text-anchor="end" fill="currentColor" opacity=".5">0/2</text>
+<rect class="box" x="523" y="514" width="353" height="40" rx="4"><title>證據庫／端口：計畫宣告 1 個檔，已建立 0 個 · 對應 nova/證據庫/端口.py</title></rect>
+<text class="lbl" x="700" y="531" text-anchor="middle" font-size="12" fill="currentColor">端口</text>
+<text class="lay-n" x="867" y="531" text-anchor="end" fill="currentColor" opacity=".5">0/1</text>
+<text class="lbl-s" x="170" y="548" opacity=".62">append／get only，沒有 update／delete API</text>
+<rect class="lay-ing" x="24" y="561" width="126" height="40" rx="4"><title>核心：計畫宣告 7 個檔，已建立 6 個 · 由計畫 01 03 建立</title></rect>
+<text class="lbl-b" x="38" y="579" fill="var(--琥)">核心</text>
+<text class="lay-n" x="140" y="579" text-anchor="end" fill="var(--琥)" opacity=".82">6/7</text>
+<rect class="bar-bg" x="38" y="586" width="98" height="4" rx="2"/>
+<rect class="bar-ing" x="38" y="586" width="84" height="4" rx="2"/>
+<rect class="box mod-done" x="164" y="561" width="113" height="40" rx="4"><title>核心／識別：計畫宣告 2 個檔，已建立 2 個 · 對應 識別.py、test_值型別.py</title></rect>
+<text class="lbl" x="220" y="574" text-anchor="middle" font-size="10.5" fill="currentColor">識別</text>
+<text class="lay-n" x="220" y="588" text-anchor="middle" fill="var(--綠)" opacity=".9">2/2</text>
+<rect class="box mod-done" x="283" y="561" width="113" height="40" rx="4"><title>核心／摘要：計畫宣告 1 個檔，已建立 1 個 · 對應 摘要.py</title></rect>
+<text class="lbl" x="339" y="574" text-anchor="middle" font-size="10.5" fill="currentColor">摘要</text>
+<text class="lay-n" x="339" y="588" text-anchor="middle" fill="var(--綠)" opacity=".9">1/1</text>
+<rect class="box mod-done" x="402" y="561" width="113" height="40" rx="4"><title>核心／時間：計畫宣告 1 個檔，已建立 1 個 · 對應 時間.py</title></rect>
+<text class="lbl" x="458" y="574" text-anchor="middle" font-size="10.5" fill="currentColor">時間</text>
+<text class="lay-n" x="458" y="588" text-anchor="middle" fill="var(--綠)" opacity=".9">1/1</text>
+<rect class="box mod-done" x="521" y="561" width="113" height="40" rx="4"><title>核心／錯誤：計畫宣告 1 個檔，已建立 1 個 · 對應 錯誤.py</title></rect>
+<text class="lbl" x="577" y="574" text-anchor="middle" font-size="10.5" fill="currentColor">錯誤</text>
+<text class="lay-n" x="577" y="588" text-anchor="middle" fill="var(--綠)" opacity=".9">1/1</text>
+<rect class="box mod-done" x="640" y="561" width="113" height="40" rx="4"><title>核心／工具鏈守衛：計畫宣告 1 個檔，已建立 1 個 · 對應 工具鏈守衛.py</title></rect>
+<text class="lbl" x="696" y="574" text-anchor="middle" font-size="10.5" fill="currentColor">工具鏈守衛</text>
+<text class="lay-n" x="696" y="588" text-anchor="middle" fill="var(--綠)" opacity=".9">1/1</text>
+<rect class="box" x="759" y="561" width="113" height="40" rx="4"><title>核心／事件：計畫宣告 1 個檔，已建立 0 個 · 對應 事件.py</title></rect>
+<text class="lbl" x="815" y="574" text-anchor="middle" font-size="10.5" fill="currentColor">事件</text>
+<text class="lay-n" x="815" y="588" text-anchor="middle" fill="currentColor" opacity=".9">0/1</text>
+<text class="lbl-s" x="170" y="595" opacity=".62">抽走仍成立的通用型別</text>
+<rect class="lay-wait" x="24" y="608" width="126" height="40" rx="4"><title>啟動：計畫宣告 13 個檔，已建立 0 個 · 由計畫 03 13 20 建立</title></rect>
+<text class="lbl-b" x="38" y="626" fill="currentColor">啟動</text>
+<text class="lay-n" x="140" y="626" text-anchor="end" fill="currentColor" opacity=".82">0/13</text>
+<rect class="bar-bg" x="38" y="633" width="98" height="4" rx="2"/>
+<rect class="box" x="164" y="608" width="353" height="40" rx="4"><title>啟動／組裝根：計畫宣告 13 個檔，已建立 0 個 · 對應 該層其餘檔案</title></rect>
+<text class="lbl" x="340" y="625" text-anchor="middle" font-size="12" fill="currentColor">組裝根</text>
+<text class="lay-n" x="508" y="625" text-anchor="end" fill="currentColor" opacity=".5">0/13</text>
+<rect class="box mod-none" x="523" y="608" width="353" height="40" rx="4"><title>啟動／規格目錄：沒有對應的 nova/ 檔——它的產出不住在 nova/ 底下</title></rect>
+<text class="lbl" x="700" y="625" text-anchor="middle" font-size="12" fill="currentColor">規格目錄</text>
+<text class="lbl-s" x="170" y="642" opacity=".62">唯一注入具體 adapter 的地方</text>
+<text class="lbl-s" x="24" y="677" opacity=".7">領域與權威是唯一持有終態權的兩層；其餘每一層都可以被替換或重建而不改變任何行為保證。</text>
+</svg>
+<figcaption>橫軸是同一層裡彼此平行的模組，縱軸是依賴方向。判定一個東西該不該自成一層有四個並列條件——有穩定身分與封閉終態、承載無法下推的保證、透過窄契約組合下層的多個生命週期、擁有自己狀態的恢復責任。<b>沒有自己生命週期的東西不是層，是資料。</b></figcaption>
+</figure>
+<h2>權威架構</h2>
+<p class="lede">三個縱向生命週期產生宣告，四個橫向權威做裁定。生命週期不裁定自己的成敗——這是整個系統的中心規則，也是為什麼判準、帳與保護清單都放在執行者碰不到的地方。</p>
+<figure>
+<svg viewBox="0 0 900 452" role="img" aria-label="三個縱向生命週期產生宣告，四個橫向權威做裁定，裁定結果回寫，兩者都落在底部的內容定址儲存與只增證據索引">
+<defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+
+<text class="lbl-s" x="24" y="20">生命週期　產生宣告</text>
+<rect class="box" x="24" y="34" width="272" height="80" rx="5"/>
+<text class="lbl-b" x="40" y="60">Work</text>
+<text class="lbl" x="40" y="80">持久工作 · 平行追求組合</text>
+<text class="lbl-s" x="40" y="100">7 天全域期限 · 決定性選拔</text>
+<line class="ed" x1="160" y1="114" x2="160" y2="140" marker-end="url(#a1)"/>
+<text class="lbl-s" x="170" y="132">組合多個</text>
+
+<rect class="box" x="24" y="140" width="272" height="80" rx="5"/>
+<text class="lbl-b" x="40" y="166">Pursuit</text>
+<text class="lbl" x="40" y="186">目標追求 · 可暫停可換後端</text>
+<text class="lbl-s" x="40" y="206">嘗試上限 · 預算 · 期限下必停</text>
+<line class="ed" x1="160" y1="220" x2="160" y2="246" marker-end="url(#a1)"/>
+<text class="lbl-s" x="170" y="238">組合多個</text>
+
+<rect class="box" x="24" y="246" width="272" height="80" rx="5"/>
+<text class="lbl-b" x="40" y="272">Execution</text>
+<text class="lbl" x="40" y="292">單次執行 · 外部監督的封套</text>
+<text class="lbl-s" x="40" y="312">牆鐘／回合／輸出上限由外部強制</text>
+
+<line class="ed" x1="296" y1="150" x2="600" y2="150" marker-end="url(#a1)" stroke="var(--靛)"/>
+<text class="lbl-s" x="352" y="142" fill="var(--靛)">產生宣告（不含裁定）</text>
+<line class="ed" x1="600" y1="212" x2="296" y2="212" marker-end="url(#a1)" stroke="var(--靛)"/>
+<text class="lbl-s" x="352" y="232" fill="var(--靛)">裁定回寫 · 生命週期不可自裁</text>
+
+<text class="lbl-s" x="600" y="20">權威　唯一裁定權</text>
+<rect class="boxa" x="600" y="34" width="276" height="62" rx="5"/>
+<text class="lbl-b" x="616" y="58" fill="var(--靛)">判準權威</text>
+<text class="lbl-s" x="616" y="78" fill="var(--靛)">凍結定義 · 隔離評估 · 候選改不到</text>
+
+<rect class="boxa" x="600" y="104" width="276" height="62" rx="5"/>
+<text class="lbl-b" x="616" y="128" fill="var(--靛)">資源權威</text>
+<text class="lbl-s" x="616" y="148" fill="var(--靛)">預留／核銷 · 逐 bucket 額度五態</text>
+
+<rect class="boxa" x="600" y="174" width="276" height="62" rx="5"/>
+<text class="lbl-b" x="616" y="198" fill="var(--靛)">效果權威</text>
+<text class="lbl-s" x="616" y="218" fill="var(--靛)">outbox 意圖 · 收據 · 不宣稱恰好一次</text>
+
+<rect class="boxa" x="600" y="244" width="276" height="62" rx="5"/>
+<text class="lbl-b" x="616" y="268" fill="var(--靛)">知識權威</text>
+<text class="lbl-s" x="616" y="288" fill="var(--靛)">來源 · TTL · 撤銷傳播 · 可重播快照</text>
+
+<rect class="box" x="24" y="366" width="852" height="56" rx="5"/>
+<text class="lbl-b" x="40" y="392">內容定址儲存　·　只增證據索引</text>
+<text class="lbl-s" x="40" y="412">blob 先寫、後設資料交易後寫 · 權威狀態由單一擁有者程序持有 · 事件尾流可丟棄重建</text>
+<line class="ed" x1="160" y1="326" x2="160" y2="364" marker-end="url(#a1)"/>
+<line class="ed" x1="738" y1="306" x2="738" y2="364" marker-end="url(#a1)"/>
+</svg>
+<figcaption>生命週期只產生宣告，四個權威各自持有唯一裁定權並把結果回寫。兩邊的產物都落在同一份內容定址儲存與只增證據索引上。應用服務是唯一的邊界，但它<b>不取得任何領域終態權</b>——所以它不是第五個權威。</figcaption>
+</figure>
+<figure>
+<svg viewBox="0 0 900 214" role="img" aria-label="執行結束、判準接受、外部生效是三個獨立宣告，彼此不可互相推導">
+<defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--緋)"/></marker></defs>
+<rect class="box" x="24" y="38" width="252" height="86" rx="5"/>
+<text class="lbl-b" x="40" y="66">Attempt.terminated</text>
+<text class="lbl" x="40" y="88">執行結束了</text>
+<text class="lbl-s" x="40" y="110">執行封套宣告</text>
+
+<rect class="box" x="324" y="38" width="252" height="86" rx="5"/>
+<text class="lbl-b" x="340" y="66">Assessment.accepted</text>
+<text class="lbl" x="340" y="88">符合凍結的定義</text>
+<text class="lbl-s" x="340" y="110">判準權威宣告</text>
+
+<rect class="box" x="624" y="38" width="252" height="86" rx="5"/>
+<text class="lbl-b" x="640" y="66">Commitment.verified</text>
+<text class="lbl" x="640" y="88">在外部真的生效了</text>
+<text class="lbl-s" x="640" y="110">效果權威宣告</text>
+
+<line class="ed" x1="278" y1="81" x2="320" y2="81" stroke="var(--緋)" stroke-dasharray="4 3" marker-end="url(#a2)"/>
+<line class="ed" x1="578" y1="81" x2="620" y2="81" stroke="var(--緋)" stroke-dasharray="4 3" marker-end="url(#a2)"/>
+<g stroke="var(--緋)" stroke-width="1.6">
+<line x1="292" y1="72" x2="306" y2="90"/><line x1="306" y1="72" x2="292" y2="90"/>
+<line x1="592" y1="72" x2="606" y2="90"/><line x1="606" y1="72" x2="592" y2="90"/>
+</g>
+<text class="lbl-s" x="24" y="168" fill="var(--緋)">✗ 跑完了不等於做對了　　✗ 判準綠了不等於外部生效了　　✗ 三者都不得由另外兩者推導</text>
+<text class="lbl-s" x="24" y="192">每一格都要有自己的證據來源；把它們壓成同一個「成功」維度，是舊 nova 最貴的一類缺陷。</text>
+</svg>
+<figcaption>三個宣告分別由三個不同的宣告者產生，任何一個都不能從另外兩個推導出來。這條規則存在的理由：不可靠的執行者最擅長的事，就是讓「我跑完了」看起來像「我做對了」。</figcaption>
+</figure>
+<h2>分層資格</h2>
+<p class="lede">四個條件同時成立才算一層，缺一不可。沒有自己生命週期的東西不是層，是資料。</p>
+<div class="tw"><table><thead><tr><th class="num">#</th><th>條件</th></tr></thead><tbody>
+<tr><td class="mono">1</td><td>有穩定身分與封閉終態集合</td></tr>
+<tr><td class="mono">2</td><td>承載無法下推到下一層的保證</td></tr>
+<tr><td class="mono">3</td><td>透過一個<b>窄且可替換的契約</b>組合下一層的多個生命週期</td></tr>
+<tr><td class="mono">4</td><td>擁有自己權威狀態的恢復責任</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="t4" role="tabpanel" aria-labelledby="b4" hidden>
+<h2>訊息流</h2>
+<p class="lede">從使用者說一句話，到畫面上那一格亮起來，中間經過哪些手、每一手交出什麼。這條路徑決定了未來 UI 能顯示什麼——因為 UI 只被允許讀最後那條事件流。</p>
+<figure>
+<svg viewBox="0 0 960 620" role="img" aria-label="使用者到 Claude 到 nova 的訊息流：左側縱列是命令下行的五手，每一手只能說自己那句話；右側是只增事件日誌與由它折疊出來的視圖；Claude 與 UI 讀同一份事件流">
+<defs>
+<marker id="m-d" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto"><polygon points="0,0 10,4 0,8" fill="var(--靛)"/></marker>
+<marker id="m-u" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto"><polygon points="0,0 10,4 0,8" fill="currentColor"/></marker>
+</defs>
+
+<text x="40" y="14" font-size="10.5" fill="currentColor" opacity=".6">命令下行　權限逐層收窄</text>
+<text x="560" y="14" font-size="10.5" fill="currentColor" opacity=".6">事實上行　唯一讀取面</text>
+
+<rect x="40" y="24" width="380" height="48" rx="4" class="box"/>
+<text x="56" y="45" font-size="13" fill="currentColor">使用者</text>
+<text x="56" y="62" font-size="9.5" fill="currentColor" opacity=".62">說出意圖與判準。只有人能改需求；不以口頭覆寫成功</text>
+
+<line x1="230" y1="72" x2="230" y2="106" stroke="var(--靛)" stroke-width="1.4" marker-end="url(#m-d)"/>
+<text x="242" y="94" font-size="9.5" fill="var(--靛)">① 自然語言意圖</text>
+
+<rect x="40" y="106" width="380" height="88" rx="4" class="boxa"/>
+<text x="56" y="128" font-size="13" fill="var(--靛)">Claude 會話</text>
+<text x="56" y="146" font-size="10.5" fill="var(--靛)">只能送出目錄裡已經有的命令</text>
+<text x="56" y="164" font-size="9.5" fill="currentColor" opacity=".62">把意圖編成 typed envelope · 附冪等鍵 · 帶自己的能力</text>
+<text x="56" y="180" font-size="9" fill="currentColor" opacity=".62">它能做什麼由 command catalog 與 ACL 決定，不由它的措辭決定</text>
+
+<line x1="230" y1="194" x2="230" y2="228" stroke="var(--靛)" stroke-width="1.4" marker-end="url(#m-d)"/>
+<text x="242" y="216" font-size="9.5" fill="var(--靛)">② CommandEnvelope（封閉 schema）</text>
+
+<rect x="40" y="228" width="380" height="88" rx="4" class="box"/>
+<text x="56" y="250" font-size="13" fill="currentColor">nova 應用邊界</text>
+<text x="56" y="268" font-size="10.5" fill="var(--靛)">唯一入口，但沒有任何領域終態權</text>
+<text x="56" y="286" font-size="9.5" fill="currentColor" opacity=".62">冪等鍵 · 摘要衝突 · 能力 ACL · 單一工作單元交易</text>
+<text x="56" y="302" font-size="9" fill="currentColor" opacity=".62">長工作回 ACCEPTED 必帶 OperationRef——不是丟出去就沒下文</text>
+
+<line x1="230" y1="316" x2="230" y2="350" stroke="var(--靛)" stroke-width="1.4" marker-end="url(#m-d)"/>
+<text x="242" y="338" font-size="9.5" fill="var(--靛)">③ 一次交易內完成或整筆不算</text>
+
+<rect x="40" y="350" width="380" height="88" rx="4" class="boxa"/>
+<text x="56" y="372" font-size="13" fill="var(--靛)">領域 · 權威</text>
+<text x="56" y="390" font-size="10.5" fill="var(--靛)">唯一能宣告終態</text>
+<text x="56" y="408" font-size="9.5" fill="currentColor" opacity=".62">三個生命週期產生宣告 · 四個權威做裁定並回寫</text>
+<text x="56" y="424" font-size="9" fill="currentColor" opacity=".62">生命週期不裁定自己的成敗；判準、預算、效果、知識各有唯一的筆</text>
+
+<line x1="160" y1="438" x2="160" y2="472" stroke="var(--靛)" stroke-width="1.4" marker-end="url(#m-d)"/>
+<text x="172" y="460" font-size="9.5" fill="var(--靛)">④ ExecutionRequest</text>
+<line x1="392" y1="472" x2="392" y2="438" stroke="currentColor" stroke-width="1.4" marker-end="url(#m-u)"/>
+<text x="404" y="460" font-size="9.5" fill="currentColor" opacity=".72">⑤ 觀察</text>
+
+<rect x="40" y="472" width="380" height="88" rx="4" class="box"/>
+<text x="56" y="494" font-size="13" fill="currentColor">執行者後端</text>
+<text x="56" y="512" font-size="10.5" fill="var(--緋)">只能回報觀察，不能宣告成敗</text>
+<text x="56" y="530" font-size="9.5" fill="currentColor" opacity=".62">BackendEvent · QuotaObservation · 牆鐘由外部程序群組強制</text>
+<text x="56" y="546" font-size="9" fill="currentColor" opacity=".62">工具授權／輸出契約／委派政策由契約給定，後端答不出就回 UNSUPPORTED</text>
+
+<path d="M420 394 H486 V300 H556" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#m-u)"/>
+<text x="440" y="330" font-size="9.5" fill="currentColor" opacity=".72">⑥ 已提交轉移事件</text>
+
+<rect x="560" y="252" width="360" height="96" rx="4" class="box"/>
+<text x="576" y="274" font-size="13" fill="currentColor">事件日誌（只增）</text>
+<text x="576" y="292" font-size="10.5" fill="var(--靛)">唯一讀取面</text>
+<text x="576" y="310" font-size="9.5" fill="currentColor" opacity=".62">遊標訂閱 · 可丟棄重建 · receipt 只由它折疊而來</text>
+<text x="576" y="326" font-size="9" fill="currentColor" opacity=".62">沒有第二份 domain query API——狀況、進度、額度全部由消費端 fold</text>
+<text x="576" y="342" font-size="9" fill="currentColor" opacity=".62">進度通知可以掉，尾流與 receipt 才是恢復真相</text>
+
+<path d="M556 268 H478 V150 H424" fill="none" stroke="var(--靛)" stroke-width="1.4" marker-end="url(#m-d)"/>
+<text x="484" y="200" font-size="9.5" fill="var(--靛)">⑦ subscribe</text>
+<text x="484" y="216" font-size="9.5" fill="var(--靛)">　 tail</text>
+
+<line x1="740" y1="348" x2="740" y2="404" stroke="var(--靛)" stroke-width="1.4" marker-end="url(#m-d)"/>
+<text x="752" y="380" font-size="9.5" fill="var(--靛)">⑧ 同一份 tail</text>
+
+<rect x="560" y="404" width="360" height="88" rx="4" class="boxa"/>
+<text x="576" y="426" font-size="13" fill="var(--靛)">視圖 · UI</text>
+<text x="576" y="444" font-size="10.5" fill="var(--靛)">由純函式折疊事件重建，不發任何額外查詢</text>
+<text x="576" y="462" font-size="9.5" fill="currentColor" opacity=".62">流程走到哪一格 · 系統狀況 · 各後端剩餘額度 · 約束狀態</text>
+<text x="576" y="478" font-size="9" fill="currentColor" opacity=".62">畫面說「走到第三格」時那是事件說的，不是畫面自己算的</text>
+
+<rect x="560" y="516" width="360" height="44" rx="4" fill="none" stroke="var(--靛)" stroke-width="1.2" stroke-dasharray="4 4"/>
+<text x="576" y="536" font-size="10.5" fill="var(--靛)">低頻寫入走同一條 ②</text>
+<text x="576" y="552" font-size="9" fill="currentColor" opacity=".62">調後端配比 · 要求某個 CLI 更新——是命令不是設定檔，一樣留下事件</text>
+
+<text x="40" y="588" font-size="9.5" fill="currentColor" opacity=".62">往下每一手的權限都比上一手窄：使用者能改需求，Claude 只能送目錄裡的命令，邊界不能宣告終態，後端連成敗都不能說。</text>
+<text x="40" y="606" font-size="9.5" fill="currentColor" opacity=".62">往上只有事實：後端回報觀察，權威做裁定，全部落成只增事件——而 Claude 與 UI 讀的是同一份，不是兩套查詢介面。</text>
+</svg>
+<figcaption>左側縱列是命令下行，<b>每一手能說的話都比上一手窄</b>；右側是事實上行匯集成的唯一讀取面。這條路徑決定了未來 UI 能顯示什麼——它只被允許讀 ⑥ 那條事件流，所以畫面上的每一格都可以往回追到是哪個權威在哪一刻宣告的。⑦⑧ 是同一份 tail 的兩個消費者：把 Claude 與 UI 接到同一條流上，兩邊就不可能各自看到不同的事實。</figcaption>
+</figure>
+<h2>建造順序</h2>
+<p class="lede">依信任根排序：能力假設與三個信任根先立，領域核心次之，外部世界再次，反向力量與總驗收最後。編號序就是合法拓撲序——照號碼做不會違反任何依賴閘。</p>
+<figure>
+<svg viewBox="0 0 900 268" role="img" aria-label="四個階段的建造順序，標出修訂前後第一次接觸真實 SDK 的任務序號差異">
+<defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+<line class="ed" x1="34" y1="118" x2="866" y2="118"/>
+<g class="lbl-s" text-anchor="middle">
+<text x="34" y="148">0</text><text x="227" y="148">41</text><text x="546" y="148">109</text>
+<text x="753" y="148">153</text><text x="866" y="148">177</text>
+</g>
+<text class="lbl-s" x="34" y="166">累計任務序號</text>
+
+<g>
+<rect class="box" x="34" y="82" width="193" height="36" rx="4"/>
+<text class="lbl-b" x="44" y="106">Phase A</text><text class="lbl-s" x="118" y="106">01 · 01B · 02–04</text>
+<rect class="box" x="227" y="82" width="320" height="36" rx="4"/>
+<text class="lbl-b" x="237" y="106">Phase B</text><text class="lbl-s" x="313" y="106">05–12　領域核心</text>
+<rect class="box" x="546" y="82" width="207" height="36" rx="4"/>
+<text class="lbl-b" x="556" y="106">Phase C</text><text class="lbl-s" x="632" y="106">13–18</text>
+<rect class="box" x="753" y="82" width="113" height="36" rx="4"/>
+<text class="lbl-b" x="763" y="106">Phase D</text><text class="lbl-s" x="763" y="130">19–20</text>
+</g>
+
+<line class="ed" x1="105" y1="82" x2="105" y2="46" stroke="var(--綠)"/>
+<circle cx="105" cy="82" r="4" fill="var(--綠)"/>
+<text class="lbl-b" x="115" y="40" fill="var(--綠)">修訂後　任務 15</text>
+<text class="lbl-s" x="115" y="58" fill="var(--綠)">01B 靜態 SDK surface probe（必跑閘）· 任務 17 有界 live smoke</text>
+
+<line class="ed" x1="598" y1="118" x2="598" y2="196" stroke="var(--緋)"/>
+<circle cx="598" cy="118" r="4" fill="var(--緋)"/>
+<text class="lbl-b" x="440" y="204" fill="var(--緋)">修訂前　任務 120</text>
+<text class="lbl-s" x="440" y="222" fill="var(--緋)">第一次 import claude_agent_sdk，此時 470 個檔案的契約已定型</text>
+<text class="lbl-s" x="34" y="248">01→02→03→04→05 嚴格序列；06 與 07 可平行；14–17 四個後端可由不同執行者平行；18 可與後端平行但不得早於事件與圖的線上契約。</text>
+</svg>
+<figcaption>把最不確定的外部假設排到最後，代價是發現得太晚。新增的 01B 把 SDK 探針提前 105 個任務——它只依賴 ClaimSpec runner，不需要 state owner、預算帳或應用邊界就能跑。</figcaption>
+</figure>
+<div class="note"><b>複驗改變了什麼</b>　修訂前第一次碰到真 SDK 是第 120 個任務，那時前面 470 個檔案的契約已經定型。新增 01B 之後，靜態 surface probe 落在第 15 個任務、有界 live smoke 在 Phase A 結束前——SDK 假設若是錯的，在還來得及改契約的時候就會發現。</div>
+<h2>能力落在哪一層</h2>
+<p class="lede">這是複驗最重要的一次修正。能力契約屬於跨後端的契約層，不屬於任何一個 adapter。</p>
+<figure>
+<svg viewBox="0 0 900 330" role="img" aria-label="修訂前能力面沒有落點四個後端形狀相同，修訂後能力契約落在跨後端契約層由各後端映射或回報不支援">
+<defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+<text class="lbl-b" x="24" y="20" fill="var(--緋)">修訂前</text>
+<rect class="box" x="24" y="34" width="390" height="52" rx="5"/>
+<text class="lbl-b" x="40" y="58">05　跨後端契約</text>
+<text class="lbl-s" x="40" y="76">events(request) · 牆鐘／回合／輸出上限　—　僅此而已</text>
+<g class="lbl-s" text-anchor="middle">
+<rect class="box" x="24" y="112" width="90" height="42" rx="4"/><text x="69" y="138">claude</text>
+<rect class="box" x="124" y="112" width="90" height="42" rx="4"/><text x="169" y="138">codex</text>
+<rect class="box" x="224" y="112" width="90" height="42" rx="4"/><text x="269" y="138">通用 CLI</text>
+<rect class="box" x="324" y="112" width="90" height="42" rx="4"/><text x="369" y="138">本地</text>
+</g>
+<text class="lbl-s" x="24" y="176">四個後端形狀完全相同 → SDK 只是「會噴事件、會燒額度的子程序」</text>
+<rect x="24" y="200" width="390" height="96" rx="5" fill="none" stroke="var(--緋)" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text class="lbl-s" x="40" y="224" fill="var(--緋)">allowed_tools · can_use_tool · PreToolUse</text>
+<text class="lbl-s" x="40" y="244" fill="var(--緋)">output_format · setting_sources · 子代理成本</text>
+<text class="lbl-b" x="40" y="272" fill="var(--緋)">21 份計畫零命中</text>
+<text class="lbl-s" x="40" y="290" fill="var(--緋)">沒有落點＝沒有機制＝規範不存在</text>
+
+<line class="ed" x1="440" y1="34" x2="440" y2="300" stroke-dasharray="3 4" opacity=".45"/>
+
+<text class="lbl-b" x="486" y="20" fill="var(--綠)">修訂後</text>
+<rect class="boxa" x="486" y="34" width="390" height="34" rx="5"/>
+<text class="lbl-b" x="502" y="56" fill="var(--靛)">01B　執行者能力契約與 SDK 探針</text>
+<line class="ed" x1="681" y1="68" x2="681" y2="88" marker-end="url(#a4)" stroke="var(--靛)"/>
+<rect class="boxa" x="486" y="88" width="390" height="88" rx="5"/>
+<text class="lbl-b" x="502" y="110" fill="var(--靛)">05　跨後端契約</text>
+<text class="lbl-s" x="502" y="130" fill="var(--靛)">ToolAuthorizationPolicyRef · StructuredOutputContractRef</text>
+<text class="lbl-s" x="502" y="148" fill="var(--靛)">DelegationPolicyRef · UsageEvidence.scope · 工具四分類</text>
+<text class="lbl-s" x="502" y="166" fill="var(--靛)">TOOL_DENIED · OUTPUT_SCHEMA_VIOLATION · UNSUPPORTED_CAPABILITY</text>
+<line class="ed" x1="681" y1="176" x2="681" y2="200" marker-end="url(#a4)"/>
+<g class="lbl-s" text-anchor="middle">
+<rect class="box" x="486" y="200" width="90" height="42" rx="4"/><text x="531" y="220">claude</text><text x="531" y="236" fill="var(--綠)">原生映射</text>
+<rect class="box" x="586" y="200" width="90" height="42" rx="4"/><text x="631" y="220">codex</text><text x="631" y="236" fill="var(--綠)">映射</text>
+<rect class="box" x="686" y="200" width="90" height="42" rx="4"/><text x="731" y="220">通用 CLI</text><text x="731" y="236" fill="var(--琥)">不支援</text>
+<rect class="box" x="786" y="200" width="90" height="42" rx="4"/><text x="831" y="220">本地</text><text x="831" y="236" fill="var(--琥)">不支援</text>
+</g>
+<text class="lbl-s" x="486" y="266" fill="var(--綠)">能力不足必須回 typed UNSUPPORTED——不得靜默降級成提示詞</text>
+<text class="lbl-s" x="486" y="290">claude 端映到 allowed_tools／can_use_tool／PreToolUse／output_format</text>
+</svg>
+<figcaption>差別不在「多塞幾個 SDK 欄位」，而在能力面被提升成<b>跨後端契約</b>。這樣每個後端都必須回答「工具准不准、輸出合不合 schema、成本算不算整棵委派樹」，答不出來就是 typed 不支援，不會變成一句寫在提示詞裡的請求。</figcaption>
+</figure>
+</section>
+
+<section id="t5" role="tabpanel" aria-labelledby="b5" hidden>
+<h2>複驗發現</h2>
+<p class="lede">控制端提出五條、sol 逐條附證據裁定並補三條。第 4 條 sol 正確地反駁了一半：live LLM 品質不該混進 deterministic release gate，該拆成雙軸。八條都已落地並經獨立驗證，不是採信自報。</p>
+<div class="find"><div class="find-h"><span class="fnum">01</span>
+<h4>SDK 工具授權與結構化輸出零落點</h4><span class="chip chip-red">確認</span></div>
+<p class="fd">21 份計畫約 500KB，<code>allowed_tools</code>／<code>can_use_tool</code>／<code>output_format</code> 等 17 個 SDK 能力字串全部零命中。四份後端計畫形狀一模一樣。</p><p class="ff"><span class="flabel">修訂</span>契約層新增三個 PolicyRef 與三個 typed outcome，落在 05 而非 adapter。</p></div><div class="find"><div class="find-h"><span class="fnum">02</span>
+<h4>子代理成本系統性少結算</h4><span class="chip chip-red">確認</span></div>
+<p class="fd"><code>usage</code> 不含 subagent，<code>total_cost_usd</code> 與 <code>model_usage</code> 含。核銷若走 <code>usage</code>，凡是委派的執行都少算——而 reserve 是防超支的唯一機制。</p><p class="ff"><span class="flabel">修訂</span><code>UsageEvidence.scope</code> 三態＋核銷來源順序＋<code>USAGE_SCOPE_INCOMPLETE</code>；delegation 算不出 worst case 就不得啟用。</p></div><div class="find"><div class="find-h"><span class="fnum">03</span>
+<h4>MCP 靜默消失</h4><span class="chip chip-red">確認</span></div>
+<p class="fd">計畫 13 的邊界只有 CLI／Python／HTTP，13 個 bootstrap command 沒有 MCP。這不是裁掉，是沒被處理。</p><p class="ff"><span class="flabel">修訂</span>MCP 作為第四 transport adapter，與其餘三者同命令同結果 parity。</p></div><div class="find"><div class="find-h"><span class="fnum">04</span>
+<h4>release gate 不含 LLM 維度</h4><span class="chip chip-amber">確認一半</span></div>
+<p class="fd"><code>DEPLOYABLE=true</code> 可以在一次真 LLM 呼叫都沒有的情況下成立。但把 live 品質混進 deterministic gate 是錯的——sol 正確反駁了這一半。</p><p class="ff"><span class="flabel">修訂</span>拆成 <code>CORE_DEPLOYABLE</code> × <code>BACKEND_READY[fingerprint]</code> 雙軸；live probe 只測可機械能力。</p></div><div class="find"><div class="find-h"><span class="fnum">05</span>
+<h4>第 101 個任務才碰到真 SDK</h4><span class="chip chip-red">確認</span></div>
+<p class="fd"><code>claude_agent_sdk</code> 只出現在計畫 14 與 20，而 01→13 幾乎全序列。任何 SDK 假設若是錯的，在 500 個檔案的契約定型後才會發現。</p><p class="ff"><span class="flabel">修訂</span>新增 01B 前置計畫：靜態 surface probe 必跑，有界 live smoke 在 Phase A 末端。</p></div><div class="find"><div class="find-h"><span class="fnum">06</span>
+<h4>ambient configuration 沒封閉</h4><span class="chip chip-ind">sol 補</span></div>
+<p class="fd">計畫 14 的 fingerprint 沒有 <code>setting_sources</code>、filesystem settings、hooks、MCP servers。同一 fingerprint 可能載入不同 prompt 與工具——可重播性漏在這裡。</p><p class="ff"><span class="flabel">修訂</span>v1 預設 <code>setting_sources=[]</code>；非空來源必須 exact allowlist 且內容定址並納入 fingerprint。</p></div><div class="find"><div class="find-h"><span class="fnum">07</span>
+<h4>SDK 工具會繞過效果權威</h4><span class="chip chip-ind">sol 補</span></div>
+<p class="fd">工具授權只回答「准不准呼叫」，不回答「寄信、推 remote ref 是否經 outbox」。這比一般 syscall 更容易發生，因為它是系統主動提供的正常能力。</p><p class="ff"><span class="flabel">修訂</span>工具四分類；<code>EFFECT_INTENT_REQUIRED</code> 工具只能寫 EffectIntent 交 relay，直接打 endpoint 即轉紅。</p></div><div class="find"><div class="find-h"><span class="fnum">08</span>
+<h4>能力證據沒有新鮮度</h4><span class="chip chip-ind">sol 補</span></div>
+<p class="fd">舊版 SDK 測出來的 <code>can_use_tool</code> 結果會在升版後繼續替新版背書。</p><p class="ff"><span class="flabel">修訂</span><code>CapabilityEvidence</code> 綁 exact fingerprint、probe version、<code>expires_at</code>；任一 component 改變立即失效。</p></div>
+<h2>計畫的不變式</h2>
+<p class="lede">複驗本身已經是機制而不是一份報告——<b>十一項</b>不變式寫成 <code>docs/計畫複驗.py</code>，每一項的負控各注入一次全部轉紅。任何人改計畫都要讓這十一項仍然成立。<b>上面那些數字，就是它印出來的</b>——數字對的時候，順帶保證了計畫本身自洽。</p>
+<div class="tw"><table>
+<thead><tr><th>代號</th><th>不變式</th><th>內容</th><th>負控（注入後必須轉紅）</th></tr></thead>
+<tbody><tr><td class="mono">I1</td><td><b>檔案所有權</b></td><td>同一路徑不得被兩份計畫 Create；Modify 的對象必須有人 Create。</td><td class="neg">把某個 Create 路徑複製到另一份計畫</td></tr><tr><td class="mono">I2</td><td><b>依賴無環</b></td><td>Dependency Gate 構成的圖不得有多節點 SCC。</td><td class="neg">讓兩份計畫互相宣告前置</td></tr><tr><td class="mono">I3</td><td><b>編號即拓撲序</b></td><td>沒有計畫依賴編號比自己大的計畫。</td><td class="neg">讓 02 宣告依賴 09</td></tr><tr><td class="mono">I4</td><td><b>任務完整性</b></td><td>每個 task 都要有 ClaimSpec、固定負控、先紅步、commit 步。</td><td class="neg">刪掉任一 task 的固定負控段</td></tr><tr><td class="mono">I5</td><td><b>修改方向</b></td><td>Modify 的對象必須由自己或<b>遞移</b>前置 Create。</td><td class="neg">讓 05 去 Modify 一個由 14 Create 的檔案</td></tr><tr><td class="mono">I6</td><td><b>任務口徑</b></td><td>一個 task <b>恰好一個 commit 步</b>、至多 2 條 ClaimSpec、至多 10 個檔。</td><td class="neg">把兩個 task 併成一個</td></tr><tr><td class="mono">I7</td><td><b>引用可解析</b></td><td><code>Run:</code> 引用的檔案必須在該 task 或更早被 Create；File Structure 宣告的必須有人 Create。</td><td class="neg">把任一 Run 檔名改一個字，或刪掉一個 Create 條目</td></tr><tr><td class="mono">I8</td><td><b>命名可通過</b></td><td>計畫在 code fence 裡宣告的 <code>def</code>／<code>class</code> 名必須通過 <code>架構/檢查工程規範.py</code> 的識別字閘。</td><td class="neg">把任一 <code>def test_x_中文</code> 的底線刪掉</td></tr><tr><td class="mono">I9</td><td><b>訊息用中文</b></td><td>每個 task 的 <code>git commit -m</code> 訊息必須含漢字（型別前綴 <code>feat:</code> 等保持 ASCII）。</td><td class="neg">把任一條 commit 訊息改回英文</td></tr>
+<tr><td class="mono">I10</td><td><b>宣告與落點一對一</b></td>
+<td>每個 task 要有 <code>ClaimSpec落點:</code> 行，且它的 id 集合必須與宣告行<b>逐字相等</b>；
+一個 id 只能指一條路徑、一條路徑只能被一個 id 指名，且該路徑不得由更晚的 task 才 Create。</td>
+<td class="neg">抄錯一個 id、把兩個 id 指到同一份檔、或指到後面的 task 才建的檔</td></tr>
+<tr><td class="mono">I11</td><td><b>檔內 id 相符</b></td>
+<td>打開每一份<b>實存</b>的 claim 檔，比對它的 <code>claim_id</code> 與計畫的落點宣告。</td>
+<td class="neg">把兩個 id 的落點路徑對調——兩份檔都存在、都一對一，<b>I10 全綠</b>，
+只有 I11 抓得到「配錯人」</td></tr></tbody></table></div>
+<div class="note">建這個閘的過程抓到<b>我自己的兩個缺陷</b>：第一版解析 Dependency Gate 的散文，少報讓「編號即拓撲序」空過、多報又誤判順序違反——改成只讀機器可讀的 <code>前置計畫：</code> 宣告並 fail-closed；I5 用直接邊比對而依賴是可遞移的——改用遞移閉包。兩個都是「機制看起來在運作、實際上放行了」。</div>
+<h2>知識檢索的裁定</h2>
+<p class="lede">使用者問「用 SQLite 是不是就該用 RAG」。查完資料後的答案是不用——而決定的不是論文分數，是可重播性。</p>
+<figure>
+<svg viewBox="0 0 900 296" role="img" aria-label="同一份輸入下向量檢索重建索引後回傳不同結果，而範圍過濾加上溯源圖閉包每次都相同">
+<defs><marker id="a7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+<rect class="box" x="24" y="34" width="180" height="52" rx="5"/>
+<text class="lbl-b" x="40" y="58">同一份輸入</text>
+<text class="lbl-s" x="40" y="76">事件遊標 · 查詢事實 · policy · 時鐘</text>
+
+<text class="lbl-b" x="252" y="24" fill="var(--緋)">向量檢索</text>
+<line class="ed" x1="204" y1="50" x2="248" y2="50" marker-end="url(#a7)"/>
+<rect class="box" x="252" y="34" width="150" height="34" rx="4"/>
+<text class="lbl-s" x="264" y="55">第一次 ANN</text>
+<line class="ed" x1="402" y1="51" x2="446" y2="51" marker-end="url(#a7)"/>
+<rect class="box" x="450" y="34" width="120" height="34" rx="4"/>
+<text class="lbl" x="464" y="56" font-size="12">A · B · C</text>
+
+<line class="ed" x1="327" y1="68" x2="327" y2="94" marker-end="url(#a7)"/>
+<text class="lbl-s" x="337" y="88">刪索引重建（內容完全沒變）</text>
+<rect class="box" x="252" y="94" width="150" height="34" rx="4"/>
+<text class="lbl-s" x="264" y="115">第二次 ANN</text>
+<line class="ed" x1="402" y1="111" x2="446" y2="111" marker-end="url(#a7)"/>
+<rect x="450" y="94" width="120" height="34" rx="4" fill="var(--緋淡)" stroke="var(--緋)" stroke-width="1.4"/>
+<text class="lbl" x="464" y="116" font-size="12" fill="var(--緋)">A · B · <tspan font-weight="700">D</tspan></text>
+<text class="lbl-s" x="592" y="80" fill="var(--緋)">兩份 snapshot 各自都「可重播」</text>
+<text class="lbl-s" x="592" y="98" fill="var(--緋)">但 resolve(輸入) 不是決定性的</text>
+<text class="lbl-s" x="592" y="116" fill="var(--緋)">HNSW 插入順序可讓 recall 差 12 個百分點</text>
+
+<text class="lbl-b" x="252" y="182" fill="var(--綠)">範圍過濾 ＋ 溯源圖閉包</text>
+<line class="ed" x1="114" y1="86" x2="114" y2="196" marker-end="url(#a7)"/>
+<line class="ed" x1="114" y1="196" x2="248" y2="196" marker-end="url(#a7)"/>
+<rect class="box" x="252" y="192" width="318" height="34" rx="4"/>
+<text class="lbl-s" x="264" y="213">exact scope → ACTIVE/TTL/profile → derived_from 閉包 → 穩定拓撲排序</text>
+<line class="ed" x1="570" y1="209" x2="614" y2="209" marker-end="url(#a7)"/>
+<rect x="618" y="192" width="258" height="34" rx="4" fill="var(--綠淡)" stroke="var(--綠)" stroke-width="1.4"/>
+<text class="lbl" x="632" y="214" font-size="12" fill="var(--綠)">每次都是同一份 · 不做 top-k</text>
+<text class="lbl-s" x="24" y="262">v1 不做向量、不做 GraphRAG 實體抽取、不做摘要樹。索引只准做 exact projection 加速，不得排名、不得刪候選。</text>
+<text class="lbl-s" x="24" y="282">加向量的門檻是 30 天量測命中後另開選型 Work，並要通過「100 次索引重建 snapshot digest 完全一致」。過不了就只能當加速器。</text>
+</svg>
+<figcaption>說服控制端的不是那些論文的分數，是這個反例：內容一個字都沒改，只是重建索引，同一份輸入就解析出不同結果。凍結 snapshot 只解決「之後重播」，沒解決「同一輸入重新解析」——而後者才是這套架構的地基。向量會把「漏掉」換成「不確定地猜」，但漏掉是 scope 標錯的准入品質問題，向量修不好它。</figcaption>
+</figure>
+<h2>已定案</h2>
+<div class="decs"><div class="dec"><h4>nova 是十三層，不是九層</h4><p>總覽 §6.6 的表寫「設施／」且只列九層，但 21 份計畫一致寫 <code>nova/基礎設施/</code>（159 比 0），且實際用到十三個第一層目錄。裁定以計畫實際用法為準；多出的 <code>約束</code>／<code>維護</code>／<code>內容庫</code>／<code>證據庫</code> 的 predicate <b>逐字引用</b>各自擁有計畫（12／19／04）的 Architecture 段，不由實作者發明。</p></div><div class="dec"><h4>Tasks 1–4 的 ClaimSpec 閘推遲</h4><p>runner 在 Task 9 才建立，卻被 Task 1–4 呼叫；Task 1 的 claim 檔沒有建立點。裁定不改計畫、推遲補跑。<b>這筆欠帳只有文件承諾撐著</b>，Task 9 之前沒有任何機制會因它轉紅。</p></div><div class="dec"><h4>中文標點不是 confusable</h4><p>Ruff 的 RUF001／002／003 把全形標點判為 ambiguous，與「一切繁體中文」直接衝突（103 處）。用 <code>allowed-confusables</code> 白名單放行——那是 Ruff 為非拉丁語系設計的入口，不是 baseline ignore。<code>D400</code> 要求 ASCII 句點結尾同理排除：保證義務是 D1xx 的「必須有 non-empty docstring」，不是標點形狀。</p></div><div class="dec"><h4>固定負控 fixture 排出 lint 範圍</h4><p>事前固定的錯誤 subject 就是要壞的。讓 repo 自己的 <code>ruff check</code> 去管它們，Plan Exit Gate 永遠不可能綠。這是掃描範圍的裁決，不是 baseline ignore。</p></div><div class="dec"><h4>schema 欄位名一律 ASCII，值可中文</h4><p>TOML bare key 不接受非 ASCII，而 config 的欄位名本來就在語言規則的 ASCII 例外清單裡。<code>架構/目錄規則.toml</code> 因此是 <code>name</code>／<code>order</code>／<code>allow_io</code>，中文只出現在值。同理 dependency-group 名用 <code>dev</code>。</p></div><div class="dec"><h4>工程規範 day-one 生效</h4><p>Ruff formatter（100 字元）＋lint＋import 排序、mypy <code>strict</code>＋<code>warn_unreachable</code>、complexity ≤10／branch ≤12／參數 ≤6、module ≤400／class ≤250／function ≤60 邏輯行。全部在寫第一行 production code 之前就要有牙。</p></div><div class="dec"><h4>不另立 01A，擴充 01 Task 1</h4><p>排在 01 後面就管不到 01 寫出的第一批 code；排平行又跟 01 搶 <code>pyproject.toml</code> 的建立權。工程檢查本來就是 day-one 工具鏈信任根，不是另一個領域子系統。</p></div><div class="dec"><h4>一個檔案命中兩層就拆檔</h4><p>六個頂層與九個 <code>nova/</code> 層都寫成決策樹。若一個檔案同時合理命中兩層，<b>不准挑一個塞進去</b>——那表示它有兩個改變的理由。checker 要求每條路徑恰好命中一個 owner。</p></div><div class="dec"><h4>中文識別字的雙軌規則</h4><p>Python 內部識別字可全中文或全 ASCII，必須 NFC，<b>同一識別字禁止混 Han 與 Latin</b>（Python 解析時做 NFKC 正規化，「bytes 不同解析同名」是真風險）。shell 變數與函式名 ASCII，且<b>動態生成的 shell 變數名直接拒絕</b>——靜態檢查器證明不了它的字元集合。</p></div><div class="dec"><h4>新檔必須先列入某份計畫的 Create</h4><p>由 plan catalog ＋ placement checker 執法。這條擋的是「先亂放，以後整理」——而那正是結構開始腐爛的地方。</p></div><div class="dec"><h4>本地模型可立即當開發執行者</h4><p>不必等計畫 17。但它<b>不是</b>正式 nova 後端——正式後端要接 CAS、Execution、Resource、Effect、Constraint 與 Application 契約。預設只評測 8bit，4bit 與原版不進主派工；只准 fixture 生成、封閉列舉、跑既有命令、單檔機械修改。</p></div><div class="dec"><h4>知識檢索 v1 不做向量</h4><p>exact scope filter → ACTIVE／TTL／profile 驗證 → provenance DAG 決定性閉包 → 全部 eligible 進 snapshot，不做 top-k。加向量要先過 30 天量測門檻，再過「100 次索引重建 digest 完全一致」。</p></div><div class="dec"><h4>知識溢位不得靜默截斷</h4><p>預算 <code>min(32_768 tokens, usable context 的 25%)</code>；放不下就回 typed <code>KNOWLEDGE_CONTEXT_OVERFLOW</code>——不截尾、不摘要、不臨時改用相似度。</p></div><div class="dec"><h4>MCP 可最後實作，語義現在就定</h4><p>core 加 <code>OperationRef</code>／<code>OperationReceipt</code>／<code>get_operation</code>，receipt 只由事件投影 fold 出來。舊名映射封閉：<code>get_ticket→get_operation</code>、<code>start_loop→DEPRECATED_OPERATION</code>、未知名稱 <code>UNSUPPORTED_OPERATION</code>。</p></div><div class="dec"><h4>實作者不得改弱 ClaimSpec</h4><p>這是控制端原本漏掉的洞。三權分立不夠——還要禁止實作者動已准入的判準、固定負控與 <code>must_fail_exactly</code>。規格真的錯就停下來走 RequirementChange。</p></div><div class="dec"><h4>一個 task 一個 writer</h4><p>平行單位是完整 task 不是 step；先取檔案 lease；下游只認綠 commit SHA，不讀別人未提交的工作樹。多 agent 不是免費加速——協作 agent 在同總工作量下實測落後單 agent。</p></div><div class="dec"><h4>完全重做，不重構</h4><p>舊經驗與坑保留，<b>測試不保留</b>——150／227 個測試檔 import 內部模組、釘住 65 條舊層路徑。留著會把結構拉回去。</p></div><div class="dec"><h4>三個宣告不可互推</h4><p><code>Attempt.terminated</code>（執行結束）／<code>Assessment.accepted</code>（符合凍結定義）／<code>Commitment.verified</code>（外部生效）各自獨立宣告。</p></div><div class="dec"><h4>保證義務不可縮減，表述可以合併</h4><p>量錯對象了：兩份等價寫法合成一份時 representation 減少，但行為義務不該減少。不變式改綁 <code>GuaranteeObligationId</code>。</p></div><div class="dec"><h4>自動整併 v1 不存在</h4><p><code>MANUAL_STAGE_BOUNDARY</code>；signals 只記錄不觸發。要加 threshold 必須有 policy revision、回測證據與「無理由常數」負控。</p></div><div class="dec"><h4>新計畫不重編號</h4><p>插入 <code>01B</code> 而非順延。重編號要動 20 份檔案的交叉引用，而那正是會生出不一致的地方。</p></div><div class="dec"><h4>mutation kill rate 不是閘</h4><p>等價突變讓百分比不可用。唯一有驗收權的是事前命名的 mutation 被指定 predicate 殺掉。</p></div><div class="dec"><h4>v1 isolation 明示 COOPERATIVE_PROCESS</h4><p>防忘記／出錯，不防蓄意。<code>can_use_tool</code> 是 SDK 工具路徑的真閘，<b>不是</b> sandbox 升級。</p></div><div class="dec"><h4>前端只讀事件流</h4><p>view 必須能由事件流的純函式重建，不對領域發任何額外查詢。model 不因 view 而改變。</p></div></div>
+<h2>三方修訂迴圈</h2>
+<p class="lede">2026-08-27 起，計畫的每一處修改都走這個迴圈：<b>fable 提案，claude 與 sol 各自獨立審</b>。
+規則對三方對稱——<b>誰都不能批准自己的提案</b>，一條決議永遠需要「非作者的另外兩方」都同意。
+這條規則是迴圈自己教的：sol 退回某條的依據是 Clark–Wilson ER4（認證者不得是能改動受保護對象的主體）；
+對提案者嚴格套用卻讓審查者批准自己的提案，就是專門給提案者走的後門。</p>
+<div class="note"><b>送審時不揭露自己的票</b>　證據可以共享，結論不能，否則第二個審查者就不獨立——
+這與 nova 自己那條「不同廠商不等於技術獨立」是同一個問題。
+實測有效：已裁決的 16 條裡，<b>多數缺陷是單方抓到的</b>；只有一個審查者的話，那些會帶著缺陷寫進計畫。</div>
+<div class="tw"><table>
+<thead><tr><th>決議</th><th>主題</th><th>claude</th><th>sol</th><th>結果</th></tr></thead>
+<tbody><tr><td class="mono">R5-01</td><td>detached receipt</td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECTED</span></td></tr><tr><td class="mono">R6-01</td><td>單向引用</td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPLIED</span></td></tr><tr><td class="mono">R4-01</td><td>`EXACT_ARTIFACT_FUNCTION` 機械證明</td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPLIED</span></td></tr><tr><td class="mono">R4-02</td><td>重播器輸出決定性 claim</td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPLIED</span></td></tr><tr><td class="mono">R4-03</td><td>准入授權收據</td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECTED</span></td></tr><tr><td class="mono">R3-01</td><td>`result_semantics` 封閉欄位</td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECTED</span></td></tr><tr><td class="mono">R3-02</td><td>凍結全序下的最佳候選</td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPLIED</span></td></tr><tr><td class="mono">R3-03</td><td>determinism mechanism enum</td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECTED</span></td></tr><tr><td class="mono">R3-04</td><td>准入信任根與創世儀式</td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECTED</span></td></tr><tr><td class="mono">R3-05</td><td>揭露帳走 03 正門</td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPLIED</span></td></tr><tr><td class="mono">R2-01</td><td>分數證據分 EXACT／ESTIMATED</td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECTED</span></td></tr><tr><td class="mono">R2-02</td><td>`CLAUSE_COVERAGE_JOIN`</td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECTED</span></td></tr><tr><td class="mono">R2-03</td><td>SEEDED 三態能力</td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECTED</span></td></tr><tr><td class="mono">R2-04</td><td>四角色 attestation</td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECTED</span></td></tr><tr><td class="mono">R2-05</td><td>揭露帳本持久化</td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECT</span></td><td><span class="chip chip-red">REJECTED</span></td></tr><tr><td class="mono">R2-06</td><td>新開 06B 技術效益評測</td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPROVE</span></td><td><span class="chip chip-ok">APPLIED</span></td></tr></tbody></table></div>
+<div class="find" style="border-left-color:var(--緋)"><div class="find-h">
+<span class="fnum">抓了三輪</span><h4>授權收據的自我參照循環</h4><span class="chip chip-red">已解</span></div>
+<p class="fd">准入授權收據綁 <b>exact PR head SHA</b>，卻被寫進同一個 PR——<b>寫進去，head SHA 就變了</b>。
+第一次把收據本體移出 tree，循環<b>只是從 bytes 換成 metadata</b>：manifest 新增
+<code>receipt_digest</code>／<code>receipt_locator</code>，而收據綁 manifest digest，寫這兩欄一樣改變它們。</p>
+<p class="ff"><span class="flabel">最終解</span><b>授權證據與被授權內容之間只允許單向引用</b>——收據引用 tree，
+<b>tree 對收據零引用</b>，查找靠可推導的 key <code>(repository_identity, head_sha, proposed_manifest_digest)</code>。</p></div>
+<div class="note" style="border-left-color:var(--緋)"><b>閘綠不等於沒有循環</b>　sol 在第二次退回時寫下：
+「我重跑了鏡像閘，<b>I1–I11 全綠。機械結構成立，但沒有抓到這個協定循環。</b>」
+執法器驗的是<b>結構</b>，不是<b>協定語意</b>。三個審查者當時都因為閘綠而增加了信心，
+而那份信心在這條上是錯的。這句話已寫進計畫 01 的本文，不留在對話裡。</div>
+
+<h2>排程中的裁定</h2>
+<p class="lede">這些不是懸而未決，是<b>刻意排到那個點才定</b>——每一項都有一個明確的觸發點，而在那之前有 default 或 typed refusal 撐著，不會造成上游返工。「第一行 code 前必須定」的項目現在是 <b>0</b>。</p>
+<div class="note">重審時抓到<b>兩項偽裝成「可以晚點定」的 day-one 項目</b>：工程工具鏈與程式規範、目錄落點與命名規則。判準是「晚定會導致已寫的 code 要回頭改」——679 個檔案寫完再補規範就是全樹機械重寫。兩項都已移進計畫 01 Task 1。</div>
+<div class="tw"><table><thead><tr><th>項目</th><th>最晚裁定點</th></tr></thead><tbody><tr><td>各 SDK／CLI／模型的 exact version</td><td class="neg">該 adapter 的 Task 1 前</td></tr><tr><td>哪個模型派哪類 task</td><td class="neg">每次 execution reserve 前，依 task-class eval，不寫死品牌</td></tr><tr><td>本地模型 runtime 與 artifact</td><td class="neg">計畫 17 Task 1 前，必須內容定址</td></tr><tr><td>外部 endpoint 的投遞語義</td><td class="neg">該 endpoint admission 前</td></tr><tr><td>live 憑證與網路</td><td class="neg"><code>BACKEND_READY</code> 前；缺少時維持 <code>NOT_ADMITTED</code></td></tr><tr><td>SQLite rollback→WAL 或換引擎</td><td class="neg">soak／淘汰門檻命中後（既定反轉機制，不是未決）</td></tr><tr><td>UI 視覺樣式</td><td class="neg">計畫 18 內可迭代；事件 reducer 與純事件重建不可改</td></tr></tbody></table></div>
+</section>
+
+</main>
+<footer class="wrap">docs/計畫/ · 複驗閘 docs/計畫複驗.py（十一項不變式）· 決議帳本 docs/決策/計畫修訂決議.md · 生成自 commit 2c2bec1</footer>
+<script>
+(function(){
+  var bs=[].slice.call(document.querySelectorAll('nav button'));
+  function sel(b){
+    bs.forEach(function(x){
+      var on=x===b; x.setAttribute('aria-selected',on?'true':'false');
+      document.getElementById(x.getAttribute('aria-controls')).hidden=!on;
+    });
+    window.scrollTo({top:0,behavior:'instant'});
+  }
+  bs.forEach(function(b){
+    b.addEventListener('click',function(){sel(b)});
+    b.addEventListener('keydown',function(e){
+      var i=bs.indexOf(b),n=null;
+      if(e.key==='ArrowRight')n=bs[(i+1)%bs.length];
+      if(e.key==='ArrowLeft')n=bs[(i-1+bs.length)%bs.length];
+      if(n){e.preventDefault();n.focus();sel(n)}
+    });
+  });
+})();
+</script>
+
+</body></html>
