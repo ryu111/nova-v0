@@ -273,7 +273,7 @@ def i9_訊息用中文(檔):
 
 
 BINDING_ID白名單 = frozenset({'execution-envelope.reference', 'execution-envelope.production'})
-未遷移基線 = 136  # 178 減掉已遷移的 01(13)＋01B(5)＋19(11)＋20(13)
+未遷移基線 = 133  # 178 減掉已遷移的 01(13)＋01B(5)＋19(11)＋20(13)＋08 的 T1,T2,T5
 ID樣式 = re.compile(r'^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$')
 
 
