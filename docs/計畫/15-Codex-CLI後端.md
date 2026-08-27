@@ -36,7 +36,9 @@ nova/介接/執行者後端/codex_cli/
 ├── codex-manifest完整.claim.json              — executable/model/protocol drift changes fingerprint。
 ├── codex-argv封閉.claim.json                 — exact flags/no shell/no dangerous overrides。
 ├── codex-jsonl契約.claim.json                — closed event stream/unknown fault/no self-terminal。
-└── codex上下文與更新誠實.claim.json           — initial only; pinned update unsupported。
+├── codex上下文與更新誠實.claim.json           — initial only; pinned update unsupported。
+├── codex能力誠實.claim.json                  — 四類能力逐項宣告帶證據；樂觀宣告必紅。
+└── codex不讀判準.claim.json                  — canary 不進 argv/env/stdin/workspace。
 規格/資源/保證/codex額度逐bucket.claim.json   — primary/secondary/credits/status mapping。
 驗收/後端/codex_cli/
 ├── fake_codex.py                             — executable JSONL/exit/signal/update fixtures。
@@ -45,14 +47,17 @@ nova/介接/執行者後端/codex_cli/
 ├── 測_jsonl執行.py                          — ordering/error/cancel/output caps。
 ├── 測_額度.py                               — bucket topology/reset/credits/spend controls。
 ├── 測_上下文.py                             — stdin exact bytes/reassert unsupported。
-└── 測_更新能力.py                           — self-update cannot claim pinned target。
+├── 測_更新能力.py                           — self-update cannot claim pinned target。
+└── 測_投影.py                               — 能力誠實與 sealed canary 缺席。
 ```
 
 ## Dependency Gate
 
-前置計畫：05 06 07 11 12 13
+前置計畫：01B 05 06 07 11 12 13
 
-【推論】必須完成plan 05–07、11–13。adapter不直接呼叫application或resource repository；它只發BackendEvent/QuotaObservation並接InvocationEnvelope。前置未綠就接CLI，JSONL的版本細節會被誤當領域模型，`codex update`也會繞過Effect Authority。
+【推論】必須完成plan 01B、05–07、11–13——能力字彙（`PRE_TOOL_DECISION`／
+`NATIVE_STRUCTURED_OUTPUT`／`DELEGATION`／usage scope）的來源是 01B，
+缺它 manifest 的能力宣告就沒有 typed 主詞（R12 覆蓋審修正：原前置漏 01B）。adapter不直接呼叫application或resource repository；它只發BackendEvent/QuotaObservation並接InvocationEnvelope。前置未綠就接CLI，JSONL的版本細節會被誤當領域模型，`codex update`也會繞過Effect Authority。
 
 ---
 
@@ -405,6 +410,80 @@ Expected: 【推論】PASS；actuals green, named negatives direct red。
 git add nova/介接/執行者後端/codex_cli/test_契約.py 驗收/後端/codex_cli/測_jsonl執行.py
 git commit -m "test: 驗證 Codex CLI adapter 的完整契約"
 ```
+
+### Task 8: 能力宣告誠實且投影不含判準（與計畫 14 對稱）
+
+**Files:**
+- Create: `驗收/後端/codex_cli/測_投影.py`
+- Create: `規格/執行/保證/後端/codex不讀判準.claim.json`
+- Create: `規格/執行/保證/後端/codex能力誠實.claim.json`
+- Modify: `nova/介接/執行者後端/codex_cli/manifest.py`
+- Modify: `nova/介接/執行者後端/codex_cli/test_契約.py`
+
+**Interfaces:**
+- Produces: manifest 對 01B 四類能力**逐項宣告並帶機制證據**：
+  `PRE_TOOL_DECISION`＝**unsupported**——理由是**本 v1 adapter 沒有已准入、可驗證的
+`PRE_TOOL_DECISION` 機制，因此 fail-closed 宣告 unsupported**。
+**不得寫成「Codex CLI 沒有 pre-tool callback」**：官方文件沒有記載某介面，
+不能證明該介面不存在；`--ask-for-approval never` 只證明核准策略設定，不證明沒有 callback。
+要升為 supported 只有一條路：pinned binary／API probe ＋ 對應負控。`DELEGATION` 同理。
+  `NATIVE_STRUCTURED_OUTPUT`＝依 pinned binary probe，無證據即 unsupported；
+  `DELEGATION`＝unsupported（v1 無受控子代理契約）；usage scope＝`ROOT_ONLY`
+  誠實宣告，**不得升格 tree total**。宣告 true 而無 probe 證據必須紅。
+- Produces: no-criterion projection——sealed canary 不得出現在 argv／env／stdin／
+  workspace；adapter 不 import criterion／constraint registry。
+  （R12 覆蓋審修正：14 有 `claude不讀判準` claim 與 `測_投影.py`，15 只在 T7 的
+  Interfaces 提了一句「no-criterion projection」——**無檔案、無 claim、無 fixture**；
+  adapter 家族的不對稱缺口。本 task 也讓 T7 matrix 的那個名詞從此有主體。）
+
+**ClaimSpec:** 【推論】`backend.codex-cli.capabilities-honest` 與 `backend.codex-cli.projection-no-criterion-content` 從紅轉綠。
+
+**ClaimSpec落點:** `backend.codex-cli.capabilities-honest` → `規格/執行/保證/後端/codex能力誠實.claim.json`（本 task Create）；`backend.codex-cli.projection-no-criterion-content` → `規格/執行/保證/後端/codex不讀判準.claim.json`（本 task Create）
+
+**固定負控:** 【推論】四格。`optimistic-capability`：`PRE_TOOL_DECISION` 或
+`DELEGATION` 宣告 true 而無機制證據的 manifest 變體，必須紅在
+`capability_requires_mechanism_evidence`。`usage-scope-upgraded`：root usage 標成
+`DELEGATION_TREE_TOTAL` 的變體，必須紅在 `usage_scope_not_upgraded`。
+`sealed-canary-in-invocation`：canary 出現在 stdin／env／argv／workspace 任一，
+必須紅在 `invocation_contains_no_sealed_bytes`。`registry-import`：adapter import
+判準／約束 registry 的 fixture，architecture 必須紅。
+防恆真格：誠實宣告的 manifest 通過 05 的 required-capability 協商
+（缺能力的綁定回 typed `UNSUPPORTED_CAPABILITY`，不靜默降級）。
+
+- [ ] **Step 1: 寫四個負控與防恆真格的 red tests**
+
+```python
+def test_樂觀宣告的能力必須被拒() -> None:
+    變體 = manifest變體(PRE_TOOL_DECISION=True, 證據=None)
+    assert 驗manifest(變體).code == "CAPABILITY_REQUIRES_MECHANISM_EVIDENCE"
+
+def test_呼叫不含封存金絲雀() -> None:
+    呼叫 = 捕捉codex呼叫(雙池fixture())
+    assert SEALED_CANARY.encode() not in 呼叫.all_visible_bytes
+```
+
+- [ ] **Step 2: 跑紅測確認 manifest 目前對四類能力無宣告義務**
+
+Run: `uv run pytest -q 驗收/後端/codex_cli/測_投影.py`
+
+Expected: 【推論】FAIL；能力欄位缺席或樂觀宣告不被擋。不得是收集錯誤冒充紅測。
+
+- [ ] **Step 3: 寫能力宣告、證據 gate 與投影收窄**
+
+- [ ] **Step 4: 跑四個負控、防恆真格與兩份 ClaimSpec**
+
+Run: `uv run pytest -q 驗收/後端/codex_cli/測_投影.py nova/介接/執行者後端/codex_cli/test_契約.py && uv run python 工具/跑驗收.py --claim backend.codex-cli.capabilities-honest --claim backend.codex-cli.projection-no-criterion-content`
+
+Expected: 【推論】PASS；四個負控各紅在自己宣告的 predicate。
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add 驗收/後端/codex_cli/測_投影.py 規格/執行/保證/後端/codex不讀判準.claim.json 規格/執行/保證/後端/codex能力誠實.claim.json nova/介接/執行者後端/codex_cli/manifest.py nova/介接/執行者後端/codex_cli/test_契約.py
+git commit -m "feat: Codex 能力宣告誠實且投影不含判準"
+```
+
+---
 
 ## Plan Exit Gate
 
