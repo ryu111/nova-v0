@@ -6,7 +6,7 @@
 確認不變式成立。此後任何人改計畫（含插入 01B、擴充 05/07/13/14/20）都必須讓它們
 仍然成立——讀不出來的東西，算得出來。
 
-十項不變式（下面逐條列出；I6 的說明在負控段）：
+十一項不變式（下面逐條列出；I6 的說明在負控段）：
   I1 檔案所有權   同一路徑不得被兩份計畫 Create；Modify 的對象必須有人 Create。
   I2 依賴無環     Dependency Gate 構成的圖不得有多節點 SCC。
   I3 編號即拓撲序 沒有計畫依賴編號比自己大的計畫（否則照編號執行會違反依賴閘）。
@@ -20,6 +20,12 @@
                   未遷移的 task 數必須等於檔裡寫死的 baseline——多了紅，**少了也紅**。
                   它**抓不到配錯人**：把兩個 id 的路徑對調，兩邊都存在也都一對一，I10 全綠。
                   那要靠打開 .claim.json 比對 claim_id 的另一道閘（尚未建立）。
+  I11 檔內id相符 每一份**實際存在**的 `規格/**/*.claim.json`，其 `claim_id` 欄位必須等於
+                  I10 綁定表指名該路徑的那個 id；沒有任何綁定行指名它的 claim 檔是孤兒；
+                  兩份檔用同一個 claim_id 也紅。
+                  這是 I10 抓不到的那一半——**I10 只看計畫文字，永遠抓不到配錯人**：
+                  把兩個 id 的路徑對調，兩邊都存在也都一對一，I10 全綠。I11 是唯一會打開
+                  `.claim.json` 的閘。它今天就非空：七份實存檔都被檢查。
   I8 命名可通過   計畫在 code fence 裡宣告的 def／class 名，必須通過 `架構/檢查工程規範.py`
                   的識別字閘（NFC＋NFKC＋每個 `_` 段單一 script）。計畫宣告一個自家閘會判紅
                   的名字，實作者照著寫就撞紅，最可能的反應是**放寬閘**——那正好毀掉閘。
@@ -42,6 +48,8 @@
   I7 → 把任一 Run: 指令的檔名改掉一個字，或從 File Structure 挑一個檔刪掉它的 Create 條目。
   I8 → 把任一 `def test_x_中文` 的底線刪掉，變成 `def test_x中文`。
   I9 → 把任一 commit 訊息改回英文。
+  I11 → 把任一份 claim 檔的 `claim_id` 改掉一個字元；把兩份檔改成同一個 claim_id；
+         把某個 id 的落點路徑與另一個 id 的對調（**這條 I10 抓不到，I11 才抓得到**）。
   I10 → ①刪掉某已遷移 task 的落點行而不動 baseline；②把某 id 的路徑改一個字指到沒人 Create 的檔；
         ③把兩個 id 指到同一條路徑；④落點行少寫一個 id；⑤把某 id 指到更晚的 task 才 Create 的檔。
   I6 → 把兩個 task 併成一個（commit 步會變成兩個）。
@@ -50,7 +58,7 @@
 
 exit 0 全過；非零＝有不變式不成立，逐條明講。
 """
-import re, sys, glob, os
+import re, sys, glob, os, json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from 架構.檢查工程規範 import 字的_script, 載入規則  # noqa: E402
@@ -338,7 +346,37 @@ def i10_宣告與落點一對一(檔, 邊):
     if len(未遷移) != 未遷移基線:
         失敗.append(f'I10 未遷移 {len(未遷移)} 個 task，baseline 寫的是 {未遷移基線}'
                     f'——多了要補落點行，少了要把 baseline 改小')
-    return len(未遷移)
+    return len(未遷移), 路徑對id
+
+
+def i11_檔內id相符(綁定):
+    """打開每一份實存的 claim 檔，比對它的 claim_id 與計畫綁定表。
+
+    存在理由：I10 只讀計畫文字。把兩個 id 的落點路徑對調，兩份檔都存在、都一對一，
+    I10 全綠——它結構上抓不到「配錯人」。只做 I10 就是把「宣稱有把關」從 id 層搬到路徑層。
+
+    這支是唯一會打開 `.claim.json` 的閘，也是唯一能抓到配錯人的東西。
+    """
+    根目錄 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    見過 = {}
+    for 路徑 in sorted(glob.glob(os.path.join(根目錄, '規格', '**', '*.claim.json'), recursive=True)):
+        相對 = os.path.relpath(路徑, 根目錄)
+        try:
+            內 = json.loads(open(路徑, encoding='utf-8').read())
+        except json.JSONDecodeError as 誤:
+            失敗.append(f'I11 {相對} 不是合法 JSON：{誤}')
+            continue
+        實 = 內.get('claim_id')
+        期 = 綁定.get(相對)
+        if 期 is None:
+            失敗.append(f'I11 {相對} 是孤兒：沒有任何 task 的落點行指名它'
+                        f'（它自稱 {實}）')
+        elif 實 != 期:
+            失敗.append(f'I11 {相對} 檔內 claim_id 是 {實}，但計畫綁定表說它該裝 {期}')
+        if 實 in 見過:
+            失敗.append(f'I11 claim_id {實} 出現在兩份檔：{見過[實]} 與 {相對}')
+        見過[實] = 相對
+    return len(見過)
 
 
 def i8_命名可通過(檔):
@@ -386,15 +424,16 @@ def main():
     i7_引用可解析(檔)
     i8_命名可通過(檔)
     i9_訊息用中文(檔)
-    未遷移 = i10_宣告與落點一對一(檔, 邊)
-    print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個 · ClaimSpec 落點未遷移 {未遷移} 個')
+    未遷移, 綁定 = i10_宣告與落點一對一(檔, 邊)
+    實存claim = i11_檔內id相符(綁定)
+    print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個 · ClaimSpec 落點未遷移 {未遷移} 個 · 實存 claim 檔 {實存claim} 份')
     for n in sorted(邊):
         print(f'  {n} ← {邊[n] or "（無前置）"}')
     if 失敗:
         print(f'\n不變式不成立（{len(失敗)}）：')
         for x in 失敗: print(f'  ✗ {x}')
         return 1
-    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過 · I9 訊息用中文 · I10 宣告與落點一對一　全部成立')
+    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過 · I9 訊息用中文 · I10 宣告與落點一對一 · I11 檔內id相符　全部成立')
     return 0
 
 

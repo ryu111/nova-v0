@@ -1,0 +1,41 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "core.identity-and-digest.canonical",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "同一個邏輯值永遠只有一串 canonical bytes，因此只有一個 digest：key 順序不改摘要；非 NFC 的字串、float 與無法序列化的型別一律帶 typed code 拒絕，不做任何清洗或猜測。持久 semantic id 只准小寫 ASCII、數字與 . -，必須整串符合而不是開頭符合。",
+  "sources": [
+    {"source_id": "plan.01.task.5", "kind": "PLAN_TASK", "locator": "docs/計畫/01-可執行保證語言.md#task-5"},
+    {"source_id": "round3.naming-policy", "kind": "DECISION", "locator": "docs/決策/sol-新局-第三輪.md#36"}
+  ],
+  "primitive_catalog": {"catalog_id": "core-values.v1", "digest": null},
+  "subject": {"contract": "core-values.v1", "operation": "canonical-bytes", "binding_slot": "core-values.in-process"},
+  "parameters": {"normalization": "NFC", "semantic_id_pattern": "[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*"},
+  "setup": [],
+  "stimulus": [{"primitive": "core.canonical_json_bytes", "arguments": {"value": "$SUBJECT_VALUE"}}],
+  "observations": [{"observation_id": "code", "source": "STIMULUS_RESULT", "path": "code", "type": "STRING"}],
+  "judge": {
+    "all_of": [
+      {"predicate_id": "key_order_does_not_change_digest", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "DIGEST_DIFFERS_BY_KEY_ORDER"}},
+      {"predicate_id": "text_is_nfc", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "TEXT_NOT_NFC"}},
+      {"predicate_id": "value_has_canonical_form", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "VALUE_NOT_CANONICAL"}},
+      {"predicate_id": "semantic_id_is_ascii_lowercase", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "INVALID_SEMANTIC_ID"}},
+      {"predicate_id": "verdict_is_ok", "operator": "EQUALS", "left": {"observation": "code"}, "right": {"const": "OK"}}
+    ]
+  },
+  "controls": {
+    "positive": [{"control_id": "core-values-unit-suite", "subject_binding": "CORE_VALUES_IN_PROCESS", "expected_terminal": "ACCEPT"}],
+    "negative": [
+      {"control_id": "sort-keys-removed", "faulty_subject": "nova/核心/摘要.py::canonical_json_bytes[sort_keys=False]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["key_order_does_not_change_digest"]},
+      {"control_id": "nfc-check-removed", "faulty_subject": "nova/核心/摘要.py::驗_canonical[skip-nfc]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["text_is_nfc"]},
+      {"control_id": "semantic-id-pattern-open", "faulty_subject": "nova/核心/識別.py::語義識別樣式[.*]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["semantic_id_is_ascii_lowercase"]}
+    ]
+  },
+  "run_limits": {"wall_ms": 60000, "max_output_bytes": 1048576},
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {"retain": ["code", "detail"], "record_kind": "CORE_VALUE_VERDICT"},
+  "feedback": {"to_candidate": "NONE"},
+  "cleanup": []
+}

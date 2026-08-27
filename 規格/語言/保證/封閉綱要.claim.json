@@ -1,0 +1,41 @@
+{
+  "$schema": "../ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "claimspec.language.closed-schema",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "ClaimSpec 0.2.0 的 meta-schema 是封閉的：additionalProperties 一律 false，所以 passed／status／admitted_by 這類自報欄位一寫就是 UNKNOWN_FIELD——接受權不在被測者手上。必填欄位缺一即 MISSING_FIELD、型別不符即 TYPE_MISMATCH、正控與負控都不得為空即 MIN_ITEMS；陣列裡的每一項都要逐一檢查，不是只看外層。",
+  "sources": [
+    {"source_id": "plan.01.task.6", "kind": "PLAN_TASK", "locator": "docs/計畫/01-可執行保證語言.md#task-6"},
+    {"source_id": "overview.claim-coverage", "kind": "PLAN_CONSTRAINT", "locator": "docs/計畫/00-總覽.md#8"}
+  ],
+  "primitive_catalog": {"catalog_id": "claimspec-loader.v1", "digest": null},
+  "subject": {"contract": "claimspec-loader.v1", "operation": "load", "binding_slot": "claimspec-loader.in-process"},
+  "parameters": {"meta_schema": "規格/語言/ClaimSpec.schema.json"},
+  "setup": [],
+  "stimulus": [{"primitive": "claimspec.load", "arguments": {"bytes": "$SUBJECT_BYTES"}}],
+  "observations": [{"observation_id": "code", "source": "STIMULUS_RESULT", "path": "code", "type": "STRING"}],
+  "judge": {
+    "all_of": [
+      {"predicate_id": "no_unknown_field_accepted", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "UNKNOWN_FIELD"}},
+      {"predicate_id": "required_fields_present", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "MISSING_FIELD"}},
+      {"predicate_id": "declared_types_hold", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "TYPE_MISMATCH"}},
+      {"predicate_id": "controls_are_non_empty", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "MIN_ITEMS"}},
+      {"predicate_id": "verdict_is_ok", "operator": "EQUALS", "left": {"observation": "code"}, "right": {"const": "OK"}}
+    ]
+  },
+  "controls": {
+    "positive": [{"control_id": "three-engineering-claims", "subject_binding": "EXISTING_CLAIM_FILES", "expected_terminal": "ACCEPT"}],
+    "negative": [
+      {"control_id": "self-reported-passed", "faulty_subject": "驗收/保證規格語言/測_meta_schema.py::最小_claim+{passed:true}", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["no_unknown_field_accepted"]},
+      {"control_id": "controls-emptied", "faulty_subject": "驗收/保證規格語言/測_meta_schema.py::最小_claim+{controls:{positive:[],negative:[]}}", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["controls_are_non_empty"]},
+      {"control_id": "wall-ms-as-string", "faulty_subject": "驗收/保證規格語言/測_meta_schema.py::最小_claim+{run_limits:{wall_ms:\"500\"}}", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["declared_types_hold"]}
+    ]
+  },
+  "run_limits": {"wall_ms": 60000, "max_output_bytes": 1048576},
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {"retain": ["code", "pointer"], "record_kind": "CLAIMSPEC_ADMISSION_VERDICT"},
+  "feedback": {"to_candidate": "NONE"},
+  "cleanup": []
+}
