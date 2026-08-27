@@ -2,6 +2,7 @@
 
 import json
 import pathlib
+import re
 import subprocess
 import tomllib
 from dataclasses import replace
@@ -405,3 +406,34 @@ def test_中文_toml_鍵要被擋() -> None:
         assert 結果.code == "NON_ASCII_TOML_KEY", 原始碼
     綠 = '# 中文註解沒問題\nname = "中文值也沒問題"\n[[gate]]\nargv = ["架構/檢查工程規範.py"]\n'
     assert 檢查檔案("架構/x.toml", 綠, 規則, 查計畫目錄=False).code == "OK"
+
+
+def test_gitignore_涵蓋宣告的產物目錄() -> None:
+    # generated_dirs 宣告在 目錄規則.toml，.gitignore 是第二份拷貝——
+    # 兩處各留一份，遲早有一處漏掉而把工具產物推上去。
+    忽略 = (專案根 / ".gitignore").read_text(encoding="utf-8")
+    行們 = {
+        行.strip().rstrip("/") for 行 in 忽略.splitlines() if 行.strip() and not 行.startswith("#")
+    }
+    for 目錄 in 載入規則().產物目錄:
+        assert 目錄.rstrip("/") in 行們, 目錄
+
+
+@pytest.mark.parametrize(
+    "路徑",
+    [".env", ".env.local", "私鑰.pem", "id_rsa", "秘密.json", "credentials.json", ".DS_Store"],
+)
+def test_不該上傳的樣式真的被忽略(路徑: str) -> None:
+    # 用 git 自己回答，不是自己解析 .gitignore——解析錯了會給假的安心。
+    結果 = subprocess.run(["git", "check-ignore", "-q", 路徑], cwd=專案根, check=False)
+    assert 結果.returncode == 0, f"{路徑} 沒有被忽略"
+
+
+def test_版控裡沒有憑證樣式的檔() -> None:
+    出 = subprocess.run(["git", "ls-files"], cwd=專案根, capture_output=True, text=True, check=True)
+    壞 = [
+        f
+        for f in 出.stdout.splitlines()
+        if re.search(r"(^|/)(\.env|.*\.pem|.*\.key|id_rsa|秘密.*\.json|credentials.*\.json)$", f)
+    ]
+    assert not 壞, 壞

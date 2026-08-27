@@ -77,6 +77,7 @@ class 規則集:
     IO_模組: frozenset[str]
     識別字正規化: tuple[正規化式, ...]
     閘們: tuple[tuple[str, tuple[str, ...]], ...]
+    產物目錄: tuple[str, ...]
     允許_script: frozenset[str]
     段分隔: str
 
@@ -99,6 +100,7 @@ def 載入規則(路徑: Path = 規則檔) -> 規則集:
         段分隔=命名["python_identifier"]["segment_separator"],
         允許_script=frozenset(命名["python_identifier"]["allowed_scripts"]),
         閘們=tuple((項["name"], tuple(項["argv"])) for 項 in 原始["gate"]),
+        產物目錄=tuple(原始["generated_dirs"]["list"]),
     )
 
 

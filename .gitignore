@@ -1,4 +1,42 @@
+# 工具產生的中間物。這份清單必須涵蓋 架構/目錄規則.toml 的 generated_dirs——
+# 兩處各留一份會有一處漏掉，所以有測試把它們釘在一起（架構/test_工程規範.py）。
 .venv/
 __pycache__/
 .pytest_cache/
+.hypothesis/
+.mutmut-cache
 mutants/
+node_modules/
+.ruff_cache/
+.mypy_cache/
+
+# 建置產物
+dist/
+build/
+*.egg-info/
+
+# 不該離開這台機器的東西。
+# 這裡列的是**樣式**，不是「目前有這些檔」——防的是將來有人手滑，不是現在。
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+秘密*.json
+secrets*.json
+credentials*.json
+*.credentials
+.netrc
+
+# 作業系統與編輯器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 本機日誌與暫存
+*.log
+*.tmp
