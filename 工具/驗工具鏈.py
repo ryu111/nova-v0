@@ -169,12 +169,12 @@ def 跑基線() -> list[str]:
 def 主(引數: list[str] | None = None) -> int:
     """組參數、依旗標跑對應檢查，把每個 failure code 印到 stderr 後以 0／1 回報。"""
     剖析器 = argparse.ArgumentParser(description="day-one 工具鏈探針")
-    剖析器.add_argument("--驗指定守衛突變", action="store_true")
+    剖析器.add_argument("--驗指定突變", "--驗指定守衛突變", dest="驗指定突變", action="store_true")
     剖析器.add_argument("--負控-拿掉-also-copy", dest="拿掉_also_copy", action="store_true")
     參數 = 剖析器.parse_args(引數)
 
     失敗 = 跑基線()
-    if 參數.驗指定守衛突變 and (碼 := 驗指定守衛突變()) != 通過:
+    if 參數.驗指定突變 and (碼 := 驗指定守衛突變()) != 通過:
         失敗.append(碼)
     if 參數.拿掉_also_copy and (碼 := 驗_拿掉_also_copy()) != 通過:
         失敗.append(碼)
