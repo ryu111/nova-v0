@@ -1,0 +1,188 @@
+{
+  "schema_id": "nova.claimspec/0.2.0",
+  "title": "ClaimSpec 0.2.0 封閉 meta-schema",
+  "note": "封閉的意思是 additionalProperties 一律 false：多一個欄位就是多一條沒人審過的規則。特別是 status／admitted_by／passed 這類自報欄位，它們不在這裡，因為接受權不在被測者手上。",
+  "effect_primitive_prefixes": ["effect."],
+  "effect_contract_schema": "規格/介面/效果契約.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "claimspec_version",
+    "claim_id",
+    "revision",
+    "supersedes",
+    "statement",
+    "sources",
+    "primitive_catalog",
+    "subject",
+    "parameters",
+    "setup",
+    "stimulus",
+    "observations",
+    "judge",
+    "controls",
+    "run_limits",
+    "isolation",
+    "effect_delivery",
+    "evidence",
+    "feedback",
+    "cleanup"
+  ],
+  "properties": {
+    "$schema": {"type": "string"},
+    "claimspec_version": {"type": "string", "enum": ["0.2.0"]},
+    "claim_id": {"type": "string"},
+    "revision": {"type": "integer"},
+    "supersedes": {"type": ["object", "null"]},
+    "statement": {"type": "string"},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id", "kind", "locator"],
+        "properties": {
+          "source_id": {"type": "string"},
+          "kind": {"type": "string"},
+          "locator": {"type": "string"}
+        }
+      }
+    },
+    "primitive_catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog_id", "digest"],
+      "properties": {
+        "catalog_id": {"type": "string"},
+        "digest": {"type": ["string", "null"]}
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "operation", "binding_slot"],
+      "properties": {
+        "contract": {"type": "string"},
+        "operation": {"type": "string"},
+        "binding_slot": {"type": "string"}
+      }
+    },
+    "parameters": {"type": "object"},
+    "setup": {"type": "array"},
+    "stimulus": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["primitive", "arguments"],
+        "properties": {
+          "primitive": {"type": "string"},
+          "arguments": {"type": "object"}
+        }
+      }
+    },
+    "observations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["observation_id", "source", "path", "type"],
+        "properties": {
+          "observation_id": {"type": "string"},
+          "source": {"type": "string"},
+          "path": {"type": "string"},
+          "type": {"type": "string"}
+        }
+      }
+    },
+    "judge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all_of"],
+      "properties": {
+        "all_of": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["predicate_id", "operator", "left", "right"],
+            "properties": {
+              "predicate_id": {"type": "string"},
+              "operator": {"type": "string"},
+              "left": {"type": "object"},
+              "right": {"type": "object"}
+            }
+          }
+        }
+      }
+    },
+    "controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["positive", "negative"],
+      "properties": {
+        "positive": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["control_id", "subject_binding", "expected_terminal"],
+            "properties": {
+              "control_id": {"type": "string"},
+              "subject_binding": {"type": "string"},
+              "expected_terminal": {"type": "string"}
+            }
+          }
+        },
+        "negative": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["control_id", "faulty_subject", "expected_terminal", "must_fail_exactly"],
+            "properties": {
+              "control_id": {"type": "string"},
+              "faulty_subject": {"type": "string"},
+              "claimed_path": {"type": "string"},
+              "expected_terminal": {"type": "string"},
+              "must_fail_exactly": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    },
+    "run_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wall_ms", "max_output_bytes"],
+      "properties": {
+        "wall_ms": {"type": "integer"},
+        "max_output_bytes": {"type": "integer"}
+      }
+    },
+    "isolation": {"type": "string", "enum": ["COOPERATIVE_PROCESS"]},
+    "effect_delivery": {"type": ["object", "null"]},
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["retain", "record_kind"],
+      "properties": {
+        "retain": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "record_kind": {"type": "string"}
+      }
+    },
+    "feedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["to_candidate"],
+      "properties": {"to_candidate": {"type": "string"}}
+    },
+    "cleanup": {"type": "array"}
+  }
+}

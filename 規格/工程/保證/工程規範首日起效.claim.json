@@ -22,7 +22,7 @@
     "digest": null
   },
   "subject": {
-    "contract": "engineering-config/1",
+    "contract": "engineering-config.v1",
     "operation": "validate",
     "binding_slot": "engineering-config.repository"
   },

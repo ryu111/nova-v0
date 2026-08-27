@@ -1,0 +1,27 @@
+{
+  "schema_id": "nova.binding-manifest/0.2.0",
+  "title": "把 subject binding slot 綁到確切的 capability digest",
+  "note": "slot 名與 digest 都是跨程序 identity，一律 ASCII。清單封閉：多一個欄位就是多一條沒人審過的綁定。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest_id", "revision", "bindings"],
+  "properties": {
+    "manifest_id": {"type": "string"},
+    "revision": {"type": "integer"},
+    "bindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["binding_slot", "capability_digest", "isolation"],
+        "properties": {
+          "binding_slot": {"type": "string"},
+          "capability_digest": {"type": "string"},
+          "isolation": {"type": "string"},
+          "note": {"type": "string"}
+        }
+      }
+    }
+  }
+}

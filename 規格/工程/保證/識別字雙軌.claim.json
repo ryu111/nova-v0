@@ -27,8 +27,8 @@
     "digest": null
   },
   "subject": {
-    "contract": "engineering-checker/1",
-    "operation": "check_file",
+    "contract": "engineering-checker.v1",
+    "operation": "check-file",
     "binding_slot": "engineering-checker.repository"
   },
   "parameters": {

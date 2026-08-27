@@ -1,0 +1,32 @@
+{
+  "schema_id": "nova.effect-delivery/0.2.0",
+  "title": "EffectDelivery 的封閉 wire contract",
+  "note": "semantics 在這裡刻意只宣告成 string：合法值住在 allowed_semantics，由載入器回 UNSUPPORTED_DELIVERY_SEMANTICS 這個專屬 code，而不是泛用的 ENUM_MISMATCH。宣告做不到的語意與寫錯型別是兩件事。",
+  "allowed_semantics": ["AT_LEAST_ONCE_IDEMPOTENT", "AT_MOST_ONCE"],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "endpoint_id",
+    "operation",
+    "semantics",
+    "intent_schema",
+    "idempotency_key",
+    "attempt_policy",
+    "receipt_schema",
+    "success_postcondition",
+    "duplicate_policy",
+    "uncertain_terminal"
+  ],
+  "properties": {
+    "endpoint_id": {"type": "string"},
+    "operation": {"type": "string"},
+    "semantics": {"type": "string"},
+    "intent_schema": {"type": "string"},
+    "idempotency_key": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "attempt_policy": {"type": "object"},
+    "receipt_schema": {"type": "string"},
+    "success_postcondition": {"type": "object"},
+    "duplicate_policy": {"type": "string"},
+    "uncertain_terminal": {"type": "string"}
+  }
+}
