@@ -1,0 +1,79 @@
+# Python 識別字的 Unicode 軌與跨程序的 ASCII 軌，唯一宣告。
+#
+# 這份檔是資料，`架構/檢查工程規範.py` 是它的執法器。改規則只改這裡。
+#
+# schema 欄位名依 CLAUDE.md 的 ASCII 例外走；中文只出現在值與註解。
+
+# ── Python 識別字：可全中文或全 ASCII ──
+#
+# 【實測 2026-08-27】`ast.parse` 會把識別字 NFKC 正規化後才交出來：
+#   NFD 的 e+U+0301 進 ast 變成 NFC 的 é；全形 ａ(U+FF41) 進 ast 變成 ASCII a。
+# 所以「原始 source 是不是 NFC」**不能靠 AST**，必須走 tokenize 讀原形。
+#
+# 【實測 2026-08-27】判定 Han 用碼點區間會漏 CJK Ext B（𠀀 U+20000 判成非 Han）；
+# 改用 `unicodedata.name()` 的 "CJK UNIFIED"／"CJK COMPATIBILITY" 前綴，Ext B 自動涵蓋。
+#
+# 判定單位是 **lexical segment**（以 `_` 分隔），不是整個識別字。依據：
+# docs/決策/sol-新局-第三輪.md §3.6「同一 lexical segment 內不同 script 黏寫…全拒絕」。
+# 逐識別字判定會把 `test_工作決策`、`測試_守衛確實限制值` 這類計畫自己宣告的名字判紅——
+# 那會逼實作者放寬檢查，恰好毀掉這道閘。
+# 【實測 2026-08-27】檔名不受單一 script 規則約束：計畫自己宣告的
+# `混script識別字.py`、`中文shell變數.sh` 就是黏寫檔名。這條只管識別字。
+[python_identifier]
+normalization = ["NFC", "NFKC"]
+segment_separator = "_"
+# allowed_scripts 是**被執行的**，不是說明：兩軌以外的 script（Cyrillic、
+# 帶重音的 Latin-1、全形）回 SCRIPT_NOT_IN_TWO_TRACKS。宣告了卻沒人執行的欄位
+# 比沒宣告更糟——讀的人會以為已經擋掉。
+allowed_scripts = ["ASCII_LATIN", "HAN"]
+
+# ── 跨程序識別字：一律 ASCII ──
+#
+# 理由不是美學：這些值會跨程序、跨版本、跨語言被比對。Bash 的 name 只接受
+# 字母、數字、底線且不能以數字開頭；JSON／SQL／CLI 的工具鏈對非 ASCII 的處理各不相同。
+# 中文可用於檔名、Python 識別字與顯示文字——那些不跨程序。
+[ascii_only]
+contexts = [
+  "semantic_id",
+  "event_field",
+  "schema_field",
+  "db_table_or_column",
+  "cli_executable",
+  "failure_code",
+  "shell_name",
+]
+
+# ── shell name 的靜態宣告形式 ──
+#
+# 只有以下形式的 name 可被靜態查核。非 literal 的 name（`declare "$x=1"`、
+# `export ${前綴}_值`、`eval "$n=1"`）一律回 DYNAMIC_SHELL_NAME_UNVERIFIABLE——
+# 掃不到不等於沒有，這與動態 import 是同一種坑。
+[shell_name]
+static_forms = [
+  "assignment",
+  "export",
+  "readonly",
+  "local",
+  "declare",
+  "for",
+  "function_definition",
+]
+
+# ── shell 的實測行為（決定 scanner 不能靠 bash 自己報錯）──
+#
+# 【實測 2026-08-27 bash 3.2.57 arm64-darwin】
+#   `本次路徑=/tmp/x` bash **不當成賦值**，當成命令名 → stderr 報 "No such file or
+#   directory"，但整份 script **exit 0**；`$本次路徑` 原樣印出不展開。只看 exit code
+#   的 CI 會全綠放行。所以必須靜態掃文字形式，不能靠執行時報錯。
+#   `export 甲=1`／`declare 乙=1`／`for 丙 in` → 硬錯 "not a valid identifier"。
+#   `丁() { :; }` → **rc=0**，bash 允許非 ASCII 函式名。合法不等於可跨程序，
+#   函式名照樣要擋，這條擋的是我們的規矩不是 bash 的限制。
+
+[failure_code]
+identifier_not_normalized = "IDENTIFIER_NOT_NFC"
+mixed_script_within_segment = "MIXED_SCRIPT_IDENTIFIER"
+script_outside_two_tracks = "SCRIPT_NOT_IN_TWO_TRACKS"
+non_ascii_shell_name = "NON_ASCII_SHELL_NAME"
+non_ascii_json_field = "NON_ASCII_JSON_FIELD"
+non_ascii_sql_name = "NON_ASCII_SQL_NAME"
+dynamic_shell_name = "DYNAMIC_SHELL_NAME_UNVERIFIABLE"

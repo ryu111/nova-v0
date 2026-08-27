@@ -52,7 +52,7 @@ def 讀專案設定() -> dict[str, object]:
         return tomllib.load(檔)
 
 
-def 檢查python版本() -> str:
+def 檢查直譯器版本() -> str:
     """確認直譯器恰為 .python-version 指定的版本；不接受相近的 minor／patch。"""
     期望 = (專案根 / ".python-version").read_text(encoding="utf-8").strip()
     實際 = ".".join(str(數) for 數 in sys.version_info[:3])
@@ -137,7 +137,7 @@ def 驗指定守衛突變() -> str:
     return 通過
 
 
-def 驗拿掉also_copy() -> str:
+def 驗_拿掉_also_copy() -> str:
     """負控二：mutmut 少了 also_copy 時測試沒被複製進 mutants 樹，必須是 typed 失敗而非成功。"""
     with tempfile.TemporaryDirectory() as 暫存:
         根 = Path(暫存)
@@ -162,7 +162,7 @@ def 驗拿掉also_copy() -> str:
 def 跑基線() -> list[str]:
     """跑不需要子程序的四項設定與版本檢查，回傳所有 failure code。"""
     設定 = 讀專案設定()
-    結果 = [檢查python版本(), 檢查鎖定版本(), 檢查探索設定(設定), 檢查突變設定(設定)]
+    結果 = [檢查直譯器版本(), 檢查鎖定版本(), 檢查探索設定(設定), 檢查突變設定(設定)]
     return [碼 for 碼 in 結果 if 碼 != 通過]
 
 
@@ -170,13 +170,13 @@ def 主(引數: list[str] | None = None) -> int:
     """組參數、依旗標跑對應檢查，把每個 failure code 印到 stderr 後以 0／1 回報。"""
     剖析器 = argparse.ArgumentParser(description="day-one 工具鏈探針")
     剖析器.add_argument("--驗指定守衛突變", action="store_true")
-    剖析器.add_argument("--負控-拿掉-also-copy", dest="拿掉also_copy", action="store_true")
+    剖析器.add_argument("--負控-拿掉-also-copy", dest="拿掉_also_copy", action="store_true")
     參數 = 剖析器.parse_args(引數)
 
     失敗 = 跑基線()
     if 參數.驗指定守衛突變 and (碼 := 驗指定守衛突變()) != 通過:
         失敗.append(碼)
-    if 參數.拿掉also_copy and (碼 := 驗拿掉also_copy()) != 通過:
+    if 參數.拿掉_also_copy and (碼 := 驗_拿掉_also_copy()) != 通過:
         失敗.append(碼)
 
     for 碼 in 失敗:

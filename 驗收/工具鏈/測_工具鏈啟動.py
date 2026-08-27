@@ -11,7 +11,7 @@ from hypothesis import strategies as st
 
 from nova.核心.工具鏈守衛 import 收窄
 
-必要的RUFF規則 = frozenset(
+必要的_RUFF_規則 = frozenset(
     {"E", "F", "W", "I", "UP", "B", "SIM", "C4", "PIE"}
     | {"RUF", "ANN", "ASYNC", "DTZ", "D", "C90", "PLR"}
 )
@@ -23,7 +23,7 @@ from nova.核心.工具鏈守衛 import 收窄
     ("pylint", "max-branches", 12, "BRANCHES_LIMIT_RAISED"),
     ("pylint", "max-statements", 60, "STATEMENTS_LIMIT_RAISED"),
 )
-MYPY必開 = (
+MYPY_必開 = (
     ("strict", "MYPY_STRICT_DISABLED"),
     ("warn_unreachable", "MYPY_WARN_UNREACHABLE_DISABLED"),
     ("show_error_codes", "MYPY_ERROR_CODES_HIDDEN"),
@@ -51,7 +51,7 @@ class 工程閘結果:
     違反: tuple[str, ...]
 
 
-def _檢ruff(設定: dict[str, object]) -> list[str]:
+def _檢_ruff(設定: dict[str, object]) -> list[str]:
     ruff = 設定.get("tool", {}).get("ruff", {})
     lint = ruff.get("lint", {})
     違反: list[str] = []
@@ -62,7 +62,7 @@ def _檢ruff(設定: dict[str, object]) -> list[str]:
     選取 = set(lint.get("select", []))
     if "D" not in 選取:
         違反.append("RUFF_DOCSTRING_RULES_DISABLED")
-    if not (必要的RUFF規則 - {"D"}) <= 選取:
+    if not (必要的_RUFF_規則 - {"D"}) <= 選取:
         違反.append("RUFF_RULES_DISABLED")
     for 節, 鍵, 上限, 碼 in 規模上限:
         if lint.get(節, {}).get(鍵) != 上限:
@@ -70,9 +70,9 @@ def _檢ruff(設定: dict[str, object]) -> list[str]:
     return 違反
 
 
-def _檢mypy(設定: dict[str, object]) -> list[str]:
+def _檢_mypy(設定: dict[str, object]) -> list[str]:
     mypy = 設定.get("tool", {}).get("mypy", {})
-    return [碼 for 鍵, 碼 in MYPY必開 if mypy.get(鍵) is not True]
+    return [碼 for 鍵, 碼 in MYPY_必開 if mypy.get(鍵) is not True]
 
 
 def 由違反推出失敗判準(結果: 工程閘結果) -> set[str]:
@@ -86,7 +86,7 @@ def 由違反推出失敗判準(結果: 工程閘結果) -> set[str]:
 def validate_engineering_config(路徑: str) -> 工程閘結果:
     with open(路徑, "rb") as 檔:
         設定 = tomllib.load(檔)
-    違反 = tuple(_檢ruff(設定) + _檢mypy(設定))
+    違反 = tuple(_檢_ruff(設定) + _檢_mypy(設定))
     return 工程閘結果("ENGINEERING_GATE_WEAKENED" if 違反 else "OK", 違反)
 
 
@@ -109,7 +109,7 @@ def 測試_工程閘的正控是本專案設定() -> None:
     assert validate_engineering_config("pyproject.toml").code == "OK"
 
 
-def 測試_claim檔的固定負控與實際違反一致() -> None:
+def 測試_claim_檔的固定負控與實際違反一致() -> None:
     宣告 = json.loads(
         pathlib.Path("規格/工程/保證/工程規範首日起效.claim.json").read_text(encoding="utf-8")
     )
@@ -118,7 +118,7 @@ def 測試_claim檔的固定負控與實際違反一致() -> None:
     assert 由違反推出失敗判準(結果) == set(負控["must_fail_exactly"])
 
 
-def 測試_claim檔的正控真的綠() -> None:
+def 測試_claim_檔的正控真的綠() -> None:
     宣告 = json.loads(
         pathlib.Path("規格/工程/保證/工程規範首日起效.claim.json").read_text(encoding="utf-8")
     )

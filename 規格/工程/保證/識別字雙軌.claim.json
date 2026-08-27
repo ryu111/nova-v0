@@ -1,0 +1,156 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "naming.unicode-python-ascii-boundaries",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "Python 識別字可全中文或全 ASCII，必須 NFC，且同一識別字禁止混用 Han 與 Latin；跨程序 semantic id、event／schema 欄位、DB table／column、CLI executable、failure code 與 shell 變數／函式名一律 ASCII。無法靜態查核字元集合的動態 shell 宣告一律拒絕，不得因為掃不到就放行。",
+  "sources": [
+    {
+      "source_id": "plan.01.task.4",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-4-建立python-unicode與跨程序ascii雙軌閘"
+    },
+    {
+      "source_id": "claude-md.language-rule",
+      "kind": "PLAN_CONSTRAINT",
+      "locator": "CLAUDE.md#最高原則 第 2 條與 docs/計畫/00-總覽.md#global-constraints"
+    },
+    {
+      "source_id": "round3.naming-policy",
+      "kind": "DECISION",
+      "locator": "docs/決策/sol-新局-第三輪.md#36-中文檔名與識別字可以用但不准裝作沒有成本"
+    }
+  ],
+  "primitive_catalog": {
+    "catalog_id": "architecture-checker.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "engineering-checker/1",
+    "operation": "check_file",
+    "binding_slot": "engineering-checker.repository"
+  },
+  "parameters": {
+    "rules_path": "架構/命名規則.toml",
+    "python_identifier_normalization": "NFC",
+    "ascii_only_contexts": [
+      "semantic_id",
+      "event_field",
+      "schema_field",
+      "db_table_or_column",
+      "cli_executable",
+      "failure_code",
+      "shell_name"
+    ]
+  },
+  "setup": [],
+  "stimulus": [
+    {
+      "primitive": "architecture.check_file",
+      "arguments": {
+        "path": "$SUBJECT_CLAIMED_PATH",
+        "source": "$SUBJECT_SOURCE"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "code",
+      "source": "STIMULUS_RESULT",
+      "path": "code",
+      "type": "STRING"
+    }
+  ],
+  "judge": {
+    "all_of": [
+      {
+        "predicate_id": "python_identifiers_single_script",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "MIXED_SCRIPT_IDENTIFIER"}
+      },
+      {
+        "predicate_id": "identifiers_stay_in_two_tracks",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "SCRIPT_NOT_IN_TWO_TRACKS"}
+      },
+      {
+        "predicate_id": "python_identifiers_are_nfc",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "IDENTIFIER_NOT_NFC"}
+      },
+      {
+        "predicate_id": "shell_names_are_ascii",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "NON_ASCII_SHELL_NAME"}
+      },
+      {
+        "predicate_id": "json_field_names_are_ascii",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "NON_ASCII_JSON_FIELD"}
+      },
+      {
+        "predicate_id": "sql_identifiers_are_ascii",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "NON_ASCII_SQL_NAME"}
+      },
+      {
+        "predicate_id": "dynamic_shell_name_rejected",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "DYNAMIC_SHELL_NAME_UNVERIFIABLE"}
+      },
+      {
+        "predicate_id": "gate_verdict_is_ok",
+        "operator": "EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "OK"}
+      }
+    ]
+  },
+  "controls": {
+    "positive": [
+      {
+        "control_id": "repository-tree",
+        "subject_binding": "REPOSITORY_SCAN",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
+    "negative": [
+      {
+        "control_id": "latin-han-mixed-in-one-identifier",
+        "faulty_subject": "驗收/工具鏈/fixtures/混script識別字.py",
+        "claimed_path": "nova/核心/狀態旗標.py",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": ["python_identifiers_single_script"]
+      },
+      {
+        "control_id": "non-ascii-shell-variable-name",
+        "faulty_subject": "驗收/工具鏈/fixtures/中文shell變數.sh",
+        "claimed_path": "工具/清理產物.sh",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": ["shell_names_are_ascii"]
+      }
+    ]
+  },
+  "run_limits": {
+    "wall_ms": 60000,
+    "max_output_bytes": 1048576
+  },
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {
+    "retain": ["code", "path", "detail"],
+    "record_kind": "NAMING_CHECK_VERDICT"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
+  "cleanup": []
+}
