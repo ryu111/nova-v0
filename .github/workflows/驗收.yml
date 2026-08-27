@@ -1,0 +1,29 @@
+# CI 的 required check。跑的閘清單與 工具/驗全部.py、pre-commit hook 同一份，
+# 來源是 架構/目錄規則.toml 的 [[gate]]——這裡逐條展開只為了讓 GitHub 分開顯示哪一道紅。
+# 這是權威執法點：pre-commit hook 可以被 --no-verify 繞過，也可能根本沒裝；這裡不行。
+name: gates
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+      - name: format
+        run: uv run ruff format --check .
+      - name: lint
+        run: uv run ruff check .
+      - name: types
+        run: uv run mypy nova 架構 工具
+      - name: placement
+        run: uv run python 架構/檢查工程規範.py
+      - name: plans
+        run: uv run python docs/計畫複驗.py
+      - name: tests
+        run: uv run pytest -q

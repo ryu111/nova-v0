@@ -1,0 +1,43 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "engineering.gates.automatically-enforced",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "工程閘不能只有人手跑得到。宣告清單只有一份（架構/目錄規則.toml 的 [[gate]]），由本地入口、pre-commit hook 與 CI 三處共讀；入口必須跑完每一道才回報而不是第一個紅就停，任一紅即回非零；hook 必須把非零 exit 原樣傳出去。hook 可被 --no-verify 繞過也可能根本沒裝，所以權威執法點是 CI 的 required check——不得宣稱不可能繞過。",
+  "sources": [
+    {"source_id": "plan.01.task.13", "kind": "PLAN_TASK", "locator": "docs/計畫/01-可執行保證語言.md#task-13"},
+    {"source_id": "plan.01.exit-gate", "kind": "PLAN_CONSTRAINT", "locator": "docs/計畫/01-可執行保證語言.md#plan-exit-gate"},
+    {"source_id": "claude-md.no-auto-trigger", "kind": "DECISION", "locator": "CLAUDE.md#結構"}
+  ],
+  "primitive_catalog": {"catalog_id": "gate-runner.v1", "digest": null},
+  "subject": {"contract": "gate-runner.v1", "operation": "run-all", "binding_slot": "gate-runner.repository"},
+  "parameters": {"gate_source": "架構/目錄規則.toml", "authoritative_enforcement": "ci-required-check"},
+  "setup": [],
+  "stimulus": [{"primitive": "gates.run_all", "arguments": {"gates": "$DECLARED_GATES"}}],
+  "observations": [{"observation_id": "code", "source": "STIMULUS_RESULT", "path": "code", "type": "STRING"}],
+  "judge": {
+    "all_of": [
+      {"predicate_id": "entry_runs_every_declared_gate", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "GATE_SKIPPED"}},
+      {"predicate_id": "entry_fails_when_any_gate_fails", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "RED_GATE_REPORTED_GREEN"}},
+      {"predicate_id": "ci_runs_the_same_declared_gates", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "CI_GATE_LIST_DRIFT"}},
+      {"predicate_id": "hook_propagates_nonzero_exit", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "HOOK_SWALLOWS_FAILURE"}},
+      {"predicate_id": "verdict_is_ok", "operator": "EQUALS", "left": {"observation": "code"}, "right": {"const": "OK"}}
+    ]
+  },
+  "controls": {
+    "positive": [{"control_id": "repository-gates-green", "subject_binding": "GATE_RUNNER_REPOSITORY", "expected_terminal": "ACCEPT"}],
+    "negative": [
+      {"control_id": "entry-stops-at-first-red", "faulty_subject": "工具/驗全部.py::跑[break-on-first-red]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["entry_runs_every_declared_gate"]},
+      {"control_id": "entry-always-returns-zero", "faulty_subject": "工具/驗全部.py::跑[return-0]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["entry_fails_when_any_gate_fails"]},
+      {"control_id": "ci-drops-a-gate", "faulty_subject": ".github/workflows/驗收.yml::steps[types-removed]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["ci_runs_the_same_declared_gates"]},
+      {"control_id": "hook-swallows-exit", "faulty_subject": "工具/裝_git_鉤子.py::鉤子內容[exit-0]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["hook_propagates_nonzero_exit"]}
+    ]
+  },
+  "run_limits": {"wall_ms": 600000, "max_output_bytes": 4194304},
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {"retain": ["code", "detail"], "record_kind": "GATE_ENFORCEMENT_VERDICT"},
+  "feedback": {"to_candidate": "NONE"},
+  "cleanup": []
+}

@@ -2,15 +2,19 @@
 
 import json
 import pathlib
+import subprocess
 import tomllib
 from dataclasses import replace
 
 import pytest
 
+from 工具.裝_git_鉤子 import 安裝 as 安裝鉤子
+from 工具.驗全部 import 跑, 閘清單
 from 架構.檢查工程規範 import (
     check_fixture,
     命名規則檔,
     宣稱落點樣式,
+    專案根,
     掃描倉庫,
     檢查檔案,
     讀正規化式,
@@ -276,3 +280,55 @@ def test_命名規則宣告的每個_failure_code_都有人執行() -> None:
     with 命名規則檔.open("rb") as 檔:
         宣告的 = set(tomllib.load(檔)["failure_code"].values())
     assert 宣告的 <= set(碼對照判準), 宣告的 - set(碼對照判準)
+
+
+def 造臨時倉(根: pathlib.Path, 入口回傳: int) -> pathlib.Path:
+    """造一個最小 git repo，裡面放一個回傳指定 exit code 的假入口。"""
+    subprocess.run(["git", "init", "-q"], cwd=根, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=根, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=根, check=True)
+    假入口 = 根 / "假入口.py"
+    假入口.write_text(f"import sys\n\nsys.exit({入口回傳})\n", encoding="utf-8")
+    (根 / "檔.txt").write_text("x\n", encoding="utf-8")
+    安裝鉤子(根, 假入口)
+    subprocess.run(["git", "add", "-A"], cwd=根, check=True)
+    return 根
+
+
+def test_入口跑完每一道閘且任一紅就非零(capsys: pytest.CaptureFixture[str]) -> None:
+    # 「跑到第一個紅就停」會讓後面的閘從此沒人跑過；而只回報不回非零等於沒有閘。
+    碼 = 跑((("先", ("true",)), ("壞", ("false",)), ("後", ("true",))))
+    印出 = capsys.readouterr().out
+    assert 碼 != 0
+    for 名 in ("先", "壞", "後"):
+        assert 名 in 印出
+
+
+def test_入口全綠回零(capsys: pytest.CaptureFixture[str]) -> None:
+    # 防恆真：一個永遠回非零的入口也能讓上一格通過。
+    assert 跑((("甲", ("true",)), ("乙", ("true",)))) == 0
+
+
+def test_宣告的閘不是空的() -> None:
+    名們 = {名 for 名, _ in 閘清單()}
+    assert {"format", "lint", "types", "placement", "plans", "tests"} <= 名們
+
+
+def test_CI_跑的是同一組閘() -> None:
+    文 = (專案根 / ".github" / "workflows" / "驗收.yml").read_text(encoding="utf-8")
+    for 名, argv in 載入規則().閘們:
+        assert " ".join(argv) in 文, 名
+
+
+def test_git_鉤子把非零_exit_傳出去(tmp_path: pathlib.Path) -> None:
+    # 鉤子裝了卻不把紅傳出去，等於裝了一個永遠說好的門禁。
+    倉 = 造臨時倉(tmp_path, 入口回傳=1)
+    結果 = subprocess.run(["git", "commit", "-m", "壞的"], cwd=倉, capture_output=True)
+    assert 結果.returncode != 0
+
+
+def test_閘全綠時鉤子不擋正常_commit(tmp_path: pathlib.Path) -> None:
+    # 防恆真：一個永遠擋下來的鉤子也能讓上一格通過。
+    倉 = 造臨時倉(tmp_path, 入口回傳=0)
+    結果 = subprocess.run(["git", "commit", "-m", "好的"], cwd=倉, capture_output=True)
+    assert 結果.returncode == 0, 結果.stderr.decode()
