@@ -265,7 +265,7 @@ def i9_訊息用中文(檔):
 
 
 BINDING_ID白名單 = frozenset({'execution-envelope.reference', 'execution-envelope.production'})
-未遷移基線 = 172  # 177 個 task 減掉已遷移的 01B 五個
+未遷移基線 = 148  # 177 減掉已遷移的 01B(5)＋19(11)＋20(13)
 ID樣式 = re.compile(r'^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$')
 
 
