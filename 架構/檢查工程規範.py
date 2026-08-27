@@ -265,8 +265,24 @@ SHELL_宣告 = (
     re.compile(r"^\s*(?:export|readonly|local|declare|typeset)\s+(?:-\w+\s+)*(?P<n>[^\s=]+)"),
     re.compile(r"^\s*for\s+(?P<n>\S+)\s+in\b"),
     re.compile(r"^\s*(?:function\s+)?(?P<n>[^\s()]+)\s*\(\s*\)"),
+    re.compile(r"^\s*function\s+(?P<n>[^\s({]+)"),
+    re.compile(r"^\s*alias\s+(?P<n>[^\s=]+)="),
+    re.compile(r"^\s*(?:read|select|getopts)\s+(?:-\w+\s+|\"[^\"]*\"\s+)*(?P<n>[^\s=]+)"),
+    re.compile(r"^\s*printf\s+-v\s+(?P<n>[^\s=]+)"),
+    re.compile(r"^\s*let\s+(?P<n>[^\s=]+)="),
 )
 動態記號 = ("$", "`", '"', "'", "{")
+
+
+def 判_shell_名(名: str) -> str:
+    """一個不合格的 shell name 是三種毛病之一，回哪一種要分清楚。
+
+    全 ASCII 但以數字開頭（`1abc`）既不是非 ASCII 也不是算出來的，回
+    NON_ASCII_SHELL_NAME 會是假話——bash 拒絕它的理由是 name 規則不是字元集。
+    """
+    if any(記 in 名 for 記 in 動態記號):
+        return "DYNAMIC_SHELL_NAME_UNVERIFIABLE"
+    return "INVALID_SHELL_NAME" if 名.isascii() else "NON_ASCII_SHELL_NAME"
 
 
 def 檢查_shell_名(路徑: str, 原始碼: str) -> 檢查結果:
@@ -289,12 +305,7 @@ def 檢查_shell_名(路徑: str, 原始碼: str) -> 檢查結果:
             名 = 配對.group("n")
             if ASCII_NAME.match(名):
                 break
-            碼 = (
-                "DYNAMIC_SHELL_NAME_UNVERIFIABLE"
-                if any(記 in 名 for 記 in 動態記號)
-                else "NON_ASCII_SHELL_NAME"
-            )
-            return 檢查結果(碼, 路徑, 名)
+            return 檢查結果(判_shell_名(名), 路徑, 名)
     return 檢查結果(通過, 路徑)
 
 

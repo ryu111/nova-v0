@@ -89,6 +89,12 @@
         "right": {"const": "NON_ASCII_SHELL_NAME"}
       },
       {
+        "predicate_id": "shell_names_are_valid_bash_names",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "code"},
+        "right": {"const": "INVALID_SHELL_NAME"}
+      },
+      {
         "predicate_id": "json_field_names_are_ascii",
         "operator": "NOT_EQUALS",
         "left": {"observation": "code"},

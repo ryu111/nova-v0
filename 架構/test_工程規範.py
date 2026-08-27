@@ -2,9 +2,20 @@
 
 import json
 import pathlib
+import tomllib
 from dataclasses import replace
 
-from 架構.檢查工程規範 import check_fixture, 掃描倉庫, 檢查檔案, 載入規則
+import pytest
+
+from 架構.檢查工程規範 import (
+    check_fixture,
+    命名規則檔,
+    宣稱落點樣式,
+    掃描倉庫,
+    檢查檔案,
+    讀正規化式,
+    載入規則,
+)
 
 碼對照判準 = {
     "AMBIGUOUS_PLACEMENT": "placement_owner_is_unique",
@@ -20,6 +31,7 @@ from 架構.檢查工程規範 import check_fixture, 掃描倉庫, 檢查檔案,
     "SCRIPT_NOT_IN_TWO_TRACKS": "identifiers_stay_in_two_tracks",
     "IDENTIFIER_NOT_NFC": "python_identifiers_are_nfc",
     "NON_ASCII_SHELL_NAME": "shell_names_are_ascii",
+    "INVALID_SHELL_NAME": "shell_names_are_valid_bash_names",
     "NON_ASCII_JSON_FIELD": "json_field_names_are_ascii",
     "NON_ASCII_SQL_NAME": "sql_identifiers_are_ascii",
     "DYNAMIC_SHELL_NAME_UNVERIFIABLE": "dynamic_shell_name_rejected",
@@ -143,3 +155,124 @@ def test_claim_檔的固定負控與實際行為一致() -> None:
 
 def test_claim_檔的正控是整棵倉庫都綠() -> None:
     assert 掃描倉庫() == []
+
+
+def test_段規則管到最後一段() -> None:
+    # 只驗第一段的實作會讓 `x_claim狀態` 整個溜過去——閘只擋得住單段名字。
+    結果 = 檢查檔案("nova/核心/x.py", "x_claim狀態 = 1\n", 載入規則(), 查計畫目錄=False)
+    assert 結果.code == "MIXED_SCRIPT_IDENTIFIER"
+
+
+def test_識別字帶數字不被誤殺() -> None:
+    # 數字是 NEUTRAL：不扣掉它，`值1` 會被當成兩個 script 而誤殺。
+    結果 = 檢查檔案("nova/核心/x.py", "值1 = 1\n", 載入規則(), 查計畫目錄=False)
+    assert 結果.code == "OK"
+
+
+def test_相容漢字也算_Han() -> None:
+    # U+FA0E 是少數 NFC／NFKC 都穩定的 CJK COMPATIBILITY IDEOGRAPH，
+    # 只認 "CJK UNIFIED" 前綴會把它踢出兩軌，純漢字識別字被誤殺。
+    結果 = 檢查檔案("nova/核心/x.py", "\u5de5\ufa0e = 1\n", 載入規則(), 查計畫目錄=False)
+    assert 結果.code == "OK"
+
+
+def test_兩種毛病並存時回哪個_code_要釘住() -> None:
+    # 混軌與「兩軌之外」可以同時成立。誰先回若沒被釘住，
+    # 將來 must_fail_exactly 會無聲對錯。約定：兩軌之外優先。
+    結果 = 檢查檔案("nova/核心/x.py", "x\u043f\u0440\u0438 = 1\n", 載入規則(), 查計畫目錄=False)
+    assert 結果.code == "SCRIPT_NOT_IN_TWO_TRACKS"
+
+
+def test_每種_shell_宣告形式都掃得到() -> None:
+    規則 = 載入規則()
+    形式 = (
+        "本次路徑=/tmp/x\n",
+        "export 本次路徑=/tmp/x\n",
+        "readonly 本次路徑=/tmp/x\n",
+        "local 本次路徑=/tmp/x\n",
+        "declare -r 本次路徑=/tmp/x\n",
+        "for 本次路徑 in a b; do :; done\n",
+        "本次路徑() { :; }\n",
+        "function 本次路徑 { :; }\n",
+        'alias 本次路徑="echo ok"\n',
+        "read 本次路徑\n",
+        "select 本次路徑 in a b; do :; done\n",
+        'getopts "x" 本次路徑\n',
+        'printf -v 本次路徑 "%s" t\n',
+        "let 本次路徑=1+1\n",
+        "typeset 本次路徑=/tmp/x\n",
+    )
+    for 原始碼 in 形式:
+        assert (
+            檢查檔案("工具/x.sh", 原始碼, 規則, 查計畫目錄=False).code == "NON_ASCII_SHELL_NAME"
+        ), 原始碼
+    # 註解不剝乾淨的話，`#本次路徑=x` 會被當成一條賦值——誤殺。
+    註解 = "#本次路徑=/tmp/x\n# 本次路徑=/tmp/x 只是說明\ntarget_dir=/tmp/x\n"
+    assert 檢查檔案("工具/x.sh", 註解, 規則, 查計畫目錄=False).code == "OK"
+    # 全 ASCII 但 bash 不接受的 name，回「非 ASCII」會是假話。
+    數字開頭 = 檢查檔案("工具/x.sh", "1abc=/tmp/x\n", 規則, 查計畫目錄=False)
+    assert 數字開頭.code == "INVALID_SHELL_NAME"
+
+
+def test_五種算出來的名字都不當成沒有名字() -> None:
+    規則 = 載入規則()
+    for 原始碼 in (
+        'declare "$前綴_值=1"\n',
+        'eval "$n=1"\n',
+        "export `printf x`=1\n",
+        "readonly '$q'=1\n",
+        "declare ${前綴}_值=1\n",
+        "declare $x=1\n",
+    ):
+        碼 = 檢查檔案("工具/x.sh", 原始碼, 規則, 查計畫目錄=False).code
+        assert 碼 == "DYNAMIC_SHELL_NAME_UNVERIFIABLE", 原始碼
+
+
+def test_巢狀與陣列裡的_json_欄位也要查() -> None:
+    規則 = 載入規則()
+    for 原始碼 in ('{"a": {"欄位": 1}}', '{"a": [{"欄位": 1}]}'):
+        assert 檢查檔案("規格/x.claim.json", 原始碼, 規則, 查計畫目錄=False).code == (
+            "NON_ASCII_JSON_FIELD"
+        ), 原始碼
+
+
+def test_壞掉的_json_不當成通過() -> None:
+    結果 = 檢查檔案("規格/x.claim.json", "{不是 json", 載入規則(), 查計畫目錄=False)
+    assert 結果.code == "MALFORMED_JSON"
+
+
+def test_sql_跨行註解與字串裡的中文不算識別字() -> None:
+    規則 = 載入規則()
+    綠 = "/* 建表\n   工作 */\nCREATE TABLE work (note TEXT DEFAULT '中文');\n"
+    assert 檢查檔案("nova/狀態/x.sql", 綠, 規則, 查計畫目錄=False).code == "OK"
+    紅 = "/* 說明 */\nCREATE TABLE 工作 (id TEXT);\n"
+    assert 檢查檔案("nova/狀態/x.sql", 紅, 規則, 查計畫目錄=False).code == "NON_ASCII_SQL_NAME"
+
+
+def test_沒宣告落點的_fixture_不算負控() -> None:
+    # fixture 少了「宣稱落點:」就沒有被檢查的位置，必須明講而不是靜靜通過。
+    assert check_fixture("錯誤工具設定.toml").code == "FIXTURE_MISSING_CLAIMED_PATH"
+
+
+def test_未知的正規化式直接炸() -> None:
+    with pytest.raises(ValueError, match="未知的正規化式"):
+        讀正規化式(["NFC", "NFX"])
+
+
+def test_claim_的_faulty_subject_必須指向自己宣告的落點() -> None:
+    # claim.json 的 claimed_path 與 fixture 檔內的「宣稱落點:」是兩份拷貝；
+    # 沒有人比對，兩邊可以無聲漂移，負控就不再驗證規格宣告的那個位置。
+    for claim_路徑 in 宣告過的_claim:
+        宣告 = json.loads(pathlib.Path(claim_路徑).read_text(encoding="utf-8"))
+        for 負控 in 宣告["controls"]["negative"]:
+            原始碼 = pathlib.Path(負控["faulty_subject"]).read_text(encoding="utf-8")
+            配對 = 宣稱落點樣式.search(原始碼)
+            assert 配對 is not None, 負控["faulty_subject"]
+            assert 配對.group(1) == 負控["claimed_path"], 負控["control_id"]
+
+
+def test_命名規則宣告的每個_failure_code_都有人執行() -> None:
+    # [failure_code] 那張表若沒人讀，它就只是第二份拷貝——宣告了卻沒人執行。
+    with 命名規則檔.open("rb") as 檔:
+        宣告的 = set(tomllib.load(檔)["failure_code"].values())
+    assert 宣告的 <= set(碼對照判準), 宣告的 - set(碼對照判準)

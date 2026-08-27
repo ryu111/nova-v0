@@ -19,6 +19,10 @@
 # 那會逼實作者放寬檢查，恰好毀掉這道閘。
 # 【實測 2026-08-27】檔名不受單一 script 規則約束：計畫自己宣告的
 # `混script識別字.py`、`中文shell變數.sh` 就是黏寫檔名。這條只管識別字。
+# 【實測 2026-08-27】NFKC 蘊含 NFC：掃過全部 0x110000 個碼點，
+# 「NFKC 穩定但 NFC 不穩定」的字元數是 **0**。所以 "NFC" 這一項永遠不會單獨發作，
+# 沒有任何輸入能讓它轉紅——它是照 sol-新局-第三輪 §3.6 的字面保留的冗餘項，
+# 不是一道獨立的閘。要當真正的閘看的是 "NFKC"。
 [python_identifier]
 normalization = ["NFC", "NFKC"]
 segment_separator = "_"
@@ -48,6 +52,13 @@ contexts = [
 # 只有以下形式的 name 可被靜態查核。非 literal 的 name（`declare "$x=1"`、
 # `export ${前綴}_值`、`eval "$n=1"`）一律回 DYNAMIC_SHELL_NAME_UNVERIFIABLE——
 # 掃不到不等於沒有，這與動態 import 是同一種坑。
+# 【實測 2026-08-27 bash 3.2.57】只有兩種宣告形式會讓 bash **接受**非 ASCII 名字：
+#   `甲() { :; }`／`function 甲 { :; }` → rc=0，函式真的建立且可呼叫。
+#   `alias 別名="echo ok"` → alias 真的建立（`alias` 印得出來），
+#     但非互動 shell 呼叫它得到 `command not found`。
+# 其餘全部被 bash 自己擋掉（"not a valid identifier"），**除了裸賦值**——
+# `本次路徑=/tmp/x` 被當成命令名，stderr 有錯而 script exit 0，那是唯一會靜默放行的。
+# `mapfile`／`readarray`／`coproc` 在 bash 3.2 不存在（4.0+ 才有），所以不列。
 [shell_name]
 static_forms = [
   "assignment",
@@ -55,8 +66,16 @@ static_forms = [
   "readonly",
   "local",
   "declare",
+  "typeset",
   "for",
   "function_definition",
+  "function_keyword",
+  "alias",
+  "read",
+  "select",
+  "getopts",
+  "printf_v",
+  "let",
 ]
 
 # ── shell 的實測行為（決定 scanner 不能靠 bash 自己報錯）──
@@ -74,6 +93,7 @@ identifier_not_normalized = "IDENTIFIER_NOT_NFC"
 mixed_script_within_segment = "MIXED_SCRIPT_IDENTIFIER"
 script_outside_two_tracks = "SCRIPT_NOT_IN_TWO_TRACKS"
 non_ascii_shell_name = "NON_ASCII_SHELL_NAME"
+invalid_shell_name = "INVALID_SHELL_NAME"
 non_ascii_json_field = "NON_ASCII_JSON_FIELD"
 non_ascii_sql_name = "NON_ASCII_SQL_NAME"
 dynamic_shell_name = "DYNAMIC_SHELL_NAME_UNVERIFIABLE"
