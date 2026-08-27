@@ -52,7 +52,11 @@
          把某個 id 的落點路徑與另一個 id 的對調（**這條 I10 抓不到，I11 才抓得到**）。
   I10 → ①刪掉某已遷移 task 的落點行而不動 baseline；②把某 id 的路徑改一個字指到沒人 Create 的檔；
         ③把兩個 id 指到同一條路徑；④落點行少寫一個 id；⑤把某 id 指到更晚的 task 才 Create 的檔。
-  I6 → 把兩個 task 併成一個（commit 步會變成兩個）。
+  I6 → 把兩個 task 併成一個（commit 步會變成兩個）；把任一 task 標題序號改成
+       與位置不符（撞號或跳號）。
+       **回歸負控要長期存在**：真實撞號（08 曾同時出現兩個「Task 9」）的最小壞檔應固定在
+       執法器自己的 fixture 裡，不能只靠某次跑在暫存目錄的複本——否則這項檢查
+       套用後就只剩程式碼、沒有長期牙齒。
        註：ClaimSpec 上限 2 抓不到 1+1 合併（併完剛好是 2，仍在上限內），
        所以偵測合併靠的是 commit 步那條——每個 task 都恰好一次 commit。
 
@@ -192,6 +196,12 @@ def i6_任務口徑(檔, 上限條=2, 上限檔=10):
         s = open(f, encoding='utf-8').read()
         for i, b in enumerate(re.split(r'^### Task ', s, flags=re.M)[1:], 1):
             名 = f'{編號(f)}-Task{i}'
+            # 標題序號必須等於出現位置：R11 實測 08 出現兩個「Task 9」（R8 套用改號後，
+            # R9 的 diff 仍寫舊號、逐字套用），本檢查之前完全不看標題數字，撞號不紅。
+            標題號 = re.match(r'(\d+)\s*:', b)
+            if not 標題號 or int(標題號.group(1)) != i:
+                失敗.append(f'I6 task 標題序號與位置不符：{名} 的標題寫 Task '
+                            f'{標題號.group(1) if 標題號 else "?"}（撞號或跳號）')
             區 = re.findall(r'\*\*ClaimSpec:\*\*(.+?)(?:\n\n|\*\*固定負控)', b, re.S)
             條 = set()
             for x in 區:
