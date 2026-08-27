@@ -50,6 +50,26 @@ from pathlib import Path
 }
 
 卡樣式 = r'<details class="plan">.*?</details>'
+
+
+def 換一次(樣式: str, 新: str, 文: str, 誰: str) -> str:
+    """替換且**斷言恰好命中一次**。
+
+    **這支存在的理由是我修錯過一次。** sol 指出 `pmeta` 會 0 命中而假綠，
+    我只把 `pmeta` 那一處改成 `subn`——**頁首、統計卡、Phase 列、計畫列全都還是
+    不驗命中數的 `re.sub`**。sol 再把頁首的「任務」改成 `tasks` 實測：
+    注入器修不回來、`--檢查` 照樣 exit 0。**假綠只是從一個欄位搬到另一個欄位。**
+
+    > **修被回報的那個實例，不等於修那個形狀。**
+
+    所以本檔**所有自稱擁有的錨**一律走這支，沒有例外。
+    """
+    出, n = re.subn(樣式, 新, 文, count=1)
+    if n != 1:
+        raise SystemExit(f"{誰}：錨命中 {n} 次（應為 1）——板面結構或格式不符，拒絕注入")
+    return 出
+
+
 片樣式 = r'<span class="pmeta"><b>\d+</b> task · <b>\d+</b> step · <b>\d+</b> 負控</span>'
 
 
@@ -76,16 +96,17 @@ def 取資料() -> dict:
 
 def 換頁首(文: str, 統: dict) -> str:
     """頁首那一行。"""
-    return re.sub(
+    return 換一次(
         r'(<span class="sub">)\d+ 子系統 · \d+ 任務 · 已交付 \d+／\d+ · 生成自 ([^@]*)@ \w+',
         rf"\g<1>{統['計畫']} 子系統 · {統['task']} 任務 · "
         rf"已交付 {統['交付']}／{統['task']} · 生成自 \g<2>@ {來源摘要()}",
         文,
+        "頁首",
     )
 
 
 def 換統計卡(文: str, 統: dict) -> str:
-    """統計卡九格：以中文標籤當錨，不做全域數字取代。"""
+    """統計卡**八格**：以中文標籤當錨，每格斷言恰命中一次。"""
     for 值, 標 in [
         (統["計畫"], "子系統計畫"),
         (統["task"], "任務"),
@@ -96,7 +117,12 @@ def 換統計卡(文: str, 統: dict) -> str:
         (統["claim"], "實存 claim 檔"),
         (統["未遷移"], "落點未遷移"),
     ]:
-        文 = re.sub(rf"<b>\d+</b><span>{re.escape(標)}</span>", f"<b>{值}</b><span>{標}</span>", 文)
+        文 = 換一次(
+            rf"<b>\d+</b><span>{re.escape(標)}</span>",
+            f"<b>{值}</b><span>{標}</span>",
+            文,
+            f"統計卡「{標}」",
+        )
     return 文
 
 
@@ -108,13 +134,18 @@ def 換階段列(列: str, 表: dict) -> str:
     成員 = 階段成員[名.group(1)]
     t = sum(len(表[i]["tasks"]) for i in 成員)
     b = sum(表[i]["步"] for i in 成員)
-    列 = re.sub(
+    列 = 換一次(
         r'<td class="num">\d+</td><td class="num">\d+</td>',
         f'<td class="num">{t}</td><td class="num">{b}</td>',
         列,
-        count=1,
+        f"{名.group(1)} 小計",
     )
-    return re.sub(r"(進行中 \d+／)\d+", rf"\g<1>{t}", 列)
+    # **只有進行中的 phase 有 chip 分母**——B／C／D 是「未開始」。
+    # 第一版對所有 phase 列無條件斷言 chip 命中一次，嚴格化之後立刻紅在 Phase B
+    # ——**那正是斷言該做的事**：它證明我對板面結構的假設是錯的。
+    if "進行中" not in 列:
+        return 列
+    return 換一次(r"(進行中 \d+／)\d+", rf"\g<1>{t}", 列, f"{名.group(1)} chip")
 
 
 def 換計畫列(列: str, 表: dict) -> str:
@@ -123,13 +154,15 @@ def 換計畫列(列: str, 表: dict) -> str:
     if not pid or pid.group(1) not in 表:
         return 列
     p = 表[pid.group(1)]
-    列 = re.sub(
+    列 = 換一次(
         r'<td class="num">\d+</td><td class="num">\d+</td>',
         f'<td class="num">{len(p["tasks"])}</td><td class="num">{p["步"]}</td>',
         列,
-        count=1,
+        f"計畫 {pid.group(1)} 列",
     )
-    return re.sub(r"(進行中 \d+／)\d+", rf"\g<1>{len(p['tasks'])}", 列)
+    if "進行中" not in 列:
+        return 列
+    return 換一次(r"(進行中 \d+／)\d+", rf"\g<1>{len(p['tasks'])}", 列, f"計畫 {pid.group(1)} chip")
 
 
 def 換卡(卡: str, 表: dict, 見過: set[str]) -> str:
@@ -145,16 +178,14 @@ def 換卡(卡: str, 表: dict, 見過: set[str]) -> str:
     if pid not in 表:
         raise SystemExit(f"卡上的計畫 {pid} 不在資料裡——結構不符，拒絕注入")
     p = 表[pid]
-    新卡, n = re.subn(
+    # **錨在、內容格式壞掉也要紅**——只驗「`pmeta` 出現一次」不夠。
+    return 換一次(
         片樣式,
         f'<span class="pmeta"><b>{len(p["tasks"])}</b> task · '
         f"<b>{p['步']}</b> step · <b>{p['neg']}</b> 負控</span>",
         卡,
-        count=1,
+        f"計畫 {pid} 的 pmeta",
     )
-    if n != 1:
-        raise SystemExit(f"計畫 {pid} 的 pmeta 錨在、但內容格式不符，替換 0 命中——拒絕注入")
-    return 新卡
 
 
 def 注入(文: str, 料: dict) -> str:
