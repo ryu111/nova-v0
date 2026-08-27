@@ -1,13 +1,19 @@
 # fable 的常駐簡報
 
-**為什麼需要這份檔**：fable 是 in-process subagent，**它的 agentId 只在建立它的那個 session 有效**。
-sol 不一樣——sol 是 codex CLI session，有持久 id 可以 `codex exec resume`，跨 session 接得回去。
-fable 接不回去，所以它的脈絡必須住在版控裡，否則每開一個新 session 就要重講一次。
+**2026-08-27 更新：fable 現在有持久 session。** 控制端開了一個叫 `fable` 的 Claude session，
+用 `ListAgents` 看得到、用 `SendMessage({to: "fable", ...})` 直接對話，**跨 session 活著**。
+這是首選路徑。
 
-**這份檔就是那個脈絡。** 新 session 要讓 fable 回到同一個起點，把下面「啟動指令」整段
-當 prompt 交給它即可——不要憑記憶重寫，重寫出來的簡報跟上一版不同，等於換了一個提案者。
+原本的問題是：fable 若是 in-process subagent，agentId 只在建立它的那個 session 有效，
+每開新視窗就要重講一次脈絡。sol 沒這問題（codex session 有持久 id）。持久 session 解掉了它。
 
-## 怎麼重新啟動
+**這份檔仍然必要**，理由有二：①持久 session 也可能被關掉或換掉，那時要能重建同一個提案者；
+②它是 fable 每輪都該重讀的常駐脈絡，不是一次性的開場白。
+
+**不要憑記憶重寫這份簡報。** 重寫出來的跟上一版不同，等於換了一個提案者——
+這正是本輪研究學到的：prompt 不綁 bytes 就不是身分。
+
+## 怎麼重新啟動（持久 session 不在時的備援）
 
 用 Agent 工具，`model: fable`、`subagent_type: general-purpose`、`run_in_background: true`，
 prompt 用下面這段（`<<本輪任務>>` 換成當輪要它做的事）：
