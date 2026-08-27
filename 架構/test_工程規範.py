@@ -9,6 +9,7 @@ from dataclasses import replace
 
 import pytest
 
+from 工具.裝_git_鉤子 import 乾淨環境
 from 工具.裝_git_鉤子 import 安裝 as 安裝鉤子
 from 工具.跑指定突變 import 跑批次
 from 工具.驗全部 import 跑, 閘清單
@@ -287,14 +288,14 @@ def test_命名規則宣告的每個_failure_code_都有人執行() -> None:
 
 def 造臨時倉(根: pathlib.Path, 入口回傳: int) -> pathlib.Path:
     """造一個最小 git repo，裡面放一個回傳指定 exit code 的假入口。"""
-    subprocess.run(["git", "init", "-q"], cwd=根, check=True)
-    subprocess.run(["git", "config", "user.email", "t@t"], cwd=根, check=True)
-    subprocess.run(["git", "config", "user.name", "t"], cwd=根, check=True)
+    subprocess.run(["git", "init", "-q"], cwd=根, check=True, env=乾淨環境())
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=根, check=True, env=乾淨環境())
+    subprocess.run(["git", "config", "user.name", "t"], cwd=根, check=True, env=乾淨環境())
     假入口 = 根 / "假入口.py"
     假入口.write_text(f"import sys\n\nsys.exit({入口回傳})\n", encoding="utf-8")
     (根 / "檔.txt").write_text("x\n", encoding="utf-8")
     安裝鉤子(根, 假入口)
-    subprocess.run(["git", "add", "-A"], cwd=根, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=根, check=True, env=乾淨環境())
     return 根
 
 
@@ -329,15 +330,57 @@ def test_CI_跑的是同一組閘() -> None:
 def test_git_鉤子把非零_exit_傳出去(tmp_path: pathlib.Path) -> None:
     # 鉤子裝了卻不把紅傳出去，等於裝了一個永遠說好的門禁。
     倉 = 造臨時倉(tmp_path, 入口回傳=1)
-    結果 = subprocess.run(["git", "commit", "-m", "壞的"], cwd=倉, capture_output=True)
+    結果 = subprocess.run(
+        ["git", "commit", "-m", "壞的"], cwd=倉, capture_output=True, env=乾淨環境()
+    )
     assert 結果.returncode != 0
 
 
 def test_閘全綠時鉤子不擋正常_commit(tmp_path: pathlib.Path) -> None:
     # 防恆真：一個永遠擋下來的鉤子也能讓上一格通過。
     倉 = 造臨時倉(tmp_path, 入口回傳=0)
-    結果 = subprocess.run(["git", "commit", "-m", "好的"], cwd=倉, capture_output=True)
+    結果 = subprocess.run(
+        ["git", "commit", "-m", "好的"], cwd=倉, capture_output=True, env=乾淨環境()
+    )
     assert 結果.returncode == 0, 結果.stderr.decode()
+
+
+def test_臨時倉不得被繼承的_GIT_環境變數帶去污染真倉(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """負控：git 鉤子會設 `GIT_DIR`／`GIT_INDEX_FILE`，那時 cwd 完全不算數。
+
+    **這一格是實測踩出來的，不是想像。** 2026-08-28 agy 在 worktree 裡跑 `git commit`，
+    pre-commit 鉤子啟動、跑七道閘、跑到本檔的鉤子測試——`造臨時倉` 的 `git init`／
+    `git config`／`git add -A` 與測試的 `git commit` 全部繼承了鉤子環境裡的 `GIT_DIR`，
+    於是打到真 repo：`user.email=t@t` 寫進 `.git/config`、pre-commit 被換成指向
+    pytest 暫存目錄的假入口、`實作/01-T11` 上多了一個訊息「好的」、內容是刪光整個
+    repo 只留兩個檔的 commit。**驗鉤子的測試，透過鉤子跑的時候把 repo 弄壞了。**
+
+    誘餌倉扮演「真 repo」。`造臨時倉` 若不隔離環境，誘餌會拿到 commit、
+    `user.email`、以及被覆寫的 hook。
+    """
+    誘餌 = tmp_path / "誘餌"
+    工作 = tmp_path / "工作"
+    誘餌.mkdir()
+    工作.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=誘餌, check=True, env=乾淨環境())
+
+    monkeypatch.setenv("GIT_DIR", str(誘餌 / ".git"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(誘餌 / ".git" / "index"))
+
+    造臨時倉(工作, 入口回傳=0)
+
+    誘餌設定 = (誘餌 / ".git" / "config").read_text(encoding="utf-8")
+    assert "t@t" not in 誘餌設定, "誘餌倉的 config 被污染了"
+    assert not (誘餌 / ".git" / "hooks" / "pre-commit").exists(), "誘餌倉的 hook 被覆寫了"
+    誘餌_HEAD = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"],
+        cwd=誘餌,
+        capture_output=True,
+        env=乾淨環境(),
+    )
+    assert 誘餌_HEAD.returncode != 0, "誘餌倉被寫進了 commit"
 
 
 def 造批次(
