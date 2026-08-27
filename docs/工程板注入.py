@@ -5,7 +5,7 @@
 （頁首寫 188 任務、計畫 01 寫 18 task、閘列成 Task 13、缺新 Task 12），
 而七道閘全綠，沒有任何機制會說。
 
-**這支只換算得出來的數字**：頁首、統計卡九格、Phase 小計與 chip 分母、
+**這支只換算得出來的數字**：頁首、統計卡八格、Phase 小計與 chip 分母、
 各計畫列、22 張詳細卡的 `pmeta`。
 
 **它明講不碰的**：各 task 的精選敘述與負控文字是**策展**不是全集——
@@ -64,10 +64,31 @@ def 換一次(樣式: str, 新: str, 文: str, 誰: str) -> str:
 
     所以本檔**所有自稱擁有的錨**一律走這支，沒有例外。
     """
-    出, n = re.subn(樣式, 新, 文, count=1)
-    if n != 1:
-        raise SystemExit(f"{誰}：錨命中 {n} 次（應為 1）——板面結構或格式不符，拒絕注入")
-    return 出
+    # **不能用 `count=1`。** 有 count=1 時 `n` 不可能大於 1，
+    # 於是「斷言恰一次」只抓得到 0、抓不到重複錨（sol 實測：重複頁首錨不被拒絕）。
+    # 先數全部命中，再決定。
+    命中 = len(re.findall(樣式, 文))
+    if 命中 != 1:
+        raise SystemExit(f"{誰}：錨命中 {命中} 次（應為 1）——板面結構或格式不符，拒絕注入")
+    return re.sub(樣式, 新, 文, count=1)
+
+
+def 驗集合(實: list[str], 期: set[str], 誰: str) -> None:
+    """**owned 結構的 ID 集合必須恰好相符**——無缺、無重複、無多出。
+
+    **這支是這輪的核心。** 前三輪我修的都是「內層錨對不對」，
+    而 sol 每次都指出同一件事：**沒有驗「該遍歷的結構有沒有被遍歷」**。
+    改個 selector 名字（`pid2` → `pid3`）、改個身分錨，
+    外層 `re.sub` 就靜默跳過那一列，注入器不動、`--檢查` 說一致。
+
+    > **修內層錨不等於封住「owned 結構未被遍歷」的形狀。**
+    """
+    見 = sorted(實)
+    重 = sorted({x for x in 見 if 見.count(x) > 1})
+    缺 = sorted(期 - set(見))
+    多 = sorted(set(見) - 期)
+    if 重 or 缺 or 多:
+        raise SystemExit(f"{誰} 的結構集合不符——重複 {重}、缺 {缺}、多出 {多}，拒絕注入")
 
 
 片樣式 = r'<span class="pmeta"><b>\d+</b> task · <b>\d+</b> step · <b>\d+</b> 負控</span>'
@@ -191,9 +212,22 @@ def 換卡(卡: str, 表: dict, 見過: set[str]) -> str:
 def 注入(文: str, 料: dict) -> str:
     """逐欄替換。每一條都以**結構為界**，不做全域數字取代。"""
     表 = {p["id"]: p for p in 料["計畫"]}
-    卡數 = len(re.findall(卡樣式, 文, flags=re.S))
-    if 卡數 != len(表):
-        raise SystemExit(f"工程板有 {卡數} 張計畫卡，資料有 {len(表)} 份——結構不符，拒絕注入")
+
+    # **先驗四組 owned 結構的集合，再動任何一個字。**
+    驗集合(re.findall(r'<td class="ph">(Phase [A-D])</td>', 文), set(階段成員), "Phase 列")
+    驗集合(re.findall(r'<td class="pid2">([0-9]{2}[A-Z]?)</td>', 文), set(表), "計畫列")
+    卡們 = re.findall(卡樣式, 文, flags=re.S)
+    驗集合(
+        [
+            re.findall(r'<span class="pid">([0-9]{2}[A-Z]?)</span>', c)[0]
+            for c in 卡們
+            if re.findall(r'<span class="pid">([0-9]{2}[A-Z]?)</span>', c)
+        ],
+        set(表),
+        "計畫卡",
+    )
+    if len(卡們) != len(表):
+        raise SystemExit(f"工程板有 {len(卡們)} 張計畫卡，資料有 {len(表)} 份——結構不符，拒絕注入")
 
     文 = 換頁首(文, 料["統"])
     文 = 換統計卡(文, 料["統"])
