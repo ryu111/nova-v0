@@ -374,6 +374,7 @@ def test_臨時倉不得被繼承的_GIT_環境變數帶去污染真倉(
     誘餌設定 = (誘餌 / ".git" / "config").read_text(encoding="utf-8")
     assert "t@t" not in 誘餌設定, "誘餌倉的 config 被污染了"
     assert not (誘餌 / ".git" / "hooks" / "pre-commit").exists(), "誘餌倉的 hook 被覆寫了"
+    assert "bare = false" in 誘餌設定, "誘餌倉被翻成 bare"
     誘餌_HEAD = subprocess.run(
         ["git", "rev-parse", "--verify", "HEAD"],
         cwd=誘餌,
