@@ -1,0 +1,30 @@
+{
+  "schema_version": "1",
+  "t13_state": "BLOCKED",
+  "typed_result_ready": false,
+  "string_set_compiler_ready": false,
+  "frozen_baseline": [
+    "claimspec.controls.direct-red-preserved",
+    "claimspec.mutation.named-control-only",
+    "claimspec.framework.no-verdict-rewrite",
+    "engineering.named-mutation.repeatable",
+    "naming.unicode-python-ascii-boundaries",
+    "engineering.gates.automatically-enforced",
+    "core.identity-and-digest.canonical",
+    "claimspec.language.closed-schema",
+    "claimspec.language.effect-delivery-conditional",
+    "claimspec.compiler.deterministic-typed-plan"
+  ],
+  "debt": [
+    "claimspec.controls.direct-red-preserved",
+    "claimspec.mutation.named-control-only",
+    "claimspec.framework.no-verdict-rewrite",
+    "engineering.named-mutation.repeatable",
+    "naming.unicode-python-ascii-boundaries",
+    "engineering.gates.automatically-enforced",
+    "core.identity-and-digest.canonical",
+    "claimspec.language.closed-schema",
+    "claimspec.language.effect-delivery-conditional",
+    "claimspec.compiler.deterministic-typed-plan"
+  ]
+}

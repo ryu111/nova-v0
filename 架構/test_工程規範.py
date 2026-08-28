@@ -321,7 +321,7 @@ def test_宣告的閘不是空的() -> None:
     assert {"format", "lint", "types", "placement", "plans", "tests"} <= 名們
 
 
-八道閘 = ("format", "lint", "types", "placement", "plans", "selftest", "board", "tests")
+九道閘 = ("format", "lint", "types", "placement", "plans", "r15-t13", "selftest", "board", "tests")
 
 
 def test_閘清單本身不得縮水() -> None:
@@ -338,7 +338,7 @@ def test_閘清單本身不得縮水() -> None:
     這是**已知缺口，不是已解決**。
     """
     名們 = [名 for 名, _ in 載入規則().閘們]
-    assert tuple(名們) == 八道閘, f"閘清單是 {名們}，應恰為 {list(八道閘)}"
+    assert tuple(名們) == 九道閘, f"閘清單是 {名們}，應恰為 {list(九道閘)}"
 
 
 def test_CI_跑的是同一組閘() -> None:
