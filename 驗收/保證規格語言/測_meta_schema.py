@@ -7,6 +7,7 @@
 """
 
 import copy
+import importlib.util
 import json
 import pathlib
 import re
@@ -306,7 +307,8 @@ def 測試_claim_id_不合語義識別規則會紅(最小_claim: dict[str, Any])
     "core.identity-and-digest.canonical",
     "engineering.gates.automatically-enforced",
     "engineering.named-mutation.repeatable",
-    "toolchain.python-3-14.day-one-probe",
+    # toolchain.python-3-14.day-one-probe 已於 2026-08-28 修好（claim revision 2
+    # 分面 observation 加上移除 catch-all），照棘輪方向從名單刪除。
 }
 產生者根 = ("nova", "工具", "架構", "驗收")
 最短碼長 = 3  # `OK` 這種兩字的不是失敗碼，不進檢查
@@ -377,3 +379,72 @@ def 測試_乾淨的保證不被誤殺_防恆真() -> None:
     髒 = _髒的保證()
     assert "engineering.placement.exactly-one-owner" not in 髒
     assert len(髒) < len(list((根 / "規格").rglob("*.claim.json")))
+
+
+# ── must_fail_exactly 必須恰為會紅組（2026-08-28，claim revision 2 的驗收） ──
+#
+# 這格是整個 R14-01 缺陷的機械化。revision 1 的兩個負控都宣告
+# `mutation_tests_are_copied`，而那格對兩個 faulty subject 都**不會紅**
+# ——沒有人算過「宣告組」與「實際會紅組」是不是同一組，因為
+# `工具/跑驗收.py` 回 `UNSUPPORTED_CLAIM_EXECUTION`（01 Task 12 未接線）。
+#
+# 這格不等執行鏈：直接拿探針的分面函式算出 faulty subject 的觀察，
+# 套 claim 自己的 judge，比對 `must_fail_exactly`。**算出來，不是推出來。**
+
+探針路徑 = pathlib.Path(__file__).resolve().parents[2] / "工具" / "驗工具鏈.py"
+分面版本 = 2  # claim revision 2 起改用分面 observation
+# 每個 faulty subject 實際會讓探針吐出的碼（出處為探針原始碼的 return 點）。
+壞態產出 = {
+    "nova/核心/工具鏈守衛.py::收窄[identity]": ["NAMED_MUTATION_SURVIVED:收窄"],
+    "pyproject.toml::[tool.mutmut].also_copy[removed]": ["MUTATION_TESTS_NOT_COPIED:also_copy"],
+}
+
+
+def _載入探針() -> object:
+    規 = importlib.util.spec_from_file_location("驗工具鏈", 探針路徑)
+    assert 規 and 規.loader
+    模 = importlib.util.module_from_spec(規)
+    規.loader.exec_module(模)
+    return 模
+
+
+def _會紅的(judge: dict[str, Any], 觀察: dict[str, Any]) -> set[str]:
+    """套 judge 的每個 predicate，回傳失敗的 predicate_id 集合。"""
+    紅 = set()
+    for 條 in judge["all_of"]:
+        左 = 觀察.get(str(條["left"]["observation"]))
+        右 = 條["right"]["const"]
+        通 = (左 == 右) if 條["operator"] == "EQUALS" else (左 != 右)
+        if not 通:
+            紅.add(str(條["predicate_id"]))
+    return 紅
+
+
+def 測試_工具鏈保證的負控宣告恰為會紅組() -> None:
+    """兩個負控的 `must_fail_exactly` 必須**精確等於**算出來的會紅組。
+
+    執行器不容忍多一格也不容忍少一格（`保證規格執行.py` 比的是集合相等），
+    所以 catch-all predicate 一存在，singleton 宣告就永遠不成立——
+    這是 sol 指出而我原本沒看到的一層。
+    """
+    模 = _載入探針()
+    根 = pathlib.Path(__file__).resolve().parents[2]
+    規格 = json.loads((根 / "規格/工程/保證/工具鏈首日探針.claim.json").read_text(encoding="utf-8"))
+    assert 規格["revision"] == 分面版本, "這格對的是分面 judge 的那一版"
+    for 格 in 規格["controls"]["negative"]:
+        碼們 = 壞態產出[格["faulty_subject"]]
+        紅 = _會紅的(規格["judge"], 模.分面(list(碼們)))
+        assert 紅 == set(格["must_fail_exactly"]), (
+            f"{格['control_id']}：宣告 {sorted(格['must_fail_exactly'])}，實際會紅 {sorted(紅)}"
+        )
+
+
+def 測試_未知碼不得靜默通過() -> None:
+    """分類表收不到的碼必須讓 `harness` 變 `HARNESS_ERROR`。
+
+    sol 逐字：未知 producer code 必須成為 `HARNESS_ERROR`／typed independent
+    result，**不能因為移除 catch-all 而靜默通過**。
+    """
+    模 = _載入探針()
+    assert 模.分面(["SOMETHING_NOBODY_MAPPED:x"])["harness"] == "HARNESS_ERROR"
+    assert 模.分面([])["harness"] == "OK"

@@ -2,38 +2,171 @@
   "$schema": "../../語言/ClaimSpec.schema.json",
   "claimspec_version": "0.2.0",
   "claim_id": "toolchain.python-3-14.day-one-probe",
-  "revision": 1,
-  "supersedes": null,
+  "revision": 2,
+  "supersedes": {
+    "claim_id": "toolchain.python-3-14.day-one-probe",
+    "revision": 1
+  },
   "statement": "首日工具鏈被釘死並且可被證明：CPython 3.14.7、pytest 9.1.1、pytest-xdist 3.8.0、mutmut 3.7.0、hypothesis 6.165.10；中文與英文雙軌 discovery 同時有效；突變測試必須把受測原始碼複製進 mutants 樹，否則回 typed MUTATION_TESTS_NOT_COPIED 而不是靜靜跑出一個好看的擊殺率。",
   "sources": [
-    {"source_id": "plan.01.task.1", "kind": "PLAN_TASK", "locator": "docs/計畫/01-可執行保證語言.md#task-1"},
-    {"source_id": "plan.01.task.12", "kind": "PLAN_TASK", "locator": "docs/計畫/01-可執行保證語言.md#task-12"}
+    {
+      "source_id": "plan.01.task.1",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-1"
+    },
+    {
+      "source_id": "plan.01.task.12",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-12"
+    }
   ],
-  "primitive_catalog": {"catalog_id": "toolchain-probe.v1", "digest": null},
-  "subject": {"contract": "toolchain-probe.v1", "operation": "probe", "binding_slot": "toolchain-probe.repository"},
-  "parameters": {"python": "3.14.7", "pytest": "9.1.1", "xdist": "3.8.0", "mutmut": "3.7.0", "hypothesis": "6.165.10"},
+  "primitive_catalog": {
+    "catalog_id": "toolchain-probe.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "toolchain-probe.v1",
+    "operation": "probe",
+    "binding_slot": "toolchain-probe.repository"
+  },
+  "parameters": {
+    "python": "3.14.7",
+    "pytest": "9.1.1",
+    "xdist": "3.8.0",
+    "mutmut": "3.7.0",
+    "hypothesis": "6.165.10"
+  },
   "setup": [],
-  "stimulus": [{"primitive": "toolchain.probe", "arguments": {"root": "$REPOSITORY_ROOT"}}],
-  "observations": [{"observation_id": "code", "source": "STIMULUS_RESULT", "path": "code", "type": "STRING"}],
+  "stimulus": [
+    {
+      "primitive": "toolchain.probe",
+      "arguments": {
+        "root": "$REPOSITORY_ROOT"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "toolchain",
+      "source": "STIMULUS_RESULT",
+      "path": "toolchain",
+      "type": "STRING"
+    },
+    {
+      "observation_id": "discovery",
+      "source": "STIMULUS_RESULT",
+      "path": "discovery",
+      "type": "STRING"
+    },
+    {
+      "observation_id": "mutation_copy",
+      "source": "STIMULUS_RESULT",
+      "path": "mutation_copy",
+      "type": "STRING"
+    },
+    {
+      "observation_id": "named_mutation",
+      "source": "STIMULUS_RESULT",
+      "path": "named_mutation",
+      "type": "STRING"
+    },
+    {
+      "observation_id": "harness",
+      "source": "STIMULUS_RESULT",
+      "path": "harness",
+      "type": "STRING"
+    }
+  ],
   "judge": {
     "all_of": [
-      {"predicate_id": "interpreter_and_tools_pinned", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "TOOLCHAIN_VERSION_DRIFT"}},
-      {"predicate_id": "chinese_and_ascii_discovery_both_live", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "DISCOVERY_TRACK_MISSING"}},
-      {"predicate_id": "mutation_tests_are_copied", "operator": "NOT_EQUALS", "left": {"observation": "code"}, "right": {"const": "MUTATION_TESTS_NOT_COPIED"}},
-      {"predicate_id": "verdict_is_ok", "operator": "EQUALS", "left": {"observation": "code"}, "right": {"const": "OK"}}
+      {
+        "predicate_id": "interpreter_and_tools_pinned",
+        "operator": "EQUALS",
+        "left": {
+          "observation": "toolchain"
+        },
+        "right": {
+          "const": "OK"
+        }
+      },
+      {
+        "predicate_id": "chinese_and_ascii_discovery_both_live",
+        "operator": "EQUALS",
+        "left": {
+          "observation": "discovery"
+        },
+        "right": {
+          "const": "OK"
+        }
+      },
+      {
+        "predicate_id": "mutation_tests_are_copied",
+        "operator": "EQUALS",
+        "left": {
+          "observation": "mutation_copy"
+        },
+        "right": {
+          "const": "OK"
+        }
+      },
+      {
+        "predicate_id": "named_mutation_is_killed",
+        "operator": "EQUALS",
+        "left": {
+          "observation": "named_mutation"
+        },
+        "right": {
+          "const": "OK"
+        }
+      }
     ]
   },
   "controls": {
-    "positive": [{"control_id": "repository-toolchain", "subject_binding": "TOOLCHAIN_PROBE_REPOSITORY", "expected_terminal": "ACCEPT"}],
+    "positive": [
+      {
+        "control_id": "repository-toolchain",
+        "subject_binding": "TOOLCHAIN_PROBE_REPOSITORY",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
     "negative": [
-      {"control_id": "guard-mutation-survives", "faulty_subject": "nova/核心/工具鏈守衛.py::收窄[identity]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["mutation_tests_are_copied"]},
-      {"control_id": "also-copy-removed", "faulty_subject": "pyproject.toml::[tool.mutmut].also_copy[removed]", "expected_terminal": "CLAIM_REJECTED", "must_fail_exactly": ["mutation_tests_are_copied"]}
+      {
+        "control_id": "guard-mutation-survives",
+        "faulty_subject": "nova/核心/工具鏈守衛.py::收窄[identity]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "named_mutation_is_killed"
+        ]
+      },
+      {
+        "control_id": "also-copy-removed",
+        "faulty_subject": "pyproject.toml::[tool.mutmut].also_copy[removed]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "mutation_tests_are_copied"
+        ]
+      }
     ]
   },
-  "run_limits": {"wall_ms": 300000, "max_output_bytes": 1048576},
+  "run_limits": {
+    "wall_ms": 300000,
+    "max_output_bytes": 1048576
+  },
   "isolation": "COOPERATIVE_PROCESS",
   "effect_delivery": null,
-  "evidence": {"retain": ["code", "detail"], "record_kind": "TOOLCHAIN_PROBE_VERDICT"},
-  "feedback": {"to_candidate": "NONE"},
+  "evidence": {
+    "retain": [
+      "toolchain",
+      "discovery",
+      "mutation_copy",
+      "named_mutation",
+      "harness",
+      "detail"
+    ],
+    "record_kind": "TOOLCHAIN_PROBE_VERDICT"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
   "cleanup": []
 }
