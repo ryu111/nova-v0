@@ -9,6 +9,7 @@
 import copy
 import json
 import pathlib
+import re
 from typing import Any
 
 import pytest
@@ -277,3 +278,97 @@ def 測試_claim_id_不合語義識別規則會紅(最小_claim: dict[str, Any])
     結果 = validate_claim(deep_merge(最小_claim, {"claim_id": "工作.完成"}))
     assert isinstance(結果, ClaimSpecStructuralError), 結果
     assert 結果.code == "INVALID_SEMANTIC_ID"
+
+
+# ── judge 常數必須有產生者（2026-08-28 新增） ──────────────────────────────
+#
+# 發作：`工具鏈首日探針.claim.json` 的四個 judge predicate 裡**三個是恆真格**。
+# `TOOLCHAIN_VERSION_DRIFT` 與 `DISCOVERY_TRACK_MISSING` **全 repo 只出現在
+# 那份 claim 自己裡，零產生者**；`mutation_tests_are_copied` 比對
+# `MUTATION_TESTS_NOT_COPIED`，而探針實吐 `MUTATION_TESTS_NOT_COPIED:also_copy`
+# ——差一個後綴，NOT_EQUALS 永遠成立。兩個負控宣告的那格都不可能紅。
+#
+# 這不是一份 claim 的問題：**十四份裡七份有孤兒常數**。它們今天不紅，因為
+# `工具/跑驗收.py` 回 `UNSUPPORTED_CLAIM_EXECUTION`（01 Task 12 未接線）
+# ——**`must_fail_exactly` 從來沒有被執行過**。等接線那天會一次全爆。
+#
+# 棘輪用**凍住的名單**不是數字（sol 2026-08-28 採納的量詞紀律：
+# 量詞只能證明基數，不能證明成員身分）。名單只准縮：修好一份就從名單刪一份，
+# **沒刪會紅**，所以不會有人修完債卻留著洞。
+
+判準常數債 = {
+    "claimspec.compiler.deterministic-typed-plan",
+    "claimspec.controls.direct-red-preserved",
+    "claimspec.framework.no-verdict-rewrite",
+    "claimspec.mutation.named-control-only",
+    "core.identity-and-digest.canonical",
+    "engineering.gates.automatically-enforced",
+    "engineering.named-mutation.repeatable",
+    "toolchain.python-3-14.day-one-probe",
+}
+產生者根 = ("nova", "工具", "架構", "驗收")
+最短碼長 = 3  # `OK` 這種兩字的不是失敗碼，不進檢查
+
+
+def _判準常數(規格: dict[str, Any]) -> set[str]:
+    """judge 裡被當成字面值比對的失敗碼。只收全大寫、長度 > 3 的。"""
+    出: set[str] = set()
+    for 條 in 規格.get("judge", {}).get("all_of", []):
+        for 邊 in (條.get("left", {}), 條.get("right", {})):
+            值 = 邊.get("const")
+            if isinstance(值, str) and 值.isupper() and len(值) > 最短碼長:
+                出.add(值)
+    return 出
+
+
+def _有產生者(碼: str, 根: pathlib.Path) -> bool:
+    """碼必須以**字面值**出現在某支 .py 裡（前面緊接引號），才算有產生者。
+
+    **為什麼要求引號**：第一版只查「字串有沒有出現過」，結果我在這個檔上面
+    寫的那段解釋缺陷的註解——裡面逐字列了 `TOOLCHAIN_VERSION_DRIFT` 與
+    `DISCOVERY_TRACK_MISSING`——**自己變成了產生者**，於是偵測器判定
+    工具鏈那份 claim 是乾淨的。**說明缺陷的文字把偵測器餵飽了。**
+
+    要求前面緊接 `"` 或 `'` 就把註解與 markdown 反引號排除掉，
+    而探針真正的 `return "CODE:..."`／`return f"CODE:..."` 兩種都收得到。
+
+    **仍是寬鬆方向**：字面值存在不等於真的可達。可達性要等 01 Task 12
+    接線後由執行器本身驗——那時 `must_fail_exactly` 才第一次被實際執行。
+    """
+    樣式 = re.compile(r"[\"']" + re.escape(碼))
+    return any(
+        樣式.search(檔.read_text(encoding="utf-8"))
+        for 目錄 in 產生者根
+        for 檔 in (根 / 目錄).rglob("*.py")
+    )
+
+
+def _髒的保證() -> set[str]:
+    """回傳「有孤兒常數」的 claim_id 集合。"""
+    根 = pathlib.Path(__file__).resolve().parents[2]
+    髒 = set()
+    for 檔 in sorted((根 / "規格").rglob("*.claim.json")):
+        規格 = json.loads(檔.read_text(encoding="utf-8"))
+        if any(not _有產生者(碼, 根) for 碼 in _判準常數(規格)):
+            髒.add(str(規格["claim_id"]))
+    return 髒
+
+
+def 測試_沒有新的孤兒常數() -> None:
+    """不在債名單裡的 claim，judge 常數必須都有產生者。"""
+    新髒 = _髒的保證() - 判準常數債
+    assert not 新髒, f"這些 claim 的 judge 常數零產生者，predicate 是恆真格：{sorted(新髒)}"
+
+
+def 測試_債名單只准縮() -> None:
+    """債修好了要從名單刪掉——留著會讓棘輪失去方向。"""
+    已修 = 判準常數債 - _髒的保證()
+    assert not 已修, f"這些 claim 已經不髒了，請從 判準常數債 刪掉：{sorted(已修)}"
+
+
+def 測試_乾淨的保證不被誤殺_防恆真() -> None:
+    """七份乾淨的 claim 必須不在髒集合裡——否則上面兩格都會恆真。"""
+    根 = pathlib.Path(__file__).resolve().parents[2]
+    髒 = _髒的保證()
+    assert "engineering.placement.exactly-one-owner" not in 髒
+    assert len(髒) < len(list((根 / "規格").rglob("*.claim.json")))
