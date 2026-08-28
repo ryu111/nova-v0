@@ -1,0 +1,157 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "workshop.work-order.closed-and-stale-rejecting",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "工單必須綁住來源 task 區段的位元組摘要與工作樹基準；消費時重讀重算並比對，任一不符 typed 拒。驗收由非 LLM 的獨立入口判定，後端自報不算數。",
+  "sources": [
+    {
+      "source_id": "plan.01.task.3",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-3-建立唯一落點依賴與規模閘"
+    },
+    {
+      "source_id": "plan.00.day-one-placement",
+      "kind": "PLAN_CONSTRAINT",
+      "locator": "docs/計畫/00-總覽.md#66-day-one工程規範與資料夾落點已裁定"
+    }
+  ],
+  "primitive_catalog": {
+    "catalog_id": "architecture-checker.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "work-order.v1",
+    "operation": "consume",
+    "binding_slot": "work-order.repository"
+  },
+  "parameters": {
+    "rules_path": "架構/目錄規則.toml",
+    "module_logical_lines": 400,
+    "class_logical_lines": 250,
+    "function_logical_lines": 60
+  },
+  "setup": [],
+  "stimulus": [
+    {
+      "primitive": "workshop.consume_work_order",
+      "arguments": {
+        "order": "$SUBJECT_ORDER",
+        "tree_base": "$SUBJECT_TREE_BASE"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "code",
+      "source": "STIMULUS_RESULT",
+      "path": "code",
+      "type": "STRING"
+    }
+  ],
+  "judge": {
+    "all_of": [
+      {
+        "predicate_id": "order_matches_source",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "WORK_ORDER_DIGEST_MISMATCH"
+        }
+      },
+      {
+        "predicate_id": "base_commit_is_current",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "STALE_BASE_COMMIT"
+        }
+      },
+      {
+        "predicate_id": "schema_revision_known",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "UNKNOWN_SCHEMA_REVISION"
+        }
+      },
+      {
+        "predicate_id": "acceptance_command_unambiguous",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "AMBIGUOUS_ACCEPTANCE_COMMAND"
+        }
+      }
+    ]
+  },
+  "controls": {
+    "positive": [
+      {
+        "control_id": "fresh-order",
+        "subject_binding": "WORK_ORDER_REPOSITORY",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
+    "negative": [
+      {
+        "control_id": "hand-edited-order",
+        "faulty_subject": "工單::標題[手改一字]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "order_matches_source"
+        ]
+      },
+      {
+        "control_id": "old-order-new-tree",
+        "faulty_subject": "工單::base_commit_sha[舊]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "base_commit_is_current"
+        ]
+      },
+      {
+        "control_id": "unknown-schema",
+        "faulty_subject": "工單::schema_revision[999]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "schema_revision_known"
+        ]
+      },
+      {
+        "control_id": "no-acceptance-command",
+        "faulty_subject": "驗工.跑[零條命令]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "acceptance_command_unambiguous"
+        ]
+      }
+    ]
+  },
+  "run_limits": {
+    "wall_ms": 60000,
+    "max_output_bytes": 1048576
+  },
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {
+    "retain": [
+      "code",
+      "detail"
+    ],
+    "record_kind": "WORK_ORDER_VERDICT"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
+  "cleanup": []
+}

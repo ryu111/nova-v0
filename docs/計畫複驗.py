@@ -64,13 +64,17 @@ I13 加進來時三處手寫的「十一項」全部沒更新，數字一離開�
 
 exit 0 全過；非零＝有不變式不成立，逐條明講。
 """
+
 import re, sys, glob, os, json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from 架構.檢查工程規範 import 字的_script, 載入規則  # noqa: E402
 
-根 = (sys.argv[1] if len(sys.argv) > 1
-     else os.path.join(os.path.dirname(os.path.abspath(__file__)), '計畫'))
+根 = (
+    sys.argv[1]
+    if len(sys.argv) > 1
+    else os.path.join(os.path.dirname(os.path.abspath(__file__)), "計畫")
+)
 失敗 = []
 
 
@@ -79,13 +83,16 @@ def 重置():
 
 
 def 計畫檔():
-    檔 = sorted(f for f in glob.glob(os.path.join(根, '*.md'))
-                if re.match(r'^\d\d[A-Z]?-', os.path.basename(f)))
-    return [f for f in 檔 if not os.path.basename(f).startswith('00-')]
+    檔 = sorted(
+        f
+        for f in glob.glob(os.path.join(根, "*.md"))
+        if re.match(r"^\d\d[A-Z]?-", os.path.basename(f))
+    )
+    return [f for f in 檔 if not os.path.basename(f).startswith("00-")]
 
 
 def 編號(路徑):
-    return re.match(r'^(\d\d[A-Z]?)-', os.path.basename(路徑)).group(1)
+    return re.match(r"^(\d\d[A-Z]?)-", os.path.basename(路徑)).group(1)
 
 
 def 閉包(邊):
@@ -99,7 +106,8 @@ def 閉包(邊):
             for w in c[n]:
                 新 |= c.get(w, set())
             if 新 != c[n]:
-                c[n] = 新; 變 = True
+                c[n] = 新
+                變 = True
     return c
 
 
@@ -108,22 +116,24 @@ def i1_i5_檔案所有權(檔, 邊=None):
     建, 改 = {}, {}
     for f in 檔:
         n = 編號(f)
-        for 動作, 路徑 in re.findall(r'^\s*-\s*(Create|Modify):\s*`([^`]+)`',
-                                     open(f, encoding='utf-8').read(), re.M):
-            (建 if 動作 == 'Create' else 改).setdefault(路徑, set()).add(n)
+        for 動作, 路徑 in re.findall(
+            r"^\s*-\s*(Create|Modify):\s*`([^`]+)`", open(f, encoding="utf-8").read(), re.M
+        ):
+            (建 if 動作 == "Create" else 改).setdefault(路徑, set()).add(n)
     for 路徑, ns in sorted(建.items()):
         if len(ns) > 1:
-            失敗.append(f'I1 雙重 Create：{路徑} ← {sorted(ns)}')
+            失敗.append(f"I1 雙重 Create：{路徑} ← {sorted(ns)}")
     for 路徑 in sorted(改):
         if 路徑 not in 建:
-            失敗.append(f'I1 懸空 Modify：{路徑} ← {sorted(改[路徑])}')
+            失敗.append(f"I1 懸空 Modify：{路徑} ← {sorted(改[路徑])}")
         elif 全 is not None:
             擁有 = next(iter(建[路徑]))
             for 改者 in sorted(改[路徑]):
                 if 改者 != 擁有 and 擁有 not in 全.get(改者, set()):
                     失敗.append(
-                        f'I5 未宣告的隱含依賴：{改者} 修改 {路徑}，'
-                        f'但該檔由 {擁有} 建立而 {改者} 的前置沒有 {擁有}')
+                        f"I5 未宣告的隱含依賴：{改者} 修改 {路徑}，"
+                        f"但該檔由 {擁有} 建立而 {改者} 的前置沒有 {擁有}"
+                    )
     return len(建)
 
 
@@ -134,17 +144,17 @@ def 前置(f):
     11–13」不匹配動詞清單而少報，計畫 14 散文裡「plan 11 提供…但本 adapter v1 不提供
     它」被誤當前置而多報。少報會讓 I3 空過，多報會誤判順序違反。散文給人讀，宣告給機器讀。
     """
-    s = open(f, encoding='utf-8').read()
-    m = re.search(r'^前置計畫：(.+)$', s, re.M)
+    s = open(f, encoding="utf-8").read()
+    m = re.search(r"^前置計畫：(.+)$", s, re.M)
     if not m:
-        失敗.append(f'I2 缺「前置計畫：」宣告：{os.path.basename(f)}')
+        失敗.append(f"I2 缺「前置計畫：」宣告：{os.path.basename(f)}")
         return set()
     值 = m.group(1).strip()
-    if 值 == '無':
+    if 值 == "無":
         return set()
-    項 = re.findall(r'\d\d[A-Z]?', 值)
-    if not 項 or ''.join(項) != re.sub(r'\s+', '', 值):
-        失敗.append(f'I2 「前置計畫：」格式不合：{os.path.basename(f)} → {值!r}')
+    項 = re.findall(r"\d\d[A-Z]?", 值)
+    if not 項 or "".join(項) != re.sub(r"\s+", "", 值):
+        失敗.append(f"I2 「前置計畫：」格式不合：{os.path.basename(f)} → {值!r}")
         return set()
     return set(項) - {編號(f)}
 
@@ -155,36 +165,53 @@ def i2_i3_依賴(檔):
     for n, ws in 邊.items():
         for w in ws:
             if w not in 有效:
-                失敗.append(f'I2 {n} 宣告的前置 {w} 不存在')
+                失敗.append(f"I2 {n} 宣告的前置 {w} 不存在")
     # Tarjan SCC：找環要跑 SCC，不是列已知的邊
-    idx, low, on, st, c, = {}, {}, {}, [], [0]
+    (
+        idx,
+        low,
+        on,
+        st,
+        c,
+    ) = {}, {}, {}, [], [0]
+
     def 走(v):
-        idx[v] = low[v] = c[0]; c[0] += 1; st.append(v); on[v] = True
+        idx[v] = low[v] = c[0]
+        c[0] += 1
+        st.append(v)
+        on[v] = True
         for w in 邊.get(v, []):
-            if w not in 有效: continue
+            if w not in 有效:
+                continue
             if w not in idx:
-                走(w); low[v] = min(low[v], low[w])
+                走(w)
+                low[v] = min(low[v], low[w])
             elif on.get(w):
                 low[v] = min(low[v], idx[w])
         if low[v] == idx[v]:
             comp = []
             while True:
-                w = st.pop(); on[w] = False; comp.append(w)
-                if w == v: break
+                w = st.pop()
+                on[w] = False
+                comp.append(w)
+                if w == v:
+                    break
             if len(comp) > 1:
-                失敗.append(f'I2 依賴環：{sorted(comp)}')
+                失敗.append(f"I2 依賴環：{sorted(comp)}")
+
     for v in 邊:
-        if v not in idx: 走(v)
+        if v not in idx:
+            走(v)
     for n, ws in 邊.items():
         for w in ws:
             if w in 有效 and 序位(w) >= 序位(n):
-                失敗.append(f'I3 順序違反：{n} 依賴編號較大的 {w}')
+                失敗.append(f"I3 順序違反：{n} 依賴編號較大的 {w}")
     return 邊
 
 
 def 序位(n):
     """01B 夾在 01 與 02 之間；字典序剛好正確，但寫明比依賴巧合安全。"""
-    return (int(n[:2]), n[2:] or '')
+    return (int(n[:2]), n[2:] or "")
 
 
 def i6_任務口徑(檔, 上限條=2, 上限檔=10):
@@ -195,29 +222,31 @@ def i6_任務口徑(檔, 上限條=2, 上限檔=10):
     因為基線本來就有 14 條別的違規）。現在數的是 task 內**所有** ClaimSpec 區塊。
     """
     for f in 檔:
-        s = open(f, encoding='utf-8').read()
-        for i, b in enumerate(re.split(r'^### Task ', s, flags=re.M)[1:], 1):
-            名 = f'{編號(f)}-Task{i}'
+        s = open(f, encoding="utf-8").read()
+        for i, b in enumerate(re.split(r"^### Task ", s, flags=re.M)[1:], 1):
+            名 = f"{編號(f)}-Task{i}"
             # 標題序號必須等於出現位置：R11 實測 08 出現兩個「Task 9」（R8 套用改號後，
             # R9 的 diff 仍寫舊號、逐字套用），本檢查之前完全不看標題數字，撞號不紅。
-            標題號 = re.match(r'(\d+)\s*:', b)
+            標題號 = re.match(r"(\d+)\s*:", b)
             if not 標題號 or int(標題號.group(1)) != i:
-                失敗.append(f'I6 task 標題序號與位置不符：{名} 的標題寫 Task '
-                            f'{標題號.group(1) if 標題號 else "?"}（撞號或跳號）')
-            區 = re.findall(r'\*\*ClaimSpec:\*\*(.+?)(?:\n\n|\*\*固定負控)', b, re.S)
+                失敗.append(
+                    f"I6 task 標題序號與位置不符：{名} 的標題寫 Task "
+                    f"{標題號.group(1) if 標題號 else '?'}（撞號或跳號）"
+                )
+            區 = re.findall(r"\*\*ClaimSpec:\*\*(.+?)(?:\n\n|\*\*固定負控)", b, re.S)
             條 = set()
             for x in 區:
-                條 |= set(re.findall(r'`([a-z][a-z0-9]*(?:[.\-][a-z0-9\-]+){2,6})`', x))
+                條 |= set(re.findall(r"`([a-z][a-z0-9]*(?:[.\-][a-z0-9\-]+){2,6})`", x))
             # 沒有具名 id 時退回用區塊數計，否則「一個 task 兩段 ClaimSpec」會漏
             量 = max(len(條), len(區))
             if 量 > 上限條:
-                失敗.append(f'I6 一個 task 宣稱 {量} 條 ClaimSpec（上限 {上限條}）：{名}')
-            c = len(re.findall(r'git commit', b))
+                失敗.append(f"I6 一個 task 宣稱 {量} 條 ClaimSpec（上限 {上限條}）：{名}")
+            c = len(re.findall(r"git commit", b))
             if c != 1:
-                失敗.append(f'I6 一個 task 有 {c} 個 commit 步（應恰好 1）：{名}')
-            檔數 = len(re.findall(r'^\s*-\s*(?:Create|Modify):', b, re.M))
+                失敗.append(f"I6 一個 task 有 {c} 個 commit 步（應恰好 1）：{名}")
+            檔數 = len(re.findall(r"^\s*-\s*(?:Create|Modify):", b, re.M))
             if 檔數 > 上限檔:
-                失敗.append(f'I6 一個 task 動 {檔數} 個檔（上限 {上限檔}）：{名}')
+                失敗.append(f"I6 一個 task 動 {檔數} 個檔（上限 {上限檔}）：{名}")
 
 
 def i7_引用可解析(檔):
@@ -235,41 +264,51 @@ def i7_引用可解析(檔):
     樹字 = set("│├└─ ")
     全建 = set()
     for f in 檔:
-        全建 |= set(re.findall(r'^- Create: `([^`]+)`', open(f, encoding='utf-8').read(), re.M))
+        全建 |= set(re.findall(r"^- Create: `([^`]+)`", open(f, encoding="utf-8").read(), re.M))
 
     已存在 = set()
     for f in sorted(檔, key=lambda x: 序位(編號(x))):
-        s = open(f, encoding='utf-8').read()
-        for i, b in enumerate(re.split(r'^### Task \d+:', s, flags=re.M)[1:], 1):
-            名 = f'{編號(f)}-Task{i}'
-            本 = set(re.findall(r'^- (?:Create|Modify): `([^`]+)`', b, re.M))
+        s = open(f, encoding="utf-8").read()
+        for i, b in enumerate(re.split(r"^### Task \d+:", s, flags=re.M)[1:], 1):
+            名 = f"{編號(f)}-Task{i}"
+            本 = set(re.findall(r"^- (?:Create|Modify): `([^`]+)`", b, re.M))
             引用 = set()
-            for 行 in re.findall(r'^Run:\s*`([^`]+)`', b, re.M):
-                引用 |= {p.split('::')[0].rstrip('/') for p in 路徑樣式.findall(行)}
+            for 行 in re.findall(r"^Run:\s*`([^`]+)`", b, re.M):
+                引用 |= {p.split("::")[0].rstrip("/") for p in 路徑樣式.findall(行)}
             for p in sorted(引用):
-                if p in 已存在 or p in 本: continue
-                if any(x.startswith(p + '/') for x in 已存在 | 本): continue
-                因 = '該檔在後面的 task 才 Create' if (p in 全建 or any(
-                    x.startswith(p + '/') for x in 全建)) else '整份計畫從未 Create 過這個檔'
-                失敗.append(f'I7 {名} 的 Run 引用了不存在的 {p}（{因}）')
-            已存在 |= set(re.findall(r'^- Create: `([^`]+)`', b, re.M))
+                if p in 已存在 or p in 本:
+                    continue
+                if any(x.startswith(p + "/") for x in 已存在 | 本):
+                    continue
+                因 = (
+                    "該檔在後面的 task 才 Create"
+                    if (p in 全建 or any(x.startswith(p + "/") for x in 全建))
+                    else "整份計畫從未 Create 過這個檔"
+                )
+                失敗.append(f"I7 {名} 的 Run 引用了不存在的 {p}（{因}）")
+            已存在 |= set(re.findall(r"^- Create: `([^`]+)`", b, re.M))
 
-        m = re.search(r'## File Structure\s*```text\n(.*?)```', s, re.S)
-        if not m: continue
+        m = re.search(r"## File Structure\s*```text\n(.*?)```", s, re.S)
+        if not m:
+            continue
         堆 = []
         for 行 in m.group(1).splitlines():
             j = 0
-            while j < len(行) and 行[j] in 樹字: j += 1
-            if j >= len(行): continue
-            深, 名2 = j // 4, 行[j:].split('—')[0].strip()
-            if not 名2: continue
-            if 名2.endswith('/'):
-                堆 = 堆[:深] + [名2]; continue
-            路徑 = ''.join(堆[:深]) + 名2
-            if '*' in 路徑 or not re.match(
-                    r'^(nova|規格|驗收|前端|工具|架構)/.+\.\w+$', 路徑): continue
+            while j < len(行) and 行[j] in 樹字:
+                j += 1
+            if j >= len(行):
+                continue
+            深, 名2 = j // 4, 行[j:].split("—")[0].strip()
+            if not 名2:
+                continue
+            if 名2.endswith("/"):
+                堆 = 堆[:深] + [名2]
+                continue
+            路徑 = "".join(堆[:深]) + 名2
+            if "*" in 路徑 or not re.match(r"^(nova|規格|驗收|前端|工具|架構)/.+\.\w+$", 路徑):
+                continue
             if 路徑 not in 全建:
-                失敗.append(f'I7 {編號(f)} 的 File Structure 宣告了 {路徑} 但沒有任何 task Create')
+                失敗.append(f"I7 {編號(f)} 的 File Structure 宣告了 {路徑} 但沒有任何 task Create")
 
 
 def i9_訊息用中文(檔):
@@ -279,24 +318,27 @@ def i9_訊息用中文(檔):
     """
     訊息 = re.compile(r'git commit -m "([^"]+)"')
     for f in 檔:
-        for i, m in enumerate(訊息.findall(open(f, encoding='utf-8').read()), 1):
-            if not any(字的_script(c) == 'HAN' for c in m):
-                失敗.append(f'I9 {編號(f)} 第 {i} 條 commit 訊息沒有中文：{m}')
+        for i, m in enumerate(訊息.findall(open(f, encoding="utf-8").read()), 1):
+            if not any(字的_script(c) == "HAN" for c in m):
+                失敗.append(f"I9 {編號(f)} 第 {i} 條 commit 訊息沒有中文：{m}")
 
 
-BINDING_ID白名單 = frozenset({'execution-envelope.reference', 'execution-envelope.production'})
+BINDING_ID白名單 = frozenset({"execution-envelope.reference", "execution-envelope.production"})
 未遷移基線 = 130  # R12-01 給 12 Task 9 補落點行後自 131 減一  # R4-01 給 09 Task 4、R4-02 給 05 Task 7 各補落點行後自 133 減二；新開 task 全帶落點行不計入
-ID樣式 = re.compile(r'^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$')
+ID樣式 = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$")
 
 
 def 宣告的_id(區):
     """從 `**ClaimSpec:**` 行取 claim id。反引號裡也會出現 binding id、failure code
     與萬用字元，全部不是 claim id——實測 210 個 token 裡有 6 個不是。"""
-    m = re.search(r'\*\*ClaimSpec:\*\*(.*)', 區)
+    m = re.search(r"\*\*ClaimSpec:\*\*(.*)", 區)
     if not m:
         return set()
-    return {t for t in re.findall(r'`([^`]+)`', m.group(1))
-            if ID樣式.match(t) and t not in BINDING_ID白名單}
+    return {
+        t
+        for t in re.findall(r"`([^`]+)`", m.group(1))
+        if ID樣式.match(t) and t not in BINDING_ID白名單
+    }
 
 
 def i10_宣告與落點一對一(檔, 邊):
@@ -315,49 +357,58 @@ def i10_宣告與落點一對一(檔, 邊):
     建於 = {}
     for f in 檔:
         n = 編號(f)
-        for i, b in enumerate(re.split(r'^### Task ', open(f, encoding='utf-8').read(), flags=re.M)[1:], 1):
-            for 路徑 in re.findall(r'^\s*-\s*Create:\s*`([^`]+)`', b, re.M):
+        for i, b in enumerate(
+            re.split(r"^### Task ", open(f, encoding="utf-8").read(), flags=re.M)[1:], 1
+        ):
+            for 路徑 in re.findall(r"^\s*-\s*Create:\s*`([^`]+)`", b, re.M):
                 建於.setdefault(路徑, (n, i))
     全 = 閉包(邊)
     id對路徑, 路徑對id, 未遷移 = {}, {}, []
     for f in sorted(檔, key=lambda x: 序位(編號(x))):
         n = 編號(f)
-        for i, b in enumerate(re.split(r'^### Task ', open(f, encoding='utf-8').read(), flags=re.M)[1:], 1):
-            名 = f'{n}-Task{i}'
-            m = re.search(r'^\*\*ClaimSpec落點:\*\*(.*?)(?=\n\s*\n)', b, re.S | re.M)
+        for i, b in enumerate(
+            re.split(r"^### Task ", open(f, encoding="utf-8").read(), flags=re.M)[1:], 1
+        ):
+            名 = f"{n}-Task{i}"
+            m = re.search(r"^\*\*ClaimSpec落點:\*\*(.*?)(?=\n\s*\n)", b, re.S | re.M)
             if not m:
                 未遷移.append(名)
                 continue
-            對 = re.findall(r'`([^`]+)`\s*→\s*`([^`]+)`', m.group(1))
+            對 = re.findall(r"`([^`]+)`\s*→\s*`([^`]+)`", m.group(1))
             落 = {}
             for i2, (鍵, 路徑) in enumerate(對):
                 if 鍵 in 落:
-                    失敗.append(f'I10 {名} 的落點行把 {鍵} 指了兩條路徑')
+                    失敗.append(f"I10 {名} 的落點行把 {鍵} 指了兩條路徑")
                 落[鍵] = 路徑
             if 落.keys() != 宣告的_id(b):
-                失敗.append(f'I10 {名} 落點行的 id 集合與宣告行不符：'
-                            f'落點 {sorted(落)} vs 宣告 {sorted(宣告的_id(b))}')
+                失敗.append(
+                    f"I10 {名} 落點行的 id 集合與宣告行不符："
+                    f"落點 {sorted(落)} vs 宣告 {sorted(宣告的_id(b))}"
+                )
             for 鍵, 路徑 in 落.items():
-                if not re.match(r'^規格/.+\.claim\.json$', 路徑):
-                    失敗.append(f'I10 {名} 的 {鍵} 指到不是 claim 檔的路徑：{路徑}')
+                if not re.match(r"^規格/.+\.claim\.json$", 路徑):
+                    失敗.append(f"I10 {名} 的 {鍵} 指到不是 claim 檔的路徑：{路徑}")
                     continue
                 if 路徑 not in 建於:
-                    失敗.append(f'I10 {名} 的 {鍵} 指到沒有任何 task Create 的 {路徑}')
+                    失敗.append(f"I10 {名} 的 {鍵} 指到沒有任何 task Create 的 {路徑}")
                     continue
                 擁計畫, 擁task = 建於[路徑]
                 太晚 = (擁計畫 == n and 擁task > i) or (
-                    擁計畫 != n and 擁計畫 not in 全.get(n, set()))
+                    擁計畫 != n and 擁計畫 not in 全.get(n, set())
+                )
                 if 太晚:
-                    失敗.append(f'I10 {名} 的 {鍵} 指到 {擁計畫}-Task{擁task} 才 Create 的 {路徑}')
+                    失敗.append(f"I10 {名} 的 {鍵} 指到 {擁計畫}-Task{擁task} 才 Create 的 {路徑}")
                 if 鍵 in id對路徑 and id對路徑[鍵] != 路徑:
-                    失敗.append(f'I10 {鍵} 被指到兩條路徑：{id對路徑[鍵]} 與 {路徑}')
+                    失敗.append(f"I10 {鍵} 被指到兩條路徑：{id對路徑[鍵]} 與 {路徑}")
                 if 路徑 in 路徑對id and 路徑對id[路徑] != 鍵:
-                    失敗.append(f'I10 {路徑} 被兩個 id 指名：{路徑對id[路徑]} 與 {鍵}')
+                    失敗.append(f"I10 {路徑} 被兩個 id 指名：{路徑對id[路徑]} 與 {鍵}")
                 id對路徑[鍵] = 路徑
                 路徑對id[路徑] = 鍵
     if len(未遷移) != 未遷移基線:
-        失敗.append(f'I10 未遷移 {len(未遷移)} 個 task，baseline 寫的是 {未遷移基線}'
-                    f'——多了要補落點行，少了要把 baseline 改小')
+        失敗.append(
+            f"I10 未遷移 {len(未遷移)} 個 task，baseline 寫的是 {未遷移基線}"
+            f"——多了要補落點行，少了要把 baseline 改小"
+        )
     return len(未遷移), 路徑對id
 
 
@@ -371,22 +422,23 @@ def i11_檔內id相符(綁定):
     """
     根目錄 = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     見過 = {}
-    for 路徑 in sorted(glob.glob(os.path.join(根目錄, '規格', '**', '*.claim.json'), recursive=True)):
+    for 路徑 in sorted(
+        glob.glob(os.path.join(根目錄, "規格", "**", "*.claim.json"), recursive=True)
+    ):
         相對 = os.path.relpath(路徑, 根目錄)
         try:
-            內 = json.loads(open(路徑, encoding='utf-8').read())
+            內 = json.loads(open(路徑, encoding="utf-8").read())
         except json.JSONDecodeError as 誤:
-            失敗.append(f'I11 {相對} 不是合法 JSON：{誤}')
+            失敗.append(f"I11 {相對} 不是合法 JSON：{誤}")
             continue
-        實 = 內.get('claim_id')
+        實 = 內.get("claim_id")
         期 = 綁定.get(相對)
         if 期 is None:
-            失敗.append(f'I11 {相對} 是孤兒：沒有任何 task 的落點行指名它'
-                        f'（它自稱 {實}）')
+            失敗.append(f"I11 {相對} 是孤兒：沒有任何 task 的落點行指名它（它自稱 {實}）")
         elif 實 != 期:
-            失敗.append(f'I11 {相對} 檔內 claim_id 是 {實}，但計畫綁定表說它該裝 {期}')
+            失敗.append(f"I11 {相對} 檔內 claim_id 是 {實}，但計畫綁定表說它該裝 {期}")
         if 實 in 見過:
-            失敗.append(f'I11 claim_id {實} 出現在兩份檔：{見過[實]} 與 {相對}')
+            失敗.append(f"I11 claim_id {實} 出現在兩份檔：{見過[實]} 與 {相對}")
         見過[實] = 相對
     return len(見過)
 
@@ -399,12 +451,12 @@ def i8_命名可通過(檔):
     計畫要求實作者寫出自家閘會判紅的名字，實作者最省事的出路是把閘改鬆。
     """
     分隔 = 載入規則().段分隔
-    宣告 = re.compile(r'^\s*(?:def|class)\s+([^\s(:]+)', re.M)
+    宣告 = re.compile(r"^\s*(?:def|class)\s+([^\s(:]+)", re.M)
     for f in 檔:
-        for 名 in 宣告.findall(open(f, encoding='utf-8').read()):
+        for 名 in 宣告.findall(open(f, encoding="utf-8").read()):
             for 段 in 名.split(分隔):
-                if len({字的_script(c) for c in 段} - {'NEUTRAL'}) > 1:
-                    失敗.append(f'I8 {編號(f)} 宣告了黏寫的識別字 {名}（段 {段}）')
+                if len({字的_script(c) for c in 段} - {"NEUTRAL"}) > 1:
+                    失敗.append(f"I8 {編號(f)} 宣告了黏寫的識別字 {名}（段 {段}）")
                     break
 
 
@@ -439,46 +491,51 @@ def i13_task引用可解析(檔):
     """
     任務數 = {}
     for f in 檔:
-        任務數[編號(f)] = len(re.split(r'^### Task ', open(f, encoding='utf-8').read(), flags=re.M)[1:])
+        任務數[編號(f)] = len(
+            re.split(r"^### Task ", open(f, encoding="utf-8").read(), flags=re.M)[1:]
+        )
 
-    跨 = re.compile(r'(?:(?:計畫|plan)\s*)?(\d\d[A-Z]?)\s*(?:的)?\s*Tasks?\s*(\d+)')
-    內 = re.compile(r'Tasks?\s+(\d+)')
+    跨 = re.compile(r"(?:(?:計畫|plan)\s*)?(\d\d[A-Z]?)\s*(?:的)?\s*Tasks?\s*(\d+)")
+    內 = re.compile(r"Tasks?\s+(\d+)")
 
     for f in 檔:
         我 = 編號(f)
-        s = open(f, encoding='utf-8').read()
+        s = open(f, encoding="utf-8").read()
         遮蔽 = []
         for m in 跨.finditer(s):
             他, n = m.group(1), int(m.group(2))
             遮蔽.append(m.span())
             if 他 not in 任務數:
-                失敗.append(f'I13 {我} 引用了不存在的計畫 {他}（`{m.group(0)}`）')
+                失敗.append(f"I13 {我} 引用了不存在的計畫 {他}（`{m.group(0)}`）")
             elif not 1 <= n <= 任務數[他]:
-                失敗.append(f'I13 {我} 的 `{m.group(0)}` 指到計畫 {他} 的 Task {n}，'
-                            f'但該計畫只有 {任務數[他]} 個 task')
+                失敗.append(
+                    f"I13 {我} 的 `{m.group(0)}` 指到計畫 {他} 的 Task {n}，"
+                    f"但該計畫只有 {任務數[他]} 個 task"
+                )
         for m in 內.finditer(s):
             if any(a <= m.start() < b for a, b in 遮蔽):
                 continue
             n = int(m.group(1))
             if not 1 <= n <= 任務數[我]:
-                失敗.append(f'I13 {我} 的裸 `{m.group(0)}` 超出範圍：'
-                            f'本計畫只有 {任務數[我]} 個 task')
+                失敗.append(
+                    f"I13 {我} 的裸 `{m.group(0)}` 超出範圍：本計畫只有 {任務數[我]} 個 task"
+                )
 
 
 def i4_任務完整(檔):
     總 = 0
     for f in 檔:
-        for b in re.split(r'^### Task ', open(f, encoding='utf-8').read(), flags=re.M)[1:]:
+        for b in re.split(r"^### Task ", open(f, encoding="utf-8").read(), flags=re.M)[1:]:
             總 += 1
-            名 = f'{編號(f)}-Task{b.split(":")[0].strip()}'
-            if not re.search(r'\*\*ClaimSpec:\*\*', b):
-                失敗.append(f'I4 缺 ClaimSpec：{名}')
-            if not re.search(r'\*\*固定負控:\*\*', b):
-                失敗.append(f'I4 缺固定負控：{名}')
-            if not re.search(r'Expected:[^\n]*(FAIL|紅|red|non-zero|錯誤接受)', b, re.I):
-                失敗.append(f'I4 缺先紅步：{名}')
-            if not re.search(r'git commit', b):
-                失敗.append(f'I4 缺 commit 步：{名}')
+            名 = f"{編號(f)}-Task{b.split(':')[0].strip()}"
+            if not re.search(r"\*\*ClaimSpec:\*\*", b):
+                失敗.append(f"I4 缺 ClaimSpec：{名}")
+            if not re.search(r"\*\*固定負控:\*\*", b):
+                失敗.append(f"I4 缺固定負控：{名}")
+            if not re.search(r"Expected:[^\n]*(FAIL|紅|red|non-zero|錯誤接受)", b, re.I):
+                失敗.append(f"I4 缺先紅步：{名}")
+            if not re.search(r"git commit", b):
+                失敗.append(f"I4 缺 commit 步：{名}")
     return 總
 
 
@@ -494,7 +551,12 @@ def i12_旗標必須先宣告(檔):
                        卻消費未宣告的 `--self-test-failure-propagation`(20:823)
 
     **外部工具（pytest／uv／codex／mutmut）的旗標不算幽靈**——它們的宣告在別人的
-    repo。判定「自有」的方式：該旗標所在那一段命令裡出現 `工具/`。
+    repo。判定「自有」的方式：該旗標所在那一段命令裡出現 `工具/` 或 `工坊/`。
+
+    **`工坊/` 是 2026-08-28 補的，補之前它整個不在視野內。** 計畫 01C 的提案原本
+    寫「三殼與生成器的旗標面第一天即宣告齊全、不添幽靈旗標債」——**那句話當時
+    沒有執法器**：第一天做得到，第三十天不會有任何東西紅。同款盲點同一天也發生在
+    `測_meta_schema.py` 的 producer 掃描域上。**掃描器的語料邊界要跟著新層走。**
 
     **既有債用凍住的名單當基線，不用數字。** 第一版設計寫「未宣告基線 11，只准降
     不准升」，那是 2026-08-28 才剛被判違規的形狀——當天 sol 採納的量詞紀律逐字是
@@ -506,30 +568,42 @@ def i12_旗標必須先宣告(檔):
     所以不會有人修完債卻留著洞。
     """
     債 = {
-        '--profile', '--tx-per-second', '--verify-reproducible', '--write', '--all',
-        '--duration', '--seconds', '--tail-read-ms', '--minutes', '--events-per-tx',
-        '--self-test-failure-propagation',
+        "--profile",
+        "--tx-per-second",
+        "--verify-reproducible",
+        "--write",
+        "--all",
+        "--duration",
+        "--seconds",
+        "--tail-read-ms",
+        "--minutes",
+        "--events-per-tx",
+        "--self-test-failure-propagation",
     }
-    旗標 = re.compile(r'(?<![\w-])--[a-z][a-z0-9-]{2,}')
+    旗標 = re.compile(r"(?<![\w-])--[a-z][a-z0-9-]{2,}")
     消費, 宣告 = {}, set()
     for f in 檔:
         在fence = False
-        for 號, 行 in enumerate(open(f, encoding='utf-8').read().splitlines(), 1):
-            if 行.lstrip().startswith('```'):
-                在fence = not 在fence; continue
-            if 行.lstrip().startswith('- Produces:'):
+        for 號, 行 in enumerate(open(f, encoding="utf-8").read().splitlines(), 1):
+            if 行.lstrip().startswith("```"):
+                在fence = not 在fence
+                continue
+            if 行.lstrip().startswith("- Produces:"):
                 宣告.update(旗標.findall(行))
-            elif (行.startswith('Run:') or 在fence) and '工具/' in 行:
+            elif (行.startswith("Run:") or 在fence) and ("工具/" in 行 or "工坊/" in 行):
                 for x in 旗標.findall(行):
-                    消費.setdefault(x, f'{編號(f)}:{號}')
+                    消費.setdefault(x, f"{編號(f)}:{號}")
     幽靈 = {x: 處 for x, 處 in 消費.items() if x not in 宣告}
     for x in sorted(幽靈):
         if x not in 債:
-            失敗.append(f'I12 消費了未宣告的旗標 `{x}`（首見 {幽靈[x]}）'
-                        f'——工具的旗標面要有 `- Produces:` 宣告')
+            失敗.append(
+                f"I12 消費了未宣告的旗標 `{x}`（首見 {幽靈[x]}）"
+                f"——工具的旗標面要有 `- Produces:` 宣告"
+            )
     for x in sorted(債 - set(幽靈)):
-        失敗.append(f'I12 基線名單有 `{x}`，但它已經不是幽靈了'
-                    f'——棘輪只准縮，請從 i12 的「債」名單刪掉它')
+        失敗.append(
+            f"I12 基線名單有 `{x}`，但它已經不是幽靈了——棘輪只准縮，請從 i12 的「債」名單刪掉它"
+        )
     return len(債)
 
 
@@ -553,11 +627,11 @@ def i14_步驟序號連續(檔):
     與 I12 的十一個旗標債不同，這條一開始就是乾淨的。
     """
     for f in 檔:
-        for 段 in re.split(r'^### Task ', open(f, encoding='utf-8').read(), flags=re.M)[1:]:
-            標題 = 段.split('\n')[0]
-            號 = [int(m) for m in re.findall(r'^- \[ \] \*\*Step (\d+)', 段, re.M)]
+        for 段 in re.split(r"^### Task ", open(f, encoding="utf-8").read(), flags=re.M)[1:]:
+            標題 = 段.split("\n")[0]
+            號 = [int(m) for m in re.findall(r"^- \[ \] \*\*Step (\d+)", 段, re.M)]
             if 號 != list(range(1, len(號) + 1)):
-                失敗.append(f'I14 Step 序號不是 1..N：{編號(f)} Task {標題[:40]} 得到 {號}')
+                失敗.append(f"I14 Step 序號不是 1..N：{編號(f)} Task {標題[:40]} 得到 {號}")
 
 
 def 自測():
@@ -567,32 +641,38 @@ def 自測():
     牙齒——負控 fixture 不能只活在暫存目錄。fixture 只保證目標訊息出現；
     其他不變式在最小 fixture 上本來就會紅（如 I10 基線），不計。"""
     import subprocess
+
     根目錄 = os.path.dirname(os.path.abspath(__file__))
-    自測根 = os.path.join(根目錄, '計畫複驗自測')
-    情境們 = sorted(d for d in glob.glob(os.path.join(自測根, '*')) if os.path.isdir(d))
+    自測根 = os.path.join(根目錄, "計畫複驗自測")
+    情境們 = sorted(d for d in glob.glob(os.path.join(自測根, "*")) if os.path.isdir(d))
     if not 情境們:
-        print('自測：找不到任何情境目錄', file=sys.stderr); return 2
+        print("自測：找不到任何情境目錄", file=sys.stderr)
+        return 2
     壞 = 0
     for 情境 in 情境們:
-        預期 = open(os.path.join(情境, '預期.txt'), encoding='utf-8').read().strip()
-        跑 = subprocess.run([sys.executable, os.path.abspath(__file__), 情境],
-                            capture_output=True, text=True)
+        預期 = open(os.path.join(情境, "預期.txt"), encoding="utf-8").read().strip()
+        跑 = subprocess.run(
+            [sys.executable, os.path.abspath(__file__), 情境], capture_output=True, text=True
+        )
         中 = 預期 in (跑.stdout + 跑.stderr)
         if 跑.returncode == 0 or not 中:
             壞 += 1
-            print(f'自測 ✗ {os.path.basename(情境)}：exit={跑.returncode}，'
-                  f'預期字串{"有" if 中 else "沒"}出現')
+            print(
+                f"自測 ✗ {os.path.basename(情境)}：exit={跑.returncode}，"
+                f"預期字串{'有' if 中 else '沒'}出現"
+            )
         else:
-            print(f'自測 ✓ {os.path.basename(情境)}：非零且含「{預期}」')
+            print(f"自測 ✓ {os.path.basename(情境)}：非零且含「{預期}」")
     return 1 if 壞 else 0
 
 
 def main():
-    if sys.argv[1:] == ['--自測']:
+    if sys.argv[1:] == ["--自測"]:
         return 自測()
     檔 = 計畫檔()
     if not 檔:
-        print('找不到計畫檔', file=sys.stderr); return 2
+        print("找不到計畫檔", file=sys.stderr)
+        return 2
     邊 = i2_i3_依賴(檔)
     建數 = i1_i5_檔案所有權(檔, 邊)
     任務數 = i4_任務完整(檔)
@@ -605,22 +685,29 @@ def main():
     i14_步驟序號連續(檔)
     未遷移, 綁定 = i10_宣告與落點一對一(檔, 邊)
     實存claim = i11_檔內id相符(綁定)
-    print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個 · '
-          f'ClaimSpec 落點未遷移 {未遷移} 個 · 實存 claim 檔 {實存claim} 份 · 旗標債 {債數} 個')
+    print(
+        f"計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個 · "
+        f"ClaimSpec 落點未遷移 {未遷移} 個 · 實存 claim 檔 {實存claim} 份 · 旗標債 {債數} 個"
+    )
     # 給程式讀的一行。散文那行是給人看的，**不要拿去 parse**：
     # 2026-08-28 工程板資料.py 用 `\d+` 掃散文行，我加了「I12 旗標債」之後
     # 標籤裡的 12 被當成一個數字，整排位移。key=value 之後加新統計不會再位移。
-    print(f'統計 計畫={len(檔)} 建={建數} task={任務數} '
-          f'未遷移={未遷移} claim={實存claim} 旗標債={債數}')
+    print(
+        f"統計 計畫={len(檔)} 建={建數} task={任務數} "
+        f"未遷移={未遷移} claim={實存claim} 旗標債={債數}"
+    )
     for n in sorted(邊):
-        print(f'  {n} ← {邊[n] or "（無前置）"}')
+        print(f"  {n} ← {邊[n] or '（無前置）'}")
     if 失敗:
-        print(f'\n不變式不成立（{len(失敗)}）：')
-        for x in 失敗: print(f'  ✗ {x}')
+        print(f"\n不變式不成立（{len(失敗)}）：")
+        for x in 失敗:
+            print(f"  ✗ {x}")
         return 1
-    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過 · I9 訊息用中文 · I10 宣告與落點一對一 · I11 檔內id相符 · I12 旗標必須先宣告 · I13 task引用可解析 · I14 步驟序號連續　全部成立')
+    print(
+        "\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過 · I9 訊息用中文 · I10 宣告與落點一對一 · I11 檔內id相符 · I12 旗標必須先宣告 · I13 task引用可解析 · I14 步驟序號連續　全部成立"
+    )
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())
