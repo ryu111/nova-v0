@@ -10,13 +10,19 @@
 sol 條件四說過「三家 resume 介面不同」，我把 `--model` 分欄做對了，
 卻把呼叫形狀當成三家一樣。
 
-**`claude` 刻意不是 CLI 後端**：main agent 用 subagent 派它。
-讓殼多維護一條它不該負責的路徑，就是「殼開始長 dispatch 邏輯」的第一步。
+**`claude` 的傳輸是 subagent 不是 CLI**——但它**照樣走殼**。
+第一版我讓它整個不走殼、typed 拒，使用者指出那毀掉殼存在的理由：
+殼是統一介面，三家共用「讀 prompt、驗工單、驗 grant、記 digest」那一段，
+踢掉一家那一段就要在別處重寫一次。
+
+實體限制是真的——殼是 Python subprocess，**呼叫不到 Agent 工具**。
+所以差別只落在「誰執行那一步」：CLI 傳輸在殼內 subprocess，
+subagent 傳輸由 main agent 跑完再 `收工()` 交回來。
 """
 
 from __future__ import annotations
 
-碼_是子代理 = "BACKEND_IS_SUBAGENT"
+碼_子代理傳輸 = "TRANSPORT_IS_SUBAGENT"
 碼_未知後端 = "UNKNOWN_BACKEND"
 # **模型隨時可換**：model 一律由呼叫端傳入，這裡只決定「怎麼呼叫」不決定「呼叫誰」。
 命令列後端 = ("codex", "agy")
@@ -25,6 +31,15 @@ from __future__ import annotations
 
 class 不是命令列後端(Exception):
     """typed 拒。訊息以 failure code 起頭，讓負控釘得住紅因。"""
+
+
+def 傳輸(backend: str) -> str:
+    """這個後端由誰執行——`CLI`（殼內 subprocess）或 `SUBAGENT`（主控跑）。"""
+    if backend in 子代理後端:
+        return "SUBAGENT"
+    if backend in 命令列後端:
+        return "CLI"
+    raise 不是命令列後端(f"unknown_backend：{碼_未知後端}：{backend}")
 
 
 def 形狀(
@@ -36,7 +51,8 @@ def 形狀(
     """
     if backend in 子代理後端:
         raise 不是命令列後端(
-            f"backend_is_subagent：{碼_是子代理}：{backend} 由 main agent 以 subagent 派，不走殼"
+            f"transport_is_subagent：{碼_子代理傳輸}：{backend} 由主控以 subagent 執行，"
+            f"殼只負責備工與收工"
         )
     if backend == "codex":
         # 非互動子命令是 `exec`；prompt 走 stdin。

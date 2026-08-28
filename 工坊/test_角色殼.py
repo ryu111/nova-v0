@@ -54,7 +54,7 @@ def test_正面_經路徑啟動假後端並原樣帶回哨符(tmp_path: Path) ->
     """**這格才是冒煙**：殼真的 resolve、真的執行、真的把輸出帶回來。"""
     _假後端(tmp_path)
     環境 = dict(os.environ, PATH=f"{tmp_path}:{os.environ['PATH']}")
-    出 = 執行者.派工(_工單(), model="gpt-5.6-sol", 環境=環境, backend="codex")
+    出 = 執行者.派工(執行者.備工(_工單(), model="gpt-5.6-sol", backend="codex"), 環境=環境)
     assert 出["exit"] == 0
     assert SENTINEL in str(出["輸出"]), "殼沒有原樣帶回後端輸出"
     收到參數 = (tmp_path / "argv.txt").read_text(encoding="utf-8")
@@ -66,7 +66,7 @@ def test_正面_經路徑啟動假後端並原樣帶回哨符(tmp_path: Path) ->
 def test_負面_後端不在路徑上時恰回一二七(tmp_path: Path) -> None:
     """**恰為 127**，不是「非零」——壞態本身就非零時 `!= 0` 是恆真 oracle。"""
     環境 = dict(os.environ, PATH=str(tmp_path))
-    出 = 執行者.派工(_工單(), model="gpt-5.6-sol", 環境=環境, backend="codex")
+    出 = 執行者.派工(執行者.備工(_工單(), model="gpt-5.6-sol", backend="codex"), 環境=環境)
     assert 出["exit"] == 命令找不到, f"缺席應恰回 {命令找不到}，實際 {出['exit']}"
 
 
@@ -74,18 +74,20 @@ def test_殼記下後端的絕對路徑與摘要(tmp_path: Path) -> None:
     """resolve 後以絕對路徑執行並記 digest——語法被接受不等於跑到對的東西。"""
     _假後端(tmp_path)
     環境 = dict(os.environ, PATH=f"{tmp_path}:{os.environ['PATH']}")
-    出 = 執行者.派工(_工單(), model="gpt-5.6-sol", 環境=環境, backend="codex")
+    出 = 執行者.派工(執行者.備工(_工單(), model="gpt-5.6-sol", backend="codex"), 環境=環境)
     assert str(出["executable"]).startswith("/"), "沒有 resolve 成絕對路徑"
     assert 出["executable_digest"]
 
 
-def test_不合法的授權必須具型別拒絕(tmp_path: Path) -> None:
+def test_不合法的授權必須具型別拒絕() -> None:
     """探針值取 `edit`——**實案原字**：它不是 agy 的合法 action，
-    而整場派工無寫檔權卻無人知，燒掉一整輪。"""
-    _假後端(tmp_path)
-    環境 = dict(os.environ, PATH=f"{tmp_path}:{os.environ['PATH']}")
+    而整場派工無寫檔權卻無人知，燒掉一整輪。
+
+    **這格不再需要假後端**：驗證搬進了 `備工()`，那一段純的、不碰 subprocess。
+    拆成三段的直接好處——grant 驗證可以被單獨測，不必透過假後端間接驗。
+    """
     with pytest.raises(執行者.不得派工) as e:
-        執行者.派工(dict(_工單(), grant=["edit"]), model="gpt-5.6-sol", 環境=環境, backend="codex")
+        執行者.備工(dict(_工單(), grant=["edit"]), model="gpt-5.6-sol", backend="codex")
     assert str(e.value).startswith("grant_not_in_binary_capability_set")
 
 
@@ -95,10 +97,8 @@ def test_授權宣告了但沒生效也要拒(tmp_path: Path) -> None:
     環境 = dict(os.environ, PATH=f"{tmp_path}:{os.environ['PATH']}")
     with pytest.raises(執行者.不得派工) as e:
         執行者.派工(
-            dict(_工單(), grant=["write_file"]),
-            model="gpt-5.6-sol",
+            執行者.備工(dict(_工單(), grant=["write_file"]), model="gpt-5.6-sol", backend="codex"),
             環境=環境,
-            backend="codex",
             canary="從未出現",
         )
     assert str(e.value).startswith("grant_not_effective")
@@ -108,7 +108,8 @@ def test_合法授權照常派工_防恆真(tmp_path: Path) -> None:
     _假後端(tmp_path)
     環境 = dict(os.environ, PATH=f"{tmp_path}:{os.environ['PATH']}")
     出 = 執行者.派工(
-        dict(_工單(), grant=["write_file"]), model="gpt-5.6-sol", 環境=環境, backend="codex"
+        執行者.備工(dict(_工單(), grant=["write_file"]), model="gpt-5.6-sol", backend="codex"),
+        環境=環境,
     )
     assert 出["exit"] == 0
 
@@ -178,7 +179,7 @@ def test_角色不得取得接受權(tmp_path: Path) -> None:
     _假後端(tmp_path)
     環境 = dict(os.environ, PATH=f"{tmp_path}:{os.environ['PATH']}")
     for 殼 in (執行者, 裁定者, 第二審查者):
-        出 = 殼.派工(_工單(), model="gpt-5.6-sol", 環境=環境, backend="codex")
+        出 = 殼.派工(殼.備工(_工單(), model="gpt-5.6-sol", backend="codex"), 環境=環境)
         assert 出["kind"] == "OBSERVATION", f"{殼.角色名} 回了 {出['kind']}，不是 observation"
 
 
@@ -236,15 +237,17 @@ def test_每個後端的呼叫形狀各自封閉() -> None:
     )
 
 
-def test_claude_由子代理派不走殼() -> None:
-    """`claude` 由 main agent 以 subagent 派，殼要 typed 拒。
+def test_子代理傳輸的形狀不可取() -> None:
+    """`claude` **走殼**（備工／收工），但 `形狀()` 只服務 CLI 傳輸。
 
-    讓殼多維護一條它不該負責的路徑，就是「殼開始長 dispatch 邏輯」的第一步。
+    第一版我讓它整個不走殼、typed 拒 `backend_is_subagent`——使用者指出
+    那毀掉殼存在的理由。改成傳輸維度之後，拒絕的是「向殼要 CLI 呼叫形狀」
+    這個動作，不是「claude 這個後端」。
     """
-
+    assert 後端.傳輸("claude") == "SUBAGENT"
     with pytest.raises(後端.不是命令列後端) as e:
         後端.形狀("claude", "m", "P")
-    assert str(e.value).startswith("backend_is_subagent")
+    assert str(e.value).startswith("transport_is_subagent")
 
 
 def test_未知後端必須具型別拒絕() -> None:
@@ -252,3 +255,55 @@ def test_未知後端必須具型別拒絕() -> None:
     with pytest.raises(後端.不是命令列後端) as e:
         後端.形狀("沒聽過的", "m", "P")
     assert str(e.value).startswith("unknown_backend")
+
+
+# ── 備工／派工／收工三段（2026-08-28 使用者指正後改） ──────────────────
+#
+# **我原本的錯**：把「傳輸方式不同」當成理由，讓 `claude` 整個不走殼、typed 拒。
+# 使用者指出那毀掉殼存在的理由——**殼是統一介面**，三家共用
+# 「讀 prompt、驗工單、驗 grant、記 digest」那一段；踢掉一家，
+# 那一段就要在別處重寫一次。
+#
+# 實體限制是真的：殼是 Python subprocess，**呼叫不到 Agent 工具**。
+# 所以拆成三段——`備工()` 純驗證不執行（三家完全一樣）、
+# `派工()` 是備工加上 CLI 執行、`收工()` 給 subagent 傳輸把結果交回來記錄。
+# **語意一個，差別只在誰執行那一步。**
+#
+# 分開之後的額外好處：`備工()` 不碰 subprocess，所以 grant 驗證與工單三驗
+# **可以被單獨測**，不必透過假後端間接驗——今天「假後端驗的是傳遞不是啟動」
+# 那個問題，一半來自這兩件事黏在一起。
+
+
+def test_備工三家一致且不碰後端() -> None:
+    """`備工()` 是純的：驗完就回請求，不 resolve PATH、不起 subprocess。"""
+    for 後端名 in ("codex", "agy", "claude"):
+        請求 = 執行者.備工(_工單(), model="m", effort="high", backend=後端名)
+        assert 請求["backend"] == 後端名
+        assert 請求["model"] == "m" and 請求["effort"] == "high"
+        assert 請求["prompt_digest"]
+        assert "工單" in 請求
+
+
+def test_備工會驗授權與工單() -> None:
+    """驗證在備工這一段，不在執行那一段。"""
+    with pytest.raises(執行者.不得派工) as e:
+        執行者.備工(dict(_工單(), grant=["edit"]), model="m", effort="high", backend="codex")
+    assert str(e.value).startswith("grant_not_in_binary_capability_set")
+
+
+def test_子代理傳輸走殼但由主控執行() -> None:
+    """`claude` 的傳輸是 subagent——**備工照做**，只是不在殼內執行。"""
+    請求 = 執行者.備工(_工單(), model="opus", effort="high", backend="claude")
+    assert 請求["傳輸"] == "SUBAGENT", "claude 應標成 subagent 傳輸"
+    with pytest.raises(執行者.不得派工) as e:
+        執行者.派工(執行者.備工(_工單(), model="opus", backend="claude"), 環境={})
+    assert str(e.value).startswith("transport_is_subagent")
+
+
+def test_收工把主控跑的結果記回來() -> None:
+    """subagent 跑完由 `收工()` 記錄——**輸出一律 observation**。"""
+    請求 = 執行者.備工(_工單(), model="opus", effort="high", backend="claude")
+    出 = 執行者.收工(請求, "假的子代理輸出", 離開碼=0)
+    assert 出["kind"] == "OBSERVATION"
+    assert 出["輸出"] == "假的子代理輸出"
+    assert 出["prompt_digest"] == 請求["prompt_digest"]
