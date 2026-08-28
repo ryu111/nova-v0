@@ -1,0 +1,139 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "workshop.toplevel.declared-equals-scanned",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "`架構/目錄規則.toml` 的 `[[top_level]]` 宣告集合、`[[placement]]` 掃描根集合、types 閘 argv 與計畫 01 Plan Exit Gate 的 mypy 範圍必須互相一致；只加宣告而不加掃描面，等於宣告有、掃描無。",
+  "sources": [
+    {
+      "source_id": "plan.01.task.3",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-3-建立唯一落點依賴與規模閘"
+    },
+    {
+      "source_id": "plan.00.day-one-placement",
+      "kind": "PLAN_CONSTRAINT",
+      "locator": "docs/計畫/00-總覽.md#66-day-one工程規範與資料夾落點已裁定"
+    }
+  ],
+  "primitive_catalog": {
+    "catalog_id": "architecture-checker.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "directory-rules.v1",
+    "operation": "check-consistency",
+    "binding_slot": "directory-rules.repository"
+  },
+  "parameters": {
+    "rules_path": "架構/目錄規則.toml",
+    "module_logical_lines": 400,
+    "class_logical_lines": 250,
+    "function_logical_lines": 60
+  },
+  "setup": [],
+  "stimulus": [
+    {
+      "primitive": "architecture.check_directory_rules",
+      "arguments": {
+        "rules": "$SUBJECT_RULES",
+        "plan_fence": "$SUBJECT_PLAN_FENCE"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "code",
+      "source": "STIMULUS_RESULT",
+      "path": "code",
+      "type": "STRING"
+    }
+  ],
+  "judge": {
+    "all_of": [
+      {
+        "predicate_id": "declared_equals_scanned",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "TOPLEVEL_NOT_SCANNED"
+        }
+      },
+      {
+        "predicate_id": "types_argv_within_declared",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "TYPES_ARGV_UNDECLARED"
+        }
+      },
+      {
+        "predicate_id": "fence_matches_rules_verbatim",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "FENCE_SCOPE_DRIFT"
+        }
+      }
+    ]
+  },
+  "controls": {
+    "positive": [
+      {
+        "control_id": "current-rules",
+        "subject_binding": "DIRECTORY_RULES_REPOSITORY",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
+    "negative": [
+      {
+        "control_id": "declared-not-scanned",
+        "faulty_subject": "架構/目錄規則.toml::top_level[+誘餌] 而無對應 placement",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "declared_equals_scanned"
+        ]
+      },
+      {
+        "control_id": "types-argv-undeclared",
+        "faulty_subject": "架構/目錄規則.toml::gate[types].argv[+誘餌]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "types_argv_within_declared"
+        ]
+      },
+      {
+        "control_id": "fence-scope-drift",
+        "faulty_subject": "架構/目錄規則.toml::gate[types].argv[+工坊] 而 01 fence 未同步",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "fence_matches_rules_verbatim"
+        ]
+      }
+    ]
+  },
+  "run_limits": {
+    "wall_ms": 60000,
+    "max_output_bytes": 1048576
+  },
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {
+    "retain": [
+      "code",
+      "detail"
+    ],
+    "record_kind": "DIRECTORY_RULES_VERDICT"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
+  "cleanup": []
+}
