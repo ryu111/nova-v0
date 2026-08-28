@@ -174,7 +174,10 @@ def 抽計畫(複驗: types.ModuleType) -> list[dict]:
     for f in sorted(複驗.計畫檔(), key=lambda x: 複驗.序位(複驗.編號(x))):
         s = pathlib.Path(f).read_text(encoding="utf-8")
         編 = 複驗.編號(f)
-        目標 = re.search(r"^\*\*Goal:\*\*\s*(?:【推論】)?(.+)$", s, re.M)
+        # **Goal 可能跨多行**：`06B` 的目標寫了三行，而第一版的 `(.+)$` 只抓一行
+        # ——板面於是顯示成一句逗號結尾的殘句（sol 第四十五輪第 11 條）。
+        # 抓到下一個空行為止，再把換行併成單行。
+        目標 = re.search(r"^\*\*Goal:\*\*\s*(?:【推論】)?(.+?)(?=\n\n)", s, re.M | re.S)
         前置 = re.search(r"^前置計畫：(.+)$", s, re.M)
         ts, 步總 = [], 0
         for i, b in enumerate(re.split(r"^### Task ", s, flags=re.M)[1:], 1):
@@ -200,7 +203,7 @@ def 抽計畫(複驗: types.ModuleType) -> list[dict]:
             {
                 "id": 編,
                 "name": pathlib.Path(f).name[len(編) + 1 : -3],
-                "goal": 目標.group(1).strip() if 目標 else "",
+                "goal": " ".join(目標.group(1).split()) if 目標 else "",
                 "dep": 前置.group(1).strip() if 前置 else "無",
                 "tasks": ts,
                 "步": 步總,
