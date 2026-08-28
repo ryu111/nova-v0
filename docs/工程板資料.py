@@ -112,6 +112,26 @@ def 抽決議() -> list[dict]:
     ]
 
 
+def 抽層() -> dict[str, str]:
+    """每個 nova 第一層目錄的「已建／宣告要建」。
+
+    **為什麼要機械算**：分層圖的 `0/N` 原本是手寫的，沒有任何程式在管。
+    2026-08-28 對照發現四層過期，其中兩層是**已建的檔沒被算進去**
+    （權威 1/44 而實際 4/52、基礎設施 0/45 而實際 5/46）——
+    板面把已完成的工作顯示成沒做。
+
+    分母是計畫的 `Create:` 條目數，分子是那些路徑目前真的存在。
+    直接列舉 `nova/` 開頭的 Create 條目，不從別的型別推。
+    """
+    建: list[str] = []
+    for f in sorted((根 / "docs" / "計畫").glob("*.md")):
+        建 += re.findall(r"^- Create: `(nova/[^`]+)`", f.read_text(encoding="utf-8"), re.M)
+    層: dict[str, list[str]] = {}
+    for 路徑 in 建:
+        層.setdefault(路徑.split("/")[1], []).append(路徑)
+    return {名: f"{sum(1 for x in 們 if (根 / x).exists())}/{len(們)}" for 名, 們 in 層.items()}
+
+
 def 主() -> None:
     複驗 = 載入複驗()
     統計, _ = 跑執法器()
@@ -123,6 +143,7 @@ def 主() -> None:
         json.dumps(
             {
                 "統": 統計,
+                "層": 抽層(),
                 "計畫": 計畫,
                 "決議": 抽決議(),
                 "head": subprocess.run(

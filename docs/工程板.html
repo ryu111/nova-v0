@@ -164,7 +164,7 @@ footer{border-top:1px solid var(--線);color:var(--次);font-size:12.5px;
 
 <section id="t1" role="tabpanel" aria-labelledby="b1">
 <h2>目前狀態</h2>
-<p class="lede">每個任務的驗收單位是它自己那條 ClaimSpec 由紅轉綠，外加事前固定的負控維持會紅——執行者自報完成不算完成。<b>這一欄不再是手寫的</b>：下列每個數字都由 <code>docs/計畫複驗.py</code> 印出，而它印出數字之前，<b>十一項不變式必須全部成立</b>。「已交付」的判定也是機械的——該 task 宣告要建的檔案<b>全部存在</b>才算。</p>
+<p class="lede">每個任務的驗收單位是它自己那條 ClaimSpec 由紅轉綠，外加事前固定的負控維持會紅——執行者自報完成不算完成。<b>這一欄不再是手寫的</b>：下列每個數字都由 <code>docs/計畫複驗.py</code> 印出，而它印出數字之前，<b>十四項不變式必須全部成立</b>。「已交付」的判定也是機械的——該 task 宣告要建的檔案<b>全部存在</b>才算。</p>
 <div class="stats">
 <div class="stat"><b>23</b><span>子系統計畫</span></div>
 <div class="stat"><b>198</b><span>任務</span></div>
@@ -188,9 +188,9 @@ footer{border-top:1px solid var(--線);color:var(--次);font-size:12.5px;
 <tbody>
 <tr><td class="mono">1</td><td>鎖定 CPython 3.14.7 · pytest 9.1.1 · xdist 3.8.0 · mutmut 3.7.0 · hypothesis 6.165.10；中文與英文雙軌 discovery<span class="dep">先紅證據：python3 -m pytest → No module named pytest</span></td><td class="neg"><code>收窄</code> 換成直接回傳輸入 → property test direct red；拿掉 mutmut 的 <code>also_copy</code> → typed <code>MUTATION_TESTS_NOT_COPIED</code>，不當成功</td><td><span class="chip chip-ok">綠</span></td></tr>
 <tr><td class="mono">2</td><td>Ruff 0.16.4 ＋ mypy 2.3.1，全部既定上限（py314 · 行寬 100 · McCabe 10 · args 6 · branches 12 · statements 60 · strict）<span class="dep">先紅證據：NameError: validate_engineering_config</span></td><td class="neg">錯誤設定 fixture 同時放寬三處（拿掉 mypy strict、關掉 Ruff 的 D、McCabe 提到 20）→ <code>ENGINEERING_GATE_WEAKENED</code> 且必須逐一列出三項</td><td><span class="chip chip-ok">綠</span></td></tr>
-<tr><td class="mono">3</td><td><code>架構/目錄規則.toml</code> 宣告六頂層、nova 十三層、import 方向與 400／250／60 規模上限；<code>架構/檢查工程規範.py</code> 只執行不解釋<span class="dep">先紅證據：No module named 架構.檢查工程規範</span></td><td class="neg">repository 錯放 <code>nova/應用/</code> → <code>PLACEMENT_LAYER_MISMATCH</code>；61 行函式 → <code>FUNCTION_TOO_LARGE</code>；另七個指定突變全部被殺</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">3</td><td><code>架構/目錄規則.toml</code> 宣告七頂層（2026-08-28 加入 <code>工坊/</code>）、nova 十三層、import 方向與 400／250／60 規模上限；<code>架構/檢查工程規範.py</code> 只執行不解釋<span class="dep">先紅證據：No module named 架構.檢查工程規範</span></td><td class="neg">repository 錯放 <code>nova/應用/</code> → <code>PLACEMENT_LAYER_MISMATCH</code>；61 行函式 → <code>FUNCTION_TOO_LARGE</code>；另七個指定突變全部被殺</td><td><span class="chip chip-ok">綠</span></td></tr>
 <tr><td class="mono">4</td><td><code>架構/命名規則.toml</code> 宣告雙軌：Python 識別字可全中文或全 ASCII、必須同時是 NFC 與 NFKC、每個 <code>_</code> 段單一 script；跨程序的 shell name／JSON 欄位／SQL 識別字一律 ASCII<span class="dep">先紅證據：assert 'OK' == 'MIXED_SCRIPT_IDENTIFIER'——壞東西被接受</span></td><td class="neg"><code>claim狀態</code> → <code>MIXED_SCRIPT_IDENTIFIER</code>；<code>本次路徑=/tmp/x</code> → <code>NON_ASCII_SHELL_NAME</code>；同檔的 <code>claim_ref</code>／<code>target_dir</code> 必須不被誤殺</td><td><span class="chip chip-ok">綠</span></td></tr>
-<tr><td class="mono">5</td><td><code>nova/核心</code> 四支值型別：識別（SemanticId／BindingSlot／ClaimRef）、摘要（canonical JSON ＋ SHA-256）、時間（Duration／Instant，這一層沒有時鐘）、錯誤（CaseFailureKind 封閉 enum）<span class="dep">先紅證據：ModuleNotFoundError: nova.核心.時間</span></td><td class="neg">拿掉 <code>sort_keys</code> → 鍵順序測試紅；拿掉 NFC 檢查 → NFD 碰撞測試紅；語義識別樣式放行任何字 → 中文 id 測試紅。21 個突變 16 個當場殺、補 5 個測試後全殺</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">5</td><td><code>nova/核心</code> 四支值型別：識別（SemanticId／BindingSlot／ClaimRef）、摘要（canonical JSON ＋ SHA-256）、時間（Duration／Instant，這一層沒有時鐘）、錯誤（CaseFailureKind 封閉 enum）<span class="dep">先紅證據：ModuleNotFoundError: nova.核心.時間</span></td><td class="neg">拿掉 <code>sort_keys</code> → 鍵順序測試紅；拿掉 NFC 檢查 → NFD 碰撞測試紅；語義識別樣式放行任何字 → 中文 id 測試紅。21 個突變 16 個當場殺、補 5 個測試後全殺</td><td><span class="chip chip-wait">未交付</span><br><span class="note-in">`驗收/工具鏈/fixtures/動態shell宣告.sh` 從未建立——板面 2026-08-28 前把它列成已交付。</span></td></tr>
 <tr><td class="mono">6</td><td>ClaimSpec 0.2.0 封閉 meta-schema ＋ 效果契約 ＋ 綁定清單三份 schema；<code>保證規格模型.py</code> 只執行不解釋，且不碰檔案系統（權威層 <code>allow_io=false</code>）<span class="dep">先紅證據：ModuleNotFoundError: nova.權威.判準.保證規格模型</span></td><td class="neg"><code>passed</code>→UNKNOWN_FIELD、清空負控→MIN_ITEMS、<code>wall_ms</code> 寫成字串→TYPE_MISMATCH、效果原語配 null→EFFECT_DELIVERY_REQUIRED、非效果 claim 配契約→EFFECT_DELIVERY_FORBIDDEN、<code>EXACTLY_ONCE</code>→UNSUPPORTED_DELIVERY_SEMANTICS。25 個突變全殺</td><td><span class="chip chip-ok">綠</span></td></tr>
 <tr><td class="mono">7</td><td>確定性編譯：<code>compile_claim(spec, catalog, binding, offer)</code>，
 <code>plan_digest</code> 綁<b>四個輸入</b>而不只綁 claim——只綁 claim 等於宣稱在別的環境上驗的是同一件事<span class="dep">先紅證據：ModuleNotFoundError: nova.權威.判準.保證規格編譯</span></td>
@@ -207,10 +207,44 @@ footer{border-top:1px solid var(--線);color:var(--次);font-size:12.5px;
 <td class="neg">合法 claim 仍回 UNSUPPORTED；harness fault 被算成 CLAIM_REJECTED；未知運算回 True 而非 False。防恆真格：positional pytest 路徑照常可用</td><td><span class="chip chip-wait">未開始</span></td></tr>
 <tr><td class="mono">13</td><td>補跑 Tasks 1–4 的工程 ClaimSpec 閘：四份分兩批——兩份接線即跑，兩份待 Task 12 補齊運算。<b>「待」只是排序不是豁免</b>，本 task 不得以兩份 evidence 完成<span class="dep">拆分自原 Task 12 的 evidence-only 那一半</span></td>
 <td class="neg">把 <code>engineering.rules.day-one-enforced</code> 的四項 <code>must_fail_exactly</code> 縮成一項；negative control 回 HARNESS_ERROR 而非 CLAIM_REJECTED</td><td><span class="chip chip-wait">未開始</span></td></tr>
-<tr><td class="mono">14</td><td>六道閘接上自動執行點：本地入口 <code>工具/驗全部.py</code>（跑完每一道才回報，<b>不在第一個紅就停</b>）、pre-commit hook、CI required check，三處共讀同一份宣告清單<span class="dep">先紅證據：在拋棄式複本上同時弄壞三樣東西，git commit 仍 exit 0</span></td>
-<td class="neg">入口第一紅就停；入口永遠回零；CI 漏跑一道；hook 吞掉非零 exit。外加防恆真格：全綠時 hook 不擋正常 commit</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">14</td><td>八道閘接上自動執行點：本地入口 <code>工具/驗全部.py</code>（跑完每一道才回報，<b>不在第一個紅就停</b>）、pre-commit hook、CI required check，三處共讀同一份宣告清單<span class="dep">先紅證據：在拋棄式複本上同時弄壞三樣東西，git commit 仍 exit 0</span></td>
+<td class="neg">入口第一紅就停；入口永遠回零；CI 漏跑一道；hook 吞掉非零 exit。外加防恆真格：全綠時 hook 不擋正常 commit</td><td><span class="chip chip-wait">未交付</span><br><span class="note-in">`工具/跑驗收.py` 實跑仍回 `UNSUPPORTED_CLAIM_EXECUTION`。這是接線那一步，18 份 claim 至今零執行。</span></td></tr>
 <tr><td class="mono">15</td><td>把「跑一批指定突變」包成有測試的工具：逐條套用事前命名的突變、比對宣告，<b>沒有百分比</b><span class="dep">先紅證據：ModuleNotFoundError: 工具.跑指定突變</span></td>
-<td class="neg">宣告殺掉卻存活；宣告存活卻被殺；目標字串不存在時必須明講而不是當成通過。防恆真格：跑完工作樹與跑前逐位元組相同</td><td><span class="chip chip-ok">綠</span></td></tr>
+<td class="neg">宣告殺掉卻存活；宣告存活卻被殺；目標字串不存在時必須明講而不是當成通過。防恆真格：跑完工作樹與跑前逐位元組相同</td><td><span class="chip chip-wait">未交付</span><br><span class="note-in">依賴 Task 12。</span></td></tr>
+</tbody></table></div>
+
+<h3 class="ph-h">01C　開發期工坊（四個 task 全數交付）</h3>
+<p class="lede">把派工的固定損耗從人手挪到機械。<b>開發期基礎設施，不是產品功能</b>——
+帶明文退役條件，產品的 Work 派工與 backend 註冊入口都落地那天整包刪除。</p>
+<div class="tw"><table>
+<thead><tr><th>Task</th><th>交付</th><th>固定負控（實跑）</th><th>狀態</th></tr></thead>
+<tbody>
+<tr><td class="mono">1</td><td><b>讓 <code>工坊/</code> 成為受管轄的頂層</b>：六件同交——
+<code>[[top_level]]</code>＋<code>[[placement]] glob</code>＋types argv＋<code>gates.yml</code>＋
+計畫 01 的 Plan Exit Gate＋說明副本改為指向權威。</td>
+<td>先跑到指定失敗：只加 <code>[[top_level]]</code> 時逐字報「宣告有而掃不到 <code>['工坊']</code>」
+——<b>只加宣告是裝飾</b>，<code>top_level</code> 在 checker 裡一次都沒被載入。
+三件漏交各自被不同的格接住。</td>
+<td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">2</td><td><b>出工單與獨立驗工入口</b>：工單綁來源 task 區段的位元組摘要
+與工作樹基準，消費時四驗；驗工入口非 LLM，逐條記 argv 與 exit，全部 0 才 green。</td>
+<td>手改一字紅在 <code>work_order_tampered</code>、舊工單打新樹紅在 <code>stale_base_commit</code>。
+<b>「全綠才 green」那格繞了三版才脫離恆真</b>——fail-fast 讓「中段失敗而末條成功」不可能存在，
+能區分兩種實作的是未執行那條的處置（<code>None</code> 不是 0）。</td>
+<td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">3</td><td><b>三個角色薄殼</b>：backend／model／sid／grant 分欄不混串；
+executable 先 PATH resolve、缺席恰回 127、resolve 後以絕對路徑執行並記 digest。
+薄度 AST 格禁 sleep／遞迴／迴圈體內呼叫後端。</td>
+<td>冒煙格<b>不用 <code>--help</code></b>——殼自己的 help 完全不碰後端 PATH，那條路徑綠了也是假綠。
+正面格真的經 PATH 找到假後端、核對 exact argv 與 stdin 工單、要求原樣帶回 sentinel。</td>
+<td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">4</td><td><b>退役機制</b>：退役是<b>六處原子動作</b>不是刪目錄一件事；
+清冊記兩個哨兵（自計畫 Create 清單逐字轉錄）；checker 住在 <code>架構/</code> 不是 <code>工坊/</code>
+——住在裡面會跟著被刪。</td>
+<td><b>退役清冊排除格是雙漏洞唯一接得住的</b>：造出「宣稱已退役但兩處宣告都還在」時，
+相等格＋子集格＋逐字有序格＋CI 格四格全綠，只有它紅。
+刻意不驗「每個頂層都實存」——<code>前端/</code> 是已宣告但尚未建立的頂層，那條會誤殺它。</td>
+<td><span class="chip chip-ok">綠</span></td></tr>
 </tbody></table></div>
 <div class="note"><b>三筆欠帳的現況</b>　① <code>mypy</code> 的 <code>strict=true</code> 已接上閘，
 範圍**逐字取自計畫 01 的 Plan Exit Gate**（權威在那裡；這裡不複述字面，複述就是又一份會漂的副本）——不是全 repo，<code>docs/</code> 與 fixtures 不在裡面。
@@ -487,7 +521,7 @@ Claude 在這套系統裡出現<b>三次</b>，位置完全不同——把它們
 <h2>分層</h2>
 <p class="lede">十三層，橫軸是同層平行的模組，縱軸是依賴方向。依賴只能向下——上層可用下層，下層不得知道上層。<b>2026-08-27 起這條不再靠自律</b>：<code>架構/目錄規則.toml</code> 宣告、<code>架構/檢查工程規範.py</code> 執法，動態 <code>importlib.import_module</code> 寫的違規邊也抓得到。</p><div class="note"><b>與總覽 §6.6 的兩處出入</b>　總覽表寫「設施／」且只列九層；21 份計畫一致寫 <code>nova/基礎設施/</code>（159 比 0），且實際用到十三個第一層目錄。2026-08-27 裁定以計畫實際用法為準——多出的 <code>約束</code>／<code>維護</code>／<code>內容庫</code>／<code>證據庫</code> 的 predicate 逐字引用各自擁有計畫（12／19／04）的 Architecture 段。</div>
 <figure>
-<div class="note"><b>顏色＝進度</b>　每層左側標籤盒的底色與進度條表示「這一層在 21 份計畫裡宣告要建的檔案，已經建出幾個」。
+<div class="note"><b>顏色＝進度</b>　每層左側標籤盒的底色與進度條表示「這一層在全部計畫裡宣告要建的檔案，已經建出幾個」。
 <span style="color:var(--綠);font-weight:700">綠＝該層全部建完</span>、<span style="color:var(--琥);font-weight:700">琥＝已開工未完</span>、灰＝尚未開工。
 分母是計畫的 <code>Create:</code> 條目數，分子是那些路徑目前真的存在於 repo。滑過標籤盒可看是哪幾份計畫在建這一層。<b>右邊每一格模組也用邊框上色</b>，分母是路徑對應到那一格的檔數；<b>十三層每一層的格子加起來都剛好等於該層總數</b>——縱軸與橫軸量的是同一件事，不是兩套口徑。
 全體 <b>7／273</b>；工程規範、pyproject、規格與驗收檔不在這個分母裡（它們不住在 <code>nova/</code>）。查證日 2026-08-27。</div>
@@ -513,7 +547,7 @@ Claude 在這套系統裡出現<b>三次</b>，位置完全不同——把它們
 <text class="lbl-s" x="170" y="78" opacity=".62">transport encoding 與 result mapping</text>
 <rect class="lay-wait" x="24" y="91" width="126" height="40" rx="4"><title>應用：計畫宣告 52 個檔，已建立 0 個 · 由計畫 03 05 06 07 08 09 10 11 12 13 19 建立</title></rect>
 <text class="lbl-b" x="38" y="109" fill="currentColor">應用</text>
-<text class="lay-n" x="140" y="109" text-anchor="end" fill="currentColor" opacity=".82">0/52</text>
+<text class="lay-n" x="140" y="109" text-anchor="end" fill="currentColor" opacity=".82">0/54</text>
 <rect class="bar-bg" x="38" y="116" width="98" height="4" rx="2"/>
 <rect class="box" x="164" y="91" width="353" height="40" rx="4"><title>應用／處理（CommandBus）：計畫宣告 12 個檔，已建立 0 個 · 對應 nova/應用/處理/、nova/應用/命令.py、nova/應用/登錄.py、nova/應用/邊界.py、nova/應用/test_邊界.py</title></rect>
 <text class="lbl" x="340" y="108" text-anchor="middle" font-size="12" fill="currentColor">處理（CommandBus）</text>
@@ -524,7 +558,7 @@ Claude 在這套系統裡出現<b>三次</b>，位置完全不同——把它們
 <text class="lbl-s" x="170" y="125" opacity=".62">唯一命令匯流排與工作單元邊界</text>
 <rect class="lay-wait" x="24" y="138" width="126" height="40" rx="4"><title>領域：計畫宣告 30 個檔，已建立 0 個 · 由計畫 01B 05 08 09 12 19 建立</title></rect>
 <text class="lbl-b" x="38" y="156" fill="currentColor">領域</text>
-<text class="lay-n" x="140" y="156" text-anchor="end" fill="currentColor" opacity=".82">0/30</text>
+<text class="lay-n" x="140" y="156" text-anchor="end" fill="currentColor" opacity=".82">0/32</text>
 <rect class="bar-bg" x="38" y="163" width="98" height="4" rx="2"/>
 <rect class="boxa" x="164" y="138" width="233" height="40" rx="4"><title>領域／工作：計畫宣告 13 個檔，已建立 0 個 · 對應 nova/領域/工作/</title></rect>
 <text class="lbl" x="281" y="155" text-anchor="middle" font-size="12" fill="var(--靛)">工作</text>
@@ -538,7 +572,7 @@ Claude 在這套系統裡出現<b>三次</b>，位置完全不同——把它們
 <text class="lbl-s" x="170" y="172" opacity=".62">三個生命週期</text>
 <rect class="lay-ing" x="24" y="185" width="126" height="40" rx="4"><title>權威：計畫宣告 44 個檔，已建立 1 個 · 由計畫 01 06 07 10 11 12 19 建立</title></rect>
 <text class="lbl-b" x="38" y="203" fill="var(--琥)">權威</text>
-<text class="lay-n" x="140" y="203" text-anchor="end" fill="var(--琥)" opacity=".82">1/44</text>
+<text class="lay-n" x="140" y="203" text-anchor="end" fill="var(--琥)" opacity=".82">4/52</text>
 <rect class="bar-bg" x="38" y="210" width="98" height="4" rx="2"/>
 <rect class="bar-ing" x="38" y="210" width="2" height="4" rx="2"/>
 <rect class="boxa mod-ing" x="164" y="185" width="174" height="40" rx="4"><title>權威／判準：計畫宣告 15 個檔，已建立 1 個 · 對應 nova/權威/判準/</title></rect>
@@ -609,7 +643,7 @@ Claude 在這套系統裡出現<b>三次</b>，位置完全不同——把它們
 <text class="lbl-s" x="170" y="407" opacity=".62">外部世界的 adapter</text>
 <rect class="lay-wait" x="24" y="420" width="126" height="40" rx="4"><title>基礎設施：計畫宣告 45 個檔，已建立 0 個 · 由計畫 01 03 04 05 06 09 10 11 建立</title></rect>
 <text class="lbl-b" x="38" y="438" fill="currentColor">基礎設施</text>
-<text class="lay-n" x="140" y="438" text-anchor="end" fill="currentColor" opacity=".82">0/45</text>
+<text class="lay-n" x="140" y="438" text-anchor="end" fill="currentColor" opacity=".82">5/46</text>
 <rect class="bar-bg" x="38" y="445" width="98" height="4" rx="2"/>
 <rect class="box" x="164" y="420" width="74" height="40" rx="4"><title>基礎設施／狀態庫：計畫宣告 13 個檔，已建立 0 個 · 對應 nova/基礎設施/狀態庫/</title></rect>
 <text class="lbl" x="201" y="437" text-anchor="middle" font-size="10.5" fill="currentColor">狀態庫</text>
@@ -879,19 +913,19 @@ Claude 在這套系統裡出現<b>三次</b>，位置完全不同——把它們
 <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
 <line class="ed" x1="34" y1="118" x2="866" y2="118"/>
 <g class="lbl-s" text-anchor="middle">
-<text x="34" y="148">0</text><text x="227" y="148">41</text><text x="546" y="148">109</text>
-<text x="753" y="148">153</text><text x="866" y="148">177</text>
+<text x="34" y="148">0</text><text x="287" y="148">53</text><text x="650" y="148">129</text>
+<text x="864" y="148">174</text><text x="979" y="148">198</text>
 </g>
 <text class="lbl-s" x="34" y="166">累計任務序號</text>
 
 <g>
-<rect class="box" x="34" y="82" width="193" height="36" rx="4"/>
-<text class="lbl-b" x="44" y="106">Phase A</text><text class="lbl-s" x="118" y="106">01 · 01B · 02–04</text>
+<rect class="box" x="34" y="82" width="253" height="36" rx="4"/>
+<text class="lbl-b" x="44" y="106">Phase A</text><text class="lbl-s" x="118" y="106">01 · 01B · 01C · 02–04</text>
 <rect class="box" x="227" y="82" width="320" height="36" rx="4"/>
 <text class="lbl-b" x="237" y="106">Phase B</text><text class="lbl-s" x="313" y="106">05–12　領域核心</text>
-<rect class="box" x="546" y="82" width="207" height="36" rx="4"/>
+<rect class="box" x="650" y="82" width="214" height="36" rx="4"/>
 <text class="lbl-b" x="556" y="106">Phase C</text><text class="lbl-s" x="632" y="106">13–18</text>
-<rect class="box" x="753" y="82" width="113" height="36" rx="4"/>
+<rect class="box" x="864" y="82" width="115" height="36" rx="4"/>
 <text class="lbl-b" x="763" y="106">Phase D</text><text class="lbl-s" x="763" y="130">19–20</text>
 </g>
 
@@ -977,7 +1011,7 @@ Claude 在這套系統裡出現<b>三次</b>，位置完全不同——把它們
 <h4>能力證據沒有新鮮度</h4><span class="chip chip-ind">sol 補</span></div>
 <p class="fd">舊版 SDK 測出來的 <code>can_use_tool</code> 結果會在升版後繼續替新版背書。</p><p class="ff"><span class="flabel">修訂</span><code>CapabilityEvidence</code> 綁 exact fingerprint、probe version、<code>expires_at</code>；任一 component 改變立即失效。</p></div>
 <h2>計畫的不變式</h2>
-<p class="lede">複驗本身已經是機制而不是一份報告——<b>十一項</b>不變式寫成 <code>docs/計畫複驗.py</code>，每一項的負控各注入一次全部轉紅。任何人改計畫都要讓這十一項仍然成立。<b>上面那些數字，就是它印出來的</b>——數字對的時候，順帶保證了計畫本身自洽。</p>
+<p class="lede">複驗本身已經是機制而不是一份報告——<b>十四項</b>不變式寫成 <code>docs/計畫複驗.py</code>，每一項的負控各注入一次全部轉紅。任何人改計畫都要讓這十四項仍然成立。<b>上面那些數字，就是它印出來的</b>——數字對的時候，順帶保證了計畫本身自洽。</p>
 <div class="tw"><table>
 <thead><tr><th>代號</th><th>不變式</th><th>內容</th><th>負控（注入後必須轉紅）</th></tr></thead>
 <tbody><tr><td class="mono">I1</td><td><b>檔案所有權</b></td><td>同一路徑不得被兩份計畫 Create；Modify 的對象必須有人 Create。</td><td class="neg">把某個 Create 路徑複製到另一份計畫</td></tr><tr><td class="mono">I2</td><td><b>依賴無環</b></td><td>Dependency Gate 構成的圖不得有多節點 SCC。</td><td class="neg">讓兩份計畫互相宣告前置</td></tr><tr><td class="mono">I3</td><td><b>編號即拓撲序</b></td><td>沒有計畫依賴編號比自己大的計畫。</td><td class="neg">讓 02 宣告依賴 09</td></tr><tr><td class="mono">I4</td><td><b>任務完整性</b></td><td>每個 task 都要有 ClaimSpec、固定負控、先紅步、commit 步。</td><td class="neg">刪掉任一 task 的固定負控段</td></tr><tr><td class="mono">I5</td><td><b>修改方向</b></td><td>Modify 的對象必須由自己或<b>遞移</b>前置 Create。</td><td class="neg">讓 05 去 Modify 一個由 14 Create 的檔案</td></tr><tr><td class="mono">I6</td><td><b>任務口徑</b></td><td>一個 task <b>恰好一個 commit 步</b>、至多 2 條 ClaimSpec、至多 10 個檔。</td><td class="neg">把兩個 task 併成一個</td></tr><tr><td class="mono">I7</td><td><b>引用可解析</b></td><td><code>Run:</code> 引用的檔案必須在該 task 或更早被 Create；File Structure 宣告的必須有人 Create。</td><td class="neg">把任一 Run 檔名改一個字，或刪掉一個 Create 條目</td></tr><tr><td class="mono">I8</td><td><b>命名可通過</b></td><td>計畫在 code fence 裡宣告的 <code>def</code>／<code>class</code> 名必須通過 <code>架構/檢查工程規範.py</code> 的識別字閘。</td><td class="neg">把任一 <code>def test_x_中文</code> 的底線刪掉</td></tr><tr><td class="mono">I9</td><td><b>訊息用中文</b></td><td>每個 task 的 <code>git commit -m</code> 訊息必須含漢字（型別前綴 <code>feat:</code> 等保持 ASCII）。</td><td class="neg">把任一條 commit 訊息改回英文</td></tr>
@@ -988,7 +1022,24 @@ Claude 在這套系統裡出現<b>三次</b>，位置完全不同——把它們
 <tr><td class="mono">I11</td><td><b>檔內 id 相符</b></td>
 <td>打開每一份<b>實存</b>的 claim 檔，比對它的 <code>claim_id</code> 與計畫的落點宣告。</td>
 <td class="neg">把兩個 id 的落點路徑對調——兩份檔都存在、都一對一，<b>I10 全綠</b>，
-只有 I11 抓得到「配錯人」</td></tr></tbody></table></div>
+只有 I11 抓得到「配錯人」</td></tr>
+<tr><td class="mono">I12</td><td><b>旗標必須先宣告</b></td>
+<td>nova 自有工具（<code>工具/</code> 或 <code>工坊/</code>）被消費的旗標，必須有
+<code>- Produces:</code> 宣告過。外部工具（pytest／uv／codex）的旗標不算——它們的宣告在別人的 repo。
+既有債用<b>凍住的十一個名字</b>當基線，<b>不用數字</b>：一個數字擋不住「修掉一個舊的、加進一個新的」。</td>
+<td class="neg">兩向各一格——新的未宣告旗標要紅；<b>債修好了留在名單裡也要紅</b>，
+否則棘輪失去方向。<code>工坊/</code> 那一向另有一格：加它之前，計畫 01C 的旗標面
+<b>整個不在 I12 視野內</b>，而提案原文寫著「不添幽靈旗標債」——那句話當時沒有執法器。</td></tr>
+<tr><td class="mono">I13</td><td><b>task 引用可解析</b></td>
+<td>跨計畫與計畫內的 <code>Task N</code> 引用必須指得到真的存在的 task。
+只驗 resolvable，<b>不驗 semantically correct</b>——改號之後「指錯但仍在範圍內」這條抓不到。</td>
+<td class="neg">懸空跨計畫引用、懸空計畫內引用各一格。認得的引用形式是<b>逐條列舉語料</b>得來的：
+第一版只認 <code>01</code> 開頭那種，報「跨計畫引用只有 4 處」——實際是 16 處、四種寫法。</td></tr>
+<tr><td class="mono">I14</td><td><b>步驟序號連續</b></td>
+<td>每個 task 的 <code>Step N</code> 必須恰好是 1..N。</td>
+<td class="neg">跳號情境一格。<b>跳號的實害不是難看，是節奏斷掉</b>——刪掉的那步若是
+「先跑到指定的失敗」，整個 task 就從「先看它紅」退化成「直接寫實作」，而帳面完全正常。
+上線時 198 個 task 零違規，不帶基線債。</td></tr></tbody></table></div>
 <div class="note">建這個閘的過程抓到<b>我自己的兩個缺陷</b>：第一版解析 Dependency Gate 的散文，少報讓「編號即拓撲序」空過、多報又誤判順序違反——改成只讀機器可讀的 <code>前置計畫：</code> 宣告並 fail-closed；I5 用直接邊比對而依賴是可遞移的——改用遞移閉包。兩個都是「機制看起來在運作、實際上放行了」。</div>
 <h2>知識檢索的裁定</h2>
 <p class="lede">使用者問「用 SQLite 是不是就該用 RAG」。查完資料後的答案是不用——而決定的不是論文分數，是可重播性。</p>
@@ -1063,7 +1114,7 @@ Claude 在這套系統裡出現<b>三次</b>，位置完全不同——把它們
 </section>
 
 </main>
-<footer class="wrap">docs/計畫/ · 複驗閘 docs/計畫複驗.py（十一項不變式）· 決議帳本 docs/決策/計畫修訂決議.md · 生成自 commit 2c2bec1</footer>
+<footer class="wrap">docs/計畫/ · 複驗閘 docs/計畫複驗.py（十四項不變式）· 決議帳本 docs/決策/計畫修訂決議.md · 頁首的 <code>@</code> 是<b>計畫檔內容的摘要</b>，不是 git commit——由 <code>docs/工程板注入.py</code> 算</footer>
 <script>
 (function(){
   var bs=[].slice.call(document.querySelectorAll('nav button'));
