@@ -1,0 +1,139 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "workshop.retirement.is-atomic",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "`工坊/` 的退役是六處原子動作；已退役的目錄不得仍出現在 top_level 或 placement；哨兵路徑必須出現在某計畫的 Create 清單，否則哨兵會靜默失明。",
+  "sources": [
+    {
+      "source_id": "plan.01.task.3",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-3-建立唯一落點依賴與規模閘"
+    },
+    {
+      "source_id": "plan.00.day-one-placement",
+      "kind": "PLAN_CONSTRAINT",
+      "locator": "docs/計畫/00-總覽.md#66-day-one工程規範與資料夾落點已裁定"
+    }
+  ],
+  "primitive_catalog": {
+    "catalog_id": "architecture-checker.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "workshop-retirement.v1",
+    "operation": "check-ledger",
+    "binding_slot": "workshop-retirement.repository"
+  },
+  "parameters": {
+    "rules_path": "架構/目錄規則.toml",
+    "module_logical_lines": 400,
+    "class_logical_lines": 250,
+    "function_logical_lines": 60
+  },
+  "setup": [],
+  "stimulus": [
+    {
+      "primitive": "architecture.check_retirement_ledger",
+      "arguments": {
+        "ledger": "$SUBJECT_LEDGER",
+        "rules": "$SUBJECT_RULES"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "code",
+      "source": "STIMULUS_RESULT",
+      "path": "code",
+      "type": "STRING"
+    }
+  ],
+  "judge": {
+    "all_of": [
+      {
+        "predicate_id": "retired_not_declared",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "RETIRED_STILL_DECLARED"
+        }
+      },
+      {
+        "predicate_id": "sentinels_resolve",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "SENTINEL_PATH_DRIFTED"
+        }
+      },
+      {
+        "predicate_id": "ledger_present",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "RETIREMENT_LEDGER_MISSING"
+        }
+      }
+    ]
+  },
+  "controls": {
+    "positive": [
+      {
+        "control_id": "current-ledger",
+        "subject_binding": "WORKSHOP_RETIREMENT_REPOSITORY",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
+    "negative": [
+      {
+        "control_id": "double-miss",
+        "faulty_subject": "退役.toml::retired_dirs[+工坊] 而宣告未移除",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "retired_not_declared"
+        ]
+      },
+      {
+        "control_id": "sentinel-drift",
+        "faulty_subject": "退役.toml::sentinels[指到未宣告路徑]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "sentinels_resolve"
+        ]
+      },
+      {
+        "control_id": "ledger-deleted",
+        "faulty_subject": "工坊/退役.toml[刪除] 而 工坊/ 尚在",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "ledger_present"
+        ]
+      }
+    ]
+  },
+  "run_limits": {
+    "wall_ms": 60000,
+    "max_output_bytes": 1048576
+  },
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {
+    "retain": [
+      "code",
+      "detail"
+    ],
+    "record_kind": "WORKSHOP_RETIREMENT_VERDICT"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
+  "cleanup": []
+}
