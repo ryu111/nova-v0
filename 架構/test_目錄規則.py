@@ -43,6 +43,34 @@ def _型別閘參數() -> list[str]:
     raise AssertionError("目錄規則.toml 裡找不到跑 mypy 的閘")
 
 
+def 檢查一致性() -> str:
+    """把三格的判定做成**帶失敗碼的產生者**，供 claim 的 judge 比對。
+
+    **為什麼要有這支**：`規格/工程/保證/工坊落點受管.claim.json` 的三個
+    predicate 各比對一個常數，而**沒有任何 subject 會吐出那些碼的話，
+    那三個 predicate 就是恆真格**——十四份 claim 裡八份犯過這個病
+    （`驗收/保證規格語言/測_meta_schema.py` 的字面 producer 棘輪擋著）。
+    寫這支的當下棘輪就擋了我一次，訊息逐字報出三個孤兒常數。
+    """
+    設定 = 規則()
+    宣告 = {項["dir"] for 項 in 設定["top_level"]}
+    掃描根 = {項["glob"].split("/")[0] for 項 in 設定["placement"]}
+    if 宣告 != 掃描根:
+        return "TOPLEVEL_NOT_SCANNED"
+    參數 = {a for a in _型別閘參數() if a not in {"uv", "run", "mypy"} and not a.startswith("-")}
+    if not 參數 <= 宣告:
+        return "TYPES_ARGV_UNDECLARED"
+    期望 = " ".join(_型別閘參數())
+    if not any(期望 in 行 for 行 in 計畫01.read_text(encoding="utf-8").splitlines()):
+        return "FENCE_SCOPE_DRIFT"
+    return "OK"
+
+
+def test_一致性檢查在現況回_OK() -> None:
+    """防恆真：三格都成立時 `檢查一致性()` 必須回 `OK`，不能永遠回失敗碼。"""
+    assert 檢查一致性() == "OK"
+
+
 def test_宣告的頂層與實際掃描根一一相等() -> None:
     """`[[top_level]]` 宣告的目錄，必須恰好等於 `[[placement]]` 推出的掃描根。
 

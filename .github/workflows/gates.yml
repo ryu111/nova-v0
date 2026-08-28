@@ -25,7 +25,7 @@ jobs:
       - name: lint
         run: uv run ruff check .
       - name: types
-        run: uv run mypy nova 架構 工具
+        run: uv run mypy nova 架構 工具 工坊
       - name: placement
         run: uv run python 架構/檢查工程規範.py
       - name: plans

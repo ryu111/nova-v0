@@ -32,6 +32,10 @@ dir = "工具"
 duty = "operator／developer 薄入口，只組參數並呼叫 public application／architecture gate。"
 
 [[top_level]]
+dir = "工坊"
+duty = "開發期派工殼、工單生成器與驗工入口；帶退役哨兵的暫居區；production 不得 import；退役時六處同步移除。"
+
+[[top_level]]
 dir = "架構"
 duty = "repo 自身的 static policy、AST／path／import checker 與其 tests；production 不得 import。"
 
@@ -155,13 +159,18 @@ owner = "工具"
 glob = "架構/**"
 owner = "架構"
 
+[[placement]]
+glob = "工坊/**"
+owner = "工坊"
+
 # ── 閘清單：唯一一份 ──
 #
 # 【實測 2026-08-27】在一份拋棄式的 repo 複本上同時弄壞三樣東西，`git commit` **exit 0**
 # 照樣接受，而三道閘實際上全是 exit 1。閘存在不等於閘會被執行。
 # 這份清單由三處共讀：`工具/驗全部.py`、它裝的 pre-commit hook、與 `.github/workflows/gates.yml`。
 # 三處各留一份，遲早有一處漏掉而沒人發現；所以清單只有這一份。
-# mypy 的範圍是 `nova 架構 工具`，逐字取自計畫 01 的 Plan Exit Gate——
+# mypy 的範圍**逐字取自計畫 01 的 Plan Exit Gate**（權威在那裡，這裡不複述字面——
+# 複述就是第四份副本，改一處不改其他處就變假；由 `架構/test_目錄規則.py` 執法）——
 # 不是全 repo：`docs/` 與 fixtures 不在那個範圍裡。
 
 [[gate]]
@@ -174,7 +183,7 @@ argv = ["uv", "run", "ruff", "check", "."]
 
 [[gate]]
 name = "types"
-argv = ["uv", "run", "mypy", "nova", "架構", "工具"]
+argv = ["uv", "run", "mypy", "nova", "架構", "工具", "工坊"]
 
 [[gate]]
 name = "placement"
