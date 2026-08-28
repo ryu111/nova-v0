@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
+import re
 import sys
 
 import pytest
@@ -47,7 +48,9 @@ def 測試_乾淨板面注入後不再改動(板文: str, 料: dict) -> None:
     ("名", "壞掉"),
     [
         # ① 錨消失
-        ("頁首標籤改名", lambda s: s.replace("子系統 · 194 任務 ·", "子系統 · 194 tasks ·", 1)),
+        # 這格刻意**不寫死任務數**：第一版寫「194 任務」，計畫 01C 進來後變 198，
+        # 於是 fixture 的替換不再命中、負控靜靜失效。壞的是 fixture 不是生產碼。
+        ("頁首標籤改名", lambda s: re.sub(r"(子系統 · \d+) 任務 ·", r"\1 tasks ·", s, count=1)),
         (
             "統計卡標籤改名",
             lambda s: s.replace("<span>固定負控</span>", "<span>固定負控們</span>", 1),
