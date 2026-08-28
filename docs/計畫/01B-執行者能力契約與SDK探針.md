@@ -110,6 +110,15 @@ nova/領域/執行/
 
 **固定負控:** 【推論】加入 capability `MAGIC_TOOL_BYPASS`、tool class `OTHER`、usage scope `BEST_EFFORT`、outcome free string，或把 `PINNED_DETERMINISTIC_ENGINE` 填進 determinism mechanism enum；schema/compiler 必須 direct red。
 
+**補殺手（P1，sol 2026-08-28 APPROVE）**：新增第六格
+`repeatability-granted-without-probes`——evidence 缺 N 次 probe 記錄、次數不足 N、
+或任兩次輸出非逐 byte 相同**而 capability 仍 supported**，三個壞輸入都必須
+紅在 `repeatability_requires_probe_evidence`。
+**為什麼**：授予側零殺手時，能力等於可以自我宣告，01B 的命題被繞過。
+246 行的防恆真格（帶合規 probe 取得 supported）是本格的反面，兩格成對才完整。
+**寫入條件**：實作時沿 probe evidence judge 的 predicate 全表走一遍，
+確認宣告組**恰為**會紅組——工具鏈 claim 的三個恆真 predicate 就是漏了這一步。
+
 - [ ] **Step 1: 寫 unknown enum 與缺 ref 的 schema red tests**
 - [ ] **Step 2: 跑 `uv run pytest -q nova/領域/執行/test_能力契約.py`**
 
