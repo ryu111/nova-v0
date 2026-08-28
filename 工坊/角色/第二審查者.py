@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from 工坊.角色 import 薄度
+from 工坊.角色 import 後端, 薄度
 
 提示目錄 = Path(__file__).resolve().parent / "提示"
 角色名 = "第二審查者"
@@ -60,12 +60,16 @@ def 派工(
     if 路徑 is None:
         # **恰回 127**，不是「非零」：壞態本身就非零時 `!= 0` 是恆真 oracle。
         return {"exit": 127, "輸出": "", "executable": None, "prompt_digest": 摘要}
-    參數 = [路徑, "--model", model]
+    內容 = json.dumps({**工單, "prompt_digest": 摘要}, ensure_ascii=False)
+    # **呼叫形狀三家各不相同**，由 `後端.形狀()` 封閉決定；model 一律由呼叫端傳入
+    # ——這裡只決定「怎麼呼叫」，不決定「呼叫誰」，模型隨時可換。
+    尾, 進標準輸入 = 後端.形狀(backend, model, 內容)
+    參數 = [路徑, *尾]
     if sid:
         參數 += ["--resume", sid]
     出 = subprocess.run(
         參數,
-        input=json.dumps({**工單, "prompt_digest": 摘要}, ensure_ascii=False),
+        input=進標準輸入 or "",
         capture_output=True,
         text=True,
         env=環境,
