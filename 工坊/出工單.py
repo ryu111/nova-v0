@@ -28,6 +28,7 @@ SCHEMA_REVISION = 1
 碼_基準過期 = "STALE_BASE_COMMIT"
 碼_綱要未知 = "UNKNOWN_SCHEMA_REVISION"
 碼_範圍重疊 = "FILES_SCOPE_OVERLAP_IN_BATCH"
+碼_已凍結 = "WORKSHOP_FROZEN"
 通過 = "OK"
 專案根 = Path(__file__).resolve().parent.parent
 計畫目錄 = 專案根 / "docs" / "計畫"
@@ -56,7 +57,13 @@ def _摘要(文: str) -> str:
 def 生成(
     計畫: str, task: int, *, 基準: str, files_scope: list[str] | None = None
 ) -> dict[str, Any]:
-    """把一個 task 區段做成封閉的工單。**工單是動態產物，不寫進版控。**"""
+    """把一個 task 區段做成封閉的工單。**工單是動態產物，不寫進版控。**
+
+    `工坊/凍結.md` 存在時 typed 拒跑——**放一份文件說已凍結不能永久繞過退役**，
+    所以旗標由工具自己認，不是靠人記得。
+    """
+    if (Path(__file__).resolve().parent / "凍結.md").is_file():
+        raise 工單不可用(f"workshop_frozen：{碼_已凍結}：工坊已凍結，改走產品介面")
     區段文, 標題 = _區段(計畫, task)
     return {
         "schema_revision": SCHEMA_REVISION,

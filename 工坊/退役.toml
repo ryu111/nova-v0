@@ -1,0 +1,37 @@
+# `工坊/` 的退役清冊。
+#
+# **鍵名用 ASCII**：TOML 的裸鍵不接受中文（`哨兵 = [...]` 會炸
+# `Invalid statement`），而 CLAUDE.md 的語言例外正好列了這一類——
+# 跨程序的 schema 欄位名走 ASCII，中文留給值與註解。
+#
+# **這一層是暫居的**：產品的 Work 派工與 backend 註冊入口都落地那天，
+# 整包刪除、流程平移產品介面。退役條件寫成資料而不是散文，
+# 由 `架構/test_工坊退役.py` 執法——**checker 刻意住在 `工坊/` 外**，
+# 住在裡面的話它會跟著被刪掉。
+
+# 兩個哨兵：兩個都實存時，`工坊/` 必須已刪或已凍結。
+# **路徑自計畫的 Create 清單逐字轉錄，不轉述**——提案第一版把註冊入口寫成
+# 「14 BackendRegistry」，而 14 是 claude_agent_sdk 後端、整份沒有
+# BackendRegistry；真正的落點在計畫 20 Task 4。照描述寫的話，
+# 防漂移格會紅，或更糟——指到一個永遠不會出現的路徑，哨兵靜默失明。
+sentinels = [
+  "nova/基礎設施/排程/worker.py",   # 計畫 09 Task 8 的 Work 派工入口
+  "nova/啟動/後端登錄.py",           # 計畫 20 Task 4 的 backend 註冊入口
+]
+
+# 退役是**六處原子動作**，不是「刪目錄」一件事。
+# 【實測】只刪目錄而不移除 types argv：`uv run mypy … 工坊` 回 exit 2。
+retirement_steps = [
+  "刪 工坊/",
+  "移除 架構/目錄規則.toml 的 [[top_level]] dir = 工坊",
+  "移除 架構/目錄規則.toml 的 [[placement]] glob = 工坊/**",
+  "移除 架構/目錄規則.toml 的 types 閘 argv 裡的 工坊",
+  "移除 .github/workflows/gates.yml 的 types step 裡的 工坊",
+  "移除 docs/計畫/01-可執行保證語言.md 的 Plan Exit Gate 裡的 工坊",
+]
+
+# 已退役的頂層目錄。退役清冊排除格斷言：
+#   retired ∩ (top_level ∪ placement roots) == ∅
+# **這一格是雙漏洞唯一接得住的**——刪了目錄、移除了 argv／CI／fence，
+# 卻同時漏移除 top_level 與 placement 時，相等格與子集格都會綠。
+retired_dirs = []
