@@ -106,21 +106,26 @@ def test_退役是六處原子動作() -> None:
 
 
 @pytest.mark.parametrize(
-    ("漏掉", "應紅在"),
+    ("漏掉", "應紅在", "住哪"),
     [
-        ("gates.yml", "test_CI_跑的是同一組閘"),
-        ("01 fence", "test_計畫入口與規則檔的型別範圍逐字有序相同"),
-        ("types argv", "test_型別閘的目錄參數不得超出宣告的頂層"),
-        ("top_level 與 placement", "test_已退役的目錄不得仍出現在宣告裡"),
+        ("gates.yml", "test_CI_跑的是同一組閘", "架構/test_工程規範.py"),
+        ("01 fence", "test_計畫入口與規則檔的型別範圍逐字有序相同", "架構/test_目錄規則.py"),
+        ("types argv", "test_型別閘的目錄參數不得超出宣告的頂層", "架構/test_目錄規則.py"),
+        ("top_level 與 placement", "test_已退役的目錄不得仍出現在宣告裡", "架構/test_工坊退役.py"),
     ],
 )
-def test_部分退役必紅矩陣_每一種漏交都有人接(漏掉: str, 應紅在: str) -> None:
-    """**每一種漏交都要有具名的格接住**，不能有哪一種沒人管。
+def test_部分退役必紅矩陣_接住的那格必須真的存在(漏掉: str, 應紅在: str, 住哪: str) -> None:
+    """四種漏法各自對到的那一格，**必須真的在那個檔裡**。
 
-    這格本身不注入壞態（那要改真檔），它釘的是**對應關係本身**：
-    四種漏法各自對到哪一格。少寫一列就表示有一種漏法沒人接。
+    第一版寫成 `assert 漏掉 and 應紅在`——兩個都是 parametrize 傳進來的非空
+    字串，**恆真**。實測：把四個「應紅在」全部改成不存在的格名，四格照樣綠。
+    它宣稱釘住對應關係，實際只斷言字串非空。
+
+    現在改成解析目標檔、確認那個 `def` 真的在——格被改名或刪掉時這裡會紅，
+    對應關係才有牙。
     """
-    assert 漏掉 and 應紅在
+    源 = (專案根 / 住哪).read_text(encoding="utf-8")
+    assert f"def {應紅在}(" in 源, f"漏掉「{漏掉}」時該接住的 {應紅在} 不在 {住哪} 裡"
 
 
 def test_凍結旗標存在時生成器必須拒跑(tmp_path: pathlib.Path) -> None:
@@ -150,17 +155,36 @@ def test_未凍結時照常生成_防恆真() -> None:
     assert 出工單.生成("01C", 1, 基準="deadbeef")["計畫"] == "01C"
 
 
-def test_兩個哨兵都在時工坊必須已退役() -> None:
-    """退役觸發條件。**僅一個在時不觸發**（防恆真在下一格）。"""
-    到齊 = all((專案根 / p).exists() for p in 清冊()["sentinels"])
-    if 到齊:
-        assert not (專案根 / "工坊").is_dir() or (專案根 / "工坊" / "凍結.md").is_file(), (
-            "retirement_due：兩個產品入口都落地了，工坊必須已刪或已凍結"
-        )
+def 該退役了(哨兵在: list[bool], 工坊還在: bool, 已凍結: bool) -> bool:
+    """退役觸發條件做成**純函式**，才驗得到。
+
+    第一版寫成 `if 到齊: assert ...`，而兩個哨兵目前都不存在
+    （`nova/基礎設施/排程/worker.py` 與 `nova/啟動/後端登錄.py` 是未來的
+    產品入口）——**`if` 永遠不成立，整格空跑**。實測：把裡面的斷言改成
+    `assert False`，那格照樣綠。
+
+    條件永遠不成立的格等於沒有格。這是同一個病在本檔的第二次發作
+    ——凍結格我修了，這格沒修，因為我只修了被回報的那一處。
+    """
+    return all(哨兵在) and 工坊還在 and not 已凍結
 
 
-def test_僅一個哨兵在時不觸發_防恆真() -> None:
-    """否則上一格會在任何情況下都成立，等於沒驗。"""
-    在的 = [p for p in 清冊()["sentinels"] if (專案根 / p).exists()]
-    if len(在的) < len(清冊()["sentinels"]):
-        assert (專案根 / "工坊").is_dir(), "還沒到退役條件，工坊應該還在"
+@pytest.mark.parametrize(
+    ("哨兵在", "工坊還在", "已凍結", "該退"),
+    [
+        ([True, True], True, False, True),  # 兩個都到齊而工坊還在沒凍 → 該退役
+        ([True, True], True, True, False),  # 已凍結 → 不算違規
+        ([True, True], False, False, False),  # 已刪 → 已退役
+        ([True, False], True, False, False),  # 只到一個 → 還沒到條件
+        ([False, False], True, False, False),  # 都沒到 → 現況
+    ],
+)
+def test_退役觸發條件真值表(哨兵在: list[bool], 工坊還在: bool, 已凍結: bool, 該退: bool) -> None:
+    """五種組合逐列釘死——**含「只到一個不觸發」那列的防恆真**。"""
+    assert 該退役了(哨兵在, 工坊還在, 已凍結) is 該退
+
+
+def test_現況不該退役_接到真實檔案() -> None:
+    """真值表接回現實：兩個哨兵都還不存在，所以現在不該退役。"""
+    在 = [(專案根 / p).exists() for p in 清冊()["sentinels"]]
+    assert not 該退役了(在, (專案根 / "工坊").is_dir(), (專案根 / "工坊" / "凍結.md").is_file())
