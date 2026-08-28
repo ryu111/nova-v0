@@ -455,3 +455,33 @@ def 主() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(主())
+
+
+def 讀_CI_步驟() -> list[tuple[str, str]]:
+    """把 gates.yml 的 steps 讀成 `(name, run)` 序列。
+
+    **不能用一般的 YAML 載入器。** YAML 遇到重複鍵時**靜默取最後一個**，
+    而那正是 2026-08-28 實際發生的事：我把 `board` 塞成 `selftest` step 的
+    第二個 `run:`，解析後 `計畫複驗.py --自測` **在 CI 裡根本沒跑**，
+    而當時的測試只做字串比對，`--自測` 那串字仍在檔案裡，所以**照樣綠**。
+    所以這裡逐行掃，**每個 step 的 `run:` 出現兩次就是錯**。
+    """
+    步驟: list[tuple[str, str]] = []
+    名 = None
+    次數 = 0
+    for 行 in (
+        (專案根 / ".github" / "workflows" / "gates.yml").read_text(encoding="utf-8").splitlines()
+    ):
+        m = re.match(r"\s*- name:\s*(\S+)\s*$", 行)
+        if m:
+            if 名 is not None and 次數 != 1:
+                raise AssertionError(f"CI step {名} 有 {次數} 個 run:（應恰好 1）")
+            名, 次數 = m.group(1), 0
+            continue
+        r = re.match(r"\s*run:\s*(.+?)\s*$", 行)
+        if r and 名 is not None:
+            次數 += 1
+            步驟.append((名, r.group(1)))
+    if 名 is not None and 次數 != 1:
+        raise AssertionError(f"CI step {名} 有 {次數} 個 run:（應恰好 1）")
+    return 步驟

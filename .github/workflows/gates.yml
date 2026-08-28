@@ -32,5 +32,7 @@ jobs:
         run: uv run python docs/計畫複驗.py
       - name: selftest
         run: uv run python docs/計畫複驗.py --自測
+      - name: board
+        run: uv run python docs/工程板注入.py --檢查
       - name: tests
         run: uv run pytest -q

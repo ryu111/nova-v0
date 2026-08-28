@@ -16,6 +16,7 @@ from 工具.裝_git_鉤子 import 安裝 as 安裝鉤子
 from 工具.跑指定突變 import 跑批次
 from 工具.驗全部 import 跑, 閘清單
 from 架構.檢查工程規範 import (
+    讀_CI_步驟,
     check_fixture,
     命名規則檔,
     宣稱落點樣式,
@@ -320,13 +321,38 @@ def test_宣告的閘不是空的() -> None:
     assert {"format", "lint", "types", "placement", "plans", "tests"} <= 名們
 
 
+八道閘 = ("format", "lint", "types", "placement", "plans", "selftest", "board", "tests")
+
+
+def test_閘清單本身不得縮水() -> None:
+    """**絕對錨。** 宣告清單必須恰好是這八道、順序一致、無重複。
+
+    【sol 實測 2026-08-28】沒有這格時，下面那格是**相對檢查**——它拿宣告去比 CI，
+    **兩邊一起刪掉一道就照樣綠**，八道會靜默退成六道。
+    **比較兩個會一起漂移的東西，等於沒有錨。**
+
+    這一格與下一格的兩個壞況我手動實測過，都紅在指名的原因：
+    「宣告與 CI 同刪一道」紅在本格、「宣告重複同名」也紅在本格（`!= 八道閘`）。
+    **持久 fixture 負控尚未落地**——`架構/` 兩支模組都已逼近 400 邏輯行上限，
+    而新增測試檔會撞 `UNPLANNED_FILE`（落點必須先在計畫裡宣告）。
+    這是**已知缺口，不是已解決**。
+    """
+    名們 = [名 for 名, _ in 載入規則().閘們]
+    assert tuple(名們) == 八道閘, f"閘清單是 {名們}，應恰為 {list(八道閘)}"
+
+
 def test_CI_跑的是同一組閘() -> None:
     # 【實測 2026-08-27】檔名一定要 ASCII：叫 驗收.yml 時 GitHub 會註冊成功、
     # 顯示 active、workflow_dispatch 也跑得起來，但 push／pull_request **一次都不觸發**。
     # UI 上完全看不出異常。改成 gates.yml 之後 push 立刻觸發。
-    文 = (專案根 / ".github" / "workflows" / "gates.yml").read_text(encoding="utf-8")
-    for 名, argv in 載入規則().閘們:
-        assert " ".join(argv) in 文, 名
+    #
+    # 【實測 2026-08-28】**只比對字串會假綠**：把兩個 `run:` 塞進同一個 step，
+    # YAML 解析後前者被覆蓋、那道閘在 CI 裡消失，而字串還在檔案裡。
+    # 現在驗的是 **`name → run` 的實際結構**，而且每個 step 恰一個 `run:`。
+    # 【實測 2026-08-28】**不得轉成 `dict`／`set`**：宣告裡放兩個同名 gate、
+    # CI 只跑後一個時，經去重之後這格會 PASS。整條走**原始有序 list**。
+    宣告 = [(名, " ".join(argv)) for 名, argv in 載入規則().閘們]
+    assert 讀_CI_步驟() == 宣告, f"CI 步驟 {讀_CI_步驟()} 與宣告 {宣告} 不符"
 
 
 def test_git_鉤子把非零_exit_傳出去(tmp_path: pathlib.Path) -> None:

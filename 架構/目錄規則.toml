@@ -193,6 +193,10 @@ name = "selftest"
 argv = ["uv", "run", "python", "docs/計畫複驗.py", "--自測"]
 
 [[gate]]
+name = "board"
+argv = ["uv", "run", "python", "docs/工程板注入.py", "--檢查"]
+
+[[gate]]
 name = "tests"
 argv = ["uv", "run", "pytest", "-q"]
 
