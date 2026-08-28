@@ -156,6 +156,22 @@ def 階段涵蓋全部計畫(表: dict) -> None:
         )
 
 
+def _粗體(文: str) -> str:
+    """把計畫裡的 `**…**` 轉成 `<strong>`，其餘一律 escape。
+
+    **為什麼要有這支**：goal 直接來自計畫檔，而計畫是 markdown。
+    整段 escape 會讓 `**範圍值不是精準值**` 原樣顯示成星號；不 escape 又會
+    讓計畫文字有機會注入標籤。所以只放行這一種強調，其餘全部轉義。
+    """
+    出, 上次 = [], 0
+    for m in re.finditer(r"\*\*(.+?)\*\*", 文):
+        出.append(html.escape(文[上次 : m.start()]))
+        出.append(f"<strong>{html.escape(m.group(1))}</strong>")
+        上次 = m.end()
+    出.append(html.escape(文[上次:]))
+    return "".join(出)
+
+
 def 狀態字(已: int, 需: int) -> str:
     """檔案存在進度的三態。零分母是策展佔位格，不冒充完成。"""
     if 需 == 0:
@@ -361,7 +377,7 @@ def 換卡(卡: str, 表: dict, 見過: set[str]) -> str:
     )
     卡 = 換一次算(
         r'(<p class="goal">).*?(</p>)',
-        lambda m: f"{m.group(1)}{html.escape(p['goal'])}{m.group(2)}",
+        lambda m: f"{m.group(1)}{_粗體(p['goal'])}{m.group(2)}",
         卡,
         f"計畫 {pid} goal",
     )

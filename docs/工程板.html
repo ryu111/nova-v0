@@ -283,7 +283,7 @@ bash 3.2.57 下 <code>本次路徑=/tmp/x</code> 根本不是賦值而是命令�
 
 <section id="t2" role="tabpanel" aria-labelledby="b2" hidden>
 <h2>子系統計畫</h2>
-<p class="lede">每份計畫是一個可獨立交付、獨立驗收的子系統。展開看該計畫的目標、宣告的前置與逐項任務。這裡只放摘要——全文在 <code>docs/計畫/</code>，每份 17–42KB。</p>
+<p class="lede">每份計畫是一個可獨立交付、獨立驗收的子系統。展開看該計畫的目標、宣告的前置與逐項任務。這裡只放摘要——全文在 <code>docs/計畫/</code>，每份 14–100KB。</p>
 <h3 class="ph-h">Phase A　能力假設、三個信任根與持久證據</h3>
 <details class="plan"><summary><span class="pid">01</span>
 <span class="pname">可執行保證語言</span>
@@ -300,7 +300,7 @@ bash 3.2.57 下 <code>本次路徑=/tmp/x</code> 根本不是賦值而是命令�
 <details class="plan"><summary><span class="pid">01C</span>
 <span class="pname">開發期工坊</span>
 <span class="pmeta"><b>4</b> task · <b>15</b> step · <b>4</b> 負控</span></summary>
-<div class="pbody"><p class="goal">把「派工給不可靠執行者」這件事的**固定損耗**（工單轉錄、</p>
+<div class="pbody"><p class="goal">把「派工給不可靠執行者」這件事的<strong>固定損耗</strong>（工單轉錄、 grant 握手、驗收報告）從人手挪到機械，讓計畫的實作階段跑得動。 <strong>這是開發期基礎設施，不是產品功能</strong>——產品化版本在計畫 05／08／12／14–17， 本計畫帶明文退役條件，屆時整包刪除、流程平移產品介面。</p>
 <p class="deps">前置計畫　<code>01</code></p>
 <ol class="tasks"><li>讓 `工坊/` 成為受管轄的頂層 <span class="chip chip-ok">宣告檔齊 2／2</span></li><li>出工單與獨立驗工入口 <span class="chip chip-ok">宣告檔齊 4／4</span></li><li>三個角色薄殼 <span class="chip chip-ok">宣告檔齊 9／9</span></li><li>退役機制 <span class="chip chip-ok">宣告檔齊 3／3</span></li></ol></div></details>
 <details class="plan"><summary><span class="pid">02</span>
@@ -337,7 +337,7 @@ bash 3.2.57 下 <code>本次路徑=/tmp/x</code> 根本不是賦值而是命令�
 <details class="plan"><summary><span class="pid">06B</span>
 <span class="pname">技術效益評測</span>
 <span class="pmeta"><b>3</b> task · <b>15</b> step · <b>3</b> 負控</span></summary>
-<div class="pbody"><p class="goal">回答「某項技術值不值得用」——對 baseline 與 treatment 做成對實驗，</p>
+<div class="pbody"><p class="goal">回答「某項技術值不值得用」——對 baseline 與 treatment 做成對實驗， 產出<strong>帶不確定度的比較證據</strong>：token 用量的<strong>上界</strong>降低，且品質的<strong>下界</strong>不低於門檻， 兩者同時成立才接受。要的是<strong>範圍值不是精準值</strong>，而且區間必須窄到能做決定。</p>
 <p class="deps">前置計畫　<code>01 02 03 04 05 06</code></p>
 <ol class="tasks"><li>凍結實驗設計並拒絕事後改端點 <span class="chip chip-wait">尚未建立 0／7</span></li><li>決定性分析器——釘版統計實作，兩端點各自有牙 <span class="chip chip-wait">尚未建立 0／6</span></li><li>薄殼與證據重播 <span class="chip chip-wait">尚未建立 0／3</span></li></ol></div></details>
 <details class="plan"><summary><span class="pid">07</span>
