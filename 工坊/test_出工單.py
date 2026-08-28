@@ -121,8 +121,15 @@ def test_後端自報成功而零產出時不得_green() -> None:
 
 
 def test_嚴格模式真的生效() -> None:
-    """`zsh -euo pipefail`：管線中段失敗不得被末段的成功蓋掉。"""
-    出 = subprocess.run(
-        ["zsh", "-euo", "pipefail", "-c", "false | cat"], check=False, capture_output=True
-    )
-    assert 出.returncode != 0, "沒有 pipefail 的話這行會回 0"
+    """管線中段失敗不得被末段的成功蓋掉——**且不假設這台機器有 zsh**。
+
+    第一版寫死 `zsh`，本機（macOS）全綠而 CI 的 Linux runner 沒有 zsh，
+    `FileNotFoundError: 'zsh'` 讓整道閘掛。這格改成用 `驗工.嚴格旗標()`
+    探測到的那組旗標，並在**沒有 pipefail 的機器上明講這個上限**。
+    """
+    旗標 = 驗工.嚴格旗標()
+    出 = subprocess.run(["sh", *旗標, "-c", "false | cat"], check=False, capture_output=True)
+    if "pipefail" in 旗標:
+        assert 出.returncode != 0, "有 pipefail 卻沒擋住管線中段失敗"
+    else:
+        assert 出.returncode == 0, "沒有 pipefail 時管線末段成功就是 0——這是已知上限"
