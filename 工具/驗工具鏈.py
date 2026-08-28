@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -159,6 +160,60 @@ def 驗_拿掉_also_copy() -> str:
     return 通過
 
 
+# ── 面向分類（claim revision 2，sol 2026-08-28 裁定） ────────────────────────
+#
+# **revision 1 的病**：judge 只觀測單一 `code` 字串，四個 predicate 裡三個是恆真格
+# ——`TOOLCHAIN_VERSION_DRIFT` 與 `DISCOVERY_TRACK_MISSING` 全 repo 零產生者，
+# `mutation_tests_are_copied` 比對 `MUTATION_TESTS_NOT_COPIED` 而本檔實吐
+# `MUTATION_TESTS_NOT_COPIED:also_copy`（差一個後綴）。兩個負控宣告的那格
+# 都不可能紅，唯一有牙的是 catch-all `verdict_is_ok`。
+#
+# **光去掉後綴不夠**：catch-all 會讓每個已分類負控都**多紅一格**，
+# 而執行器要求 failed predicates **精確相等**（`保證規格執行.py`）。
+# 所以裁定是分面：每個語意面一個穩定 observation，診斷後綴另放 `detail`。
+#
+# **未知碼不得靜默通過**：分類表沒收到的碼一律 `HARNESS_ERROR`——
+# 那是獨立結果，不算負控成立，比「當成沒事」安全。
+
+面向 = {
+    "toolchain": ("PYTHON_VERSION_MISMATCH", "TOOL_VERSION_MISMATCH", "TOOL_NOT_INSTALLED"),
+    "discovery": ("PYTEST_DISCOVERY_NOT_CONFIGURED",),
+    "mutation_copy": ("MUTATION_TESTS_NOT_COPIED", "MUTMUT_CONFIG_NOT_LIST"),
+    "named_mutation": (
+        "NAMED_MUTATION_SURVIVED",
+        "NAMED_MUTATION_KILLED_BY_WRONG_TEST",
+        "MUTATION_MISSING_TESTS_TREATED_AS_SUCCESS",
+        "MUTATION_FAILED_FOR_OTHER_REASON",
+    ),
+}
+未知面 = "HARNESS_ERROR"
+
+
+def 分面(碼們: list[str]) -> dict[str, object]:
+    """把扁平的 failure code 串分到四個語意面；後綴進 `detail` 不進判定。
+
+    回傳四個面各自的裸碼（無後綴）或 `"OK"`，外加 `detail` 與 `harness`。
+    `harness` 不是 `"OK"` 時，整次觀察是**獨立結果**而不是負控成立。
+    """
+    出: dict[str, object] = dict.fromkeys(面向, 通過)
+    細節: dict[str, str] = {}
+    未知: list[str] = []
+    for 完整 in 碼們:
+        裸 = 完整.split(":", 1)[0]
+        for 面, 成員 in 面向.items():
+            if 裸 in 成員:
+                出[面] = 裸
+                細節[裸] = 完整
+                break
+        else:
+            未知.append(完整)
+    出["detail"] = 細節
+    出["harness"] = 未知面 if 未知 else 通過
+    if 未知:
+        細節[未知面] = ",".join(未知)
+    return 出
+
+
 def 跑基線() -> list[str]:
     """跑不需要子程序的四項設定與版本檢查，回傳所有 failure code。"""
     設定 = 讀專案設定()
@@ -171,6 +226,7 @@ def 主(引數: list[str] | None = None) -> int:
     剖析器 = argparse.ArgumentParser(description="day-one 工具鏈探針")
     剖析器.add_argument("--驗指定突變", "--驗指定守衛突變", dest="驗指定突變", action="store_true")
     剖析器.add_argument("--負控-拿掉-also-copy", dest="拿掉_also_copy", action="store_true")
+    剖析器.add_argument("--分面輸出", dest="分面輸出", action="store_true")
     參數 = 剖析器.parse_args(引數)
 
     失敗 = 跑基線()
@@ -179,8 +235,11 @@ def 主(引數: list[str] | None = None) -> int:
     if 參數.拿掉_also_copy and (碼 := 驗_拿掉_also_copy()) != 通過:
         失敗.append(碼)
 
-    for 碼 in 失敗:
-        print(碼, file=sys.stderr)
+    if 參數.分面輸出:
+        print(json.dumps(分面(失敗), ensure_ascii=False, sort_keys=True))
+    else:
+        for 碼 in 失敗:
+            print(碼, file=sys.stderr)
     return 1 if 失敗 else 0
 
 
