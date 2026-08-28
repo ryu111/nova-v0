@@ -32,10 +32,30 @@ def test_工單帶來源區段的位元組摘要() -> None:
     assert 單["schema_revision"] == 出工單.SCHEMA_REVISION
 
 
-def test_手改一字必須被拒() -> None:
-    """消費三驗之一：重讀來源、重算摘要。"""
+def test_工單自身欄位被改必須被拒() -> None:
+    """**整單摘要**：`grant` 與 `files_scope` 是殼的授權輸入，不能事後塞。
+
+    第一版只有 `來源摘要`（綁計畫的 task 區段），實測生成後塞
+    `grant=["command"]`、把 `files_scope` 放大成 `["nova/**"]`，**消費照樣接受**
+    ——「工單封閉」對最要緊的那一欄不成立。fable 覆蓋審 M4 抓到。
+    """
+    for 欄, 值 in (("grant", ["command"]), ("files_scope", ["nova/**"]), ("標題", "改過")):
+        單 = dict(一張工單())
+        單[欄] = 值
+        with pytest.raises(出工單.工單不可用) as e:
+            出工單.消費(單, 工作樹基準="deadbeef")
+        assert str(e.value).startswith("work_order_tampered"), f"{欄} 被改卻沒被擋"
+
+
+def test_來源區段被改必須被拒() -> None:
+    """另一半：**整單摘要對得上、但計畫的來源區段變了**。
+
+    這種情況整單摘要驗不出來（工單自己沒被動），要靠重讀來源重算。
+    兩個摘要各驗各的，缺一邊就有一整類改動溜過去。
+    """
     單 = dict(一張工單())
-    單["標題"] = str(單["標題"]) + "。"
+    單["來源摘要"] = "0" * 64
+    單["整單摘要"] = 出工單._整單摘要(單)
     with pytest.raises(出工單.工單不可用) as e:
         出工單.消費(單, 工作樹基準="deadbeef")
     assert str(e.value).startswith("work_order_digest_mismatch")

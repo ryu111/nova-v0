@@ -14,7 +14,6 @@ prompt digest，並要求殼原樣帶回 sentinel。
 
 from __future__ import annotations
 
-import ast
 import os
 import stat
 from pathlib import Path
@@ -22,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from 工坊 import 出工單
-from 工坊.角色 import 執行者, 薄度
+from 工坊.角色 import 執行者, 第二審查者, 薄度, 裁定者
 
 SENTINEL = "WORKSHOP_FAKE_BACKEND_SENTINEL"
 命令找不到 = 127  # POSIX：executable 缺席
@@ -158,10 +157,39 @@ def test_提示檔取摘要且三個角色各一份() -> None:
         assert 薄度.提示摘要(檔)
 
 
-def test_角色不得取得接受權() -> None:
-    """三個殼的輸出一律是 observation／advice——**接受權只在 ClaimSpec 閘**。"""
-    for 名 in ("執行者", "裁定者", "第二審查者"):
-        源 = (Path(__file__).resolve().parent / "角色" / f"{名}.py").read_text(encoding="utf-8")
-        樹 = ast.parse(源)
-        名字們 = {n.id for n in ast.walk(樹) if isinstance(n, ast.Name)}
-        assert "accept" not in {x.lower() for x in 名字們}, f"{名} 疑似自行宣告接受"
+def test_角色不得取得接受權(tmp_path: Path) -> None:
+    """三個殼的輸出一律 observation／advice——**看實際回傳值，不是看識別字**。
+
+    第一版只掃 `ast.Name` 裡有沒有英文 `accept`。fable 覆蓋審 M3 實測：
+    讓殼回傳 `kind="ACCEPTANCE"`（字串常數不是 `Name`）**42 格全綠**
+    ——那格掃的是命名習慣，不是行為。
+    """
+    _假後端(tmp_path)
+    環境 = dict(os.environ, PATH=f"{tmp_path}:{os.environ['PATH']}")
+    for 殼 in (執行者, 裁定者, 第二審查者):
+        出 = 殼.派工(_工單(), model="claude-opus-5", 環境=環境)
+        assert 出["kind"] == "OBSERVATION", f"{殼.角色名} 回了 {出['kind']}，不是 observation"
+
+
+def test_薄度抓得到凍結名單的匯入(tmp_path: Path) -> None:
+    """`import tenacity` 那類——**既有的 nova checker 略過非 `nova.*`，靠它抓不到**。
+
+    fable 覆蓋審 M1 實測：把整段 import 檢查關掉，42 格全綠——**零 fixture**。
+    """
+    壞 = tmp_path / "壞殼.py"
+    壞.write_text("import tenacity\n\n\ndef 派工():\n    return 1\n", encoding="utf-8")
+    assert any("凍結名單" in x for x in 薄度.檢查(壞))
+
+
+def test_薄度抓得到睡眠與遞迴(tmp_path: Path) -> None:
+    """含 `from time import sleep` 之後的**裸呼叫**——那是 `ast.Name` 不是 `Attribute`。
+
+    fable 覆蓋審 M2 實測：把 sleep／遞迴檢查整支關掉，42 格全綠。
+    """
+    睡 = tmp_path / "睡殼.py"
+    睡.write_text("from time import sleep\n\n\ndef 派工():\n    sleep(1)\n", encoding="utf-8")
+    assert any("sleep" in x for x in 薄度.檢查(睡))
+
+    遞 = tmp_path / "遞殼.py"
+    遞.write_text("def 派工(n):\n    return 派工(n - 1)\n", encoding="utf-8")
+    assert any("遞迴" in x for x in 薄度.檢查(遞))

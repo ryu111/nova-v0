@@ -1,8 +1,11 @@
 """AST 層的薄度檢查：殼不得長出 dispatch 邏輯。
 
 **為什麼要自帶 import 檢查**：既有的 nova import checker **略過非 `nova.*` 模組**，
-靠它抓不到 `import tenacity`。所以這裡用白名單制逐一檢查
-`ast.Import`／`ImportFrom`。
+靠它抓不到 `import tenacity`。這裡逐一檢查 `ast.Import`／`ImportFrom`。
+
+**用的是黑名單（`凍結名單`）不是白名單**——計畫原文寫「白名單制」而實作是黑名單，
+fable 覆蓋審抓到名實不符。黑名單的已知上限：沒列到的新 retry 套件抓不到，
+所以另外三條（禁 sleep／禁遞迴／禁迴圈內後端呼叫）管的是**形狀**而不是名字。
 
 **為什麼禁的是「迴圈內呼叫後端」而不是禁迴圈**（sol 第四十二輪接受的收窄）：
 殼逐條驗 grant 本來就要純資料迴圈，**retry 的形狀是迴圈內呼叫後端**。
@@ -16,10 +19,15 @@ import ast
 import hashlib
 from pathlib import Path
 
+碼_長出派工邏輯 = "SHELL_GREW_DISPATCH_LOGIC"
+碼_殼自宣接受 = "SHELL_CLAIMED_ACCEPTANCE"
+通過 = "OK"
 行數上限 = 200
 # 這些是 dispatch 的形狀，不是工具：裝上去就表示殼開始自己扛重試與排程。
 凍結名單 = frozenset({"tenacity", "backoff", "asyncio", "threading", "sched", "concurrent"})
 後端呼叫 = frozenset({"run", "Popen", "call", "check_output", "check_call"})
+# 這些名字被 from-import 進來之後就是裸呼叫，`ast.Attribute` 那條看不見。
+危險名 = frozenset({"sleep", "run", "Popen", "call", "check_output", "check_call"})
 
 
 def 提示摘要(檔: Path) -> str:
@@ -60,7 +68,11 @@ def _會碰後端的函式(樹: ast.Module) -> set[str]:
 
 
 def _查匯入(樹: ast.Module) -> list[str]:
-    """白名單制逐一檢查——既有的 nova checker 略過非 `nova.*`，靠它抓不到。"""
+    """黑名單逐一檢查——既有的 nova checker 略過非 `nova.*`，靠它抓不到。
+
+    `from time import sleep` 之後的裸 `sleep()` 是 `ast.Name` 不是 `Attribute`，
+    所以 from-import 的名字也要收進來，交給 `_查睡與遞迴` 比對。
+    """
     出: list[str] = []
     for 節點 in ast.walk(樹):
         if isinstance(節點, ast.Import):
@@ -69,8 +81,10 @@ def _查匯入(樹: ast.Module) -> list[str]:
                 for 別 in 節點.names
                 if 別.name.split(".")[0] in 凍結名單
             ]
-        elif isinstance(節點, ast.ImportFrom) and (節點.module or "").split(".")[0] in 凍結名單:
-            出.append(f"from 凍結名單模組 {節點.module} import")
+        elif isinstance(節點, ast.ImportFrom):
+            if (節點.module or "").split(".")[0] in 凍結名單:
+                出.append(f"from 凍結名單模組 {節點.module} import")
+            出 += [f"from-import 了 {別.name}" for 別 in 節點.names if 別.name in 危險名]
     return 出
 
 
@@ -100,6 +114,12 @@ def _查睡與遞迴(樹: ast.Module) -> list[str]:
             and 節點.func.attr == "sleep"
         ):
             出.append("殼裡不得有 sleep")
+        if (
+            isinstance(節點, ast.Call)
+            and isinstance(節點.func, ast.Name)
+            and 節點.func.id == "sleep"
+        ):
+            出.append("殼裡不得有 sleep（from-import 的裸呼叫）")
         if isinstance(節點, ast.FunctionDef):
             出 += [
                 f"遞迴呼叫 {節點.name}"
@@ -117,3 +137,12 @@ def 檢查(檔: Path) -> list[str]:
     樹 = ast.parse(源)
     超行 = [f"超過 {行數上限} 行絆線"] if len(源.splitlines()) > 行數上限 else []
     return 超行 + _查匯入(樹) + _查迴圈內後端(樹) + _查睡與遞迴(樹)
+
+
+def 判薄度(檔: Path, 回傳種類: str) -> str:
+    """把薄度與接受權兩面做成帶失敗碼的產生者，供 claim 的 judge 比對。"""
+    if 檢查(檔):
+        return 碼_長出派工邏輯
+    if 回傳種類 != "OBSERVATION":
+        return 碼_殼自宣接受
+    return 通過
