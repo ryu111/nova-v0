@@ -9,7 +9,16 @@
 sol 的裁法：**同一份 ledger 自動產生 subtotal，否則手算值不可驗。**
 所以這支是唯一的計數來源；盤點檔不再寫死任何總數。
 
-**判定表的列格式**（本支認得的全集）：以 `| ` 開頭、含三個判定值之一。
+**什麼算一列判定**（兩個條件都要，缺一就把雜訊算進去）：
+
+1. **必須在某個 `## 批次` 區段內**——第 16–18 行的判定值圖例表不是裁定。
+2. **判定值必須獨占一格**（可帶粗體、`×N`、括號補述）——票表那種
+   「FP 5／MISSING 13」是散文裡提到，不是那一列的判定。
+
+**這兩條是補的，不是原本就有。** 第一版只認「以 `| ` 開頭且含判定值」，
+於是圖例三列與票表兩列被當成五筆裁定算進總數——**而我在第一次跑就看到
+`（批次前） 1 1 1` 這行，沒有質疑它**，還把那個數字當成「唯一權威計數來源」報出去。
+被退回的手算值換成程式算，不代表程式算的就對；**程式的判定規則一樣要負控。**
 成員數的展開規則兩條，缺一不可：
 
 1. 明文 `×N` 標記優先（`` `MISSING` ×4 `` 代表四個成員）。
@@ -27,7 +36,10 @@ import sys
 
 判定值 = ("FALSE_POSITIVE", "MISSING", "DECLARATION")
 盤點檔 = pathlib.Path(__file__).resolve().parent / "決策" / "封閉集合殺手盤點.md"
-名字樣式 = re.compile(r"`[A-Z][A-Z0-9_]{2,}`")
+# 兩字名字要收得到：`ALLOWED_OPS` 的 `EQ`／`NE`／`IN`／`LT`／`GT` 都是兩字。
+# 第一版寫 `{2,}`（三字以上），那五個一律漏數——那列目前靠 `×12` 標記才對，
+# 換個人不寫標記就會少算，而且不會有任何跡象。
+名字樣式 = re.compile(r"`[A-Z][A-Z0-9_]+`")
 
 
 def 成員數(列: str, 判: str) -> int:
@@ -39,20 +51,29 @@ def 成員數(列: str, 判: str) -> int:
     return len(名字樣式.findall(名欄)) or 1
 
 
+def 獨占一格(列: str, 判: str) -> bool:
+    """判定值是否獨占某一格——排除散文裡順口提到判定值的票表列。"""
+    for 格 in 列.strip("|").split("|"):
+        乾 = 格.replace("*", "").replace("`", "").strip()
+        if 乾.startswith(判):
+            return True
+    return False
+
+
 def 統計(文: str) -> dict[str, dict[str, int]]:
     """回傳 `{批次: {判定值: 成員數}}`，外加 `窄格` 與 `觀察` 兩個附帶計數。"""
     出: dict[str, dict[str, int]] = {}
-    批 = "（批次前）"
+    批 = None
     for 列 in 文.splitlines():
         if 列.startswith("## 批次"):
             批 = 列[3:].split("：")[0].strip()
             出.setdefault(批, collections.defaultdict(int))
             continue
-        if not 列.startswith("| "):
+        if 批 is None or not 列.startswith("| "):
             continue
         本 = 出.setdefault(批, collections.defaultdict(int))
         for 判 in 判定值:
-            if 判 in 列:
+            if 判 in 列 and 獨占一格(列, 判):
                 本[判] += 成員數(列, 判)
                 break
         if "窄格" in 列:
