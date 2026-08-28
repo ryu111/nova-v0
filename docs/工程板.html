@@ -190,7 +190,7 @@ footer{border-top:1px solid var(--線);color:var(--次);font-size:12.5px;
 <tr><td class="mono">2</td><td>Ruff 0.16.4 ＋ mypy 2.3.1，全部既定上限（py314 · 行寬 100 · McCabe 10 · args 6 · branches 12 · statements 60 · strict）<span class="dep">先紅證據：NameError: validate_engineering_config</span></td><td class="neg">錯誤設定 fixture 同時放寬三處（拿掉 mypy strict、關掉 Ruff 的 D、McCabe 提到 20）→ <code>ENGINEERING_GATE_WEAKENED</code> 且必須逐一列出三項</td><td><span class="chip chip-ok">綠</span></td></tr>
 <tr><td class="mono">3</td><td><code>架構/目錄規則.toml</code> 宣告六頂層、nova 十三層、import 方向與 400／250／60 規模上限；<code>架構/檢查工程規範.py</code> 只執行不解釋<span class="dep">先紅證據：No module named 架構.檢查工程規範</span></td><td class="neg">repository 錯放 <code>nova/應用/</code> → <code>PLACEMENT_LAYER_MISMATCH</code>；61 行函式 → <code>FUNCTION_TOO_LARGE</code>；另七個指定突變全部被殺</td><td><span class="chip chip-ok">綠</span></td></tr>
 <tr><td class="mono">4</td><td><code>架構/命名規則.toml</code> 宣告雙軌：Python 識別字可全中文或全 ASCII、必須同時是 NFC 與 NFKC、每個 <code>_</code> 段單一 script；跨程序的 shell name／JSON 欄位／SQL 識別字一律 ASCII<span class="dep">先紅證據：assert 'OK' == 'MIXED_SCRIPT_IDENTIFIER'——壞東西被接受</span></td><td class="neg"><code>claim狀態</code> → <code>MIXED_SCRIPT_IDENTIFIER</code>；<code>本次路徑=/tmp/x</code> → <code>NON_ASCII_SHELL_NAME</code>；同檔的 <code>claim_ref</code>／<code>target_dir</code> 必須不被誤殺</td><td><span class="chip chip-ok">綠</span></td></tr>
-<tr><td class="mono">5</td><td><code>nova/核心</code> 四支值型別：識別（SemanticId／BindingSlot／ClaimRef）、摘要（canonical JSON ＋ SHA-256）、時間（Duration／Instant，這一層沒有時鐘）、錯誤（CaseFailureKind 封閉 enum）<span class="dep">先紅證據：ModuleNotFoundError: nova.核心.時間</span></td><td class="neg">拿掉 <code>sort_keys</code> → 鍵順序測試紅；拿掉 NFC 檢查 → NFD 碰撞測試紅；語義識別樣式放行任何字 → 中文 id 測試紅。21 個突變 16 個當場殺、補 5 個測試後全殺</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">5</td><td><code>nova/核心</code> 四支值型別：識別（SemanticId／BindingSlot／ClaimRef）、摘要（canonical JSON ＋ SHA-256）、時間（Duration／Instant，這一層沒有時鐘）、錯誤（CaseFailureKind 封閉 enum）<span class="dep">先紅證據：ModuleNotFoundError: nova.核心.時間</span></td><td class="neg">拿掉 <code>sort_keys</code> → 鍵順序測試紅；拿掉 NFC 檢查 → NFD 碰撞測試紅；語義識別樣式放行任何字 → 中文 id 測試紅。21 個突變 16 個當場殺、補 5 個測試後全殺</td><td><span class="chip chip-wait">未交付</span><br><span class="note-in">`驗收/工具鏈/fixtures/動態shell宣告.sh` 從未建立——板面 2026-08-28 前把它列成已交付。</span></td></tr>
 <tr><td class="mono">6</td><td>ClaimSpec 0.2.0 封閉 meta-schema ＋ 效果契約 ＋ 綁定清單三份 schema；<code>保證規格模型.py</code> 只執行不解釋，且不碰檔案系統（權威層 <code>allow_io=false</code>）<span class="dep">先紅證據：ModuleNotFoundError: nova.權威.判準.保證規格模型</span></td><td class="neg"><code>passed</code>→UNKNOWN_FIELD、清空負控→MIN_ITEMS、<code>wall_ms</code> 寫成字串→TYPE_MISMATCH、效果原語配 null→EFFECT_DELIVERY_REQUIRED、非效果 claim 配契約→EFFECT_DELIVERY_FORBIDDEN、<code>EXACTLY_ONCE</code>→UNSUPPORTED_DELIVERY_SEMANTICS。25 個突變全殺</td><td><span class="chip chip-ok">綠</span></td></tr>
 <tr><td class="mono">7</td><td>確定性編譯：<code>compile_claim(spec, catalog, binding, offer)</code>，
 <code>plan_digest</code> 綁<b>四個輸入</b>而不只綁 claim——只綁 claim 等於宣稱在別的環境上驗的是同一件事<span class="dep">先紅證據：ModuleNotFoundError: nova.權威.判準.保證規格編譯</span></td>
@@ -207,10 +207,44 @@ footer{border-top:1px solid var(--線);color:var(--次);font-size:12.5px;
 <td class="neg">合法 claim 仍回 UNSUPPORTED；harness fault 被算成 CLAIM_REJECTED；未知運算回 True 而非 False。防恆真格：positional pytest 路徑照常可用</td><td><span class="chip chip-wait">未開始</span></td></tr>
 <tr><td class="mono">13</td><td>補跑 Tasks 1–4 的工程 ClaimSpec 閘：四份分兩批——兩份接線即跑，兩份待 Task 12 補齊運算。<b>「待」只是排序不是豁免</b>，本 task 不得以兩份 evidence 完成<span class="dep">拆分自原 Task 12 的 evidence-only 那一半</span></td>
 <td class="neg">把 <code>engineering.rules.day-one-enforced</code> 的四項 <code>must_fail_exactly</code> 縮成一項；negative control 回 HARNESS_ERROR 而非 CLAIM_REJECTED</td><td><span class="chip chip-wait">未開始</span></td></tr>
-<tr><td class="mono">14</td><td>六道閘接上自動執行點：本地入口 <code>工具/驗全部.py</code>（跑完每一道才回報，<b>不在第一個紅就停</b>）、pre-commit hook、CI required check，三處共讀同一份宣告清單<span class="dep">先紅證據：在拋棄式複本上同時弄壞三樣東西，git commit 仍 exit 0</span></td>
-<td class="neg">入口第一紅就停；入口永遠回零；CI 漏跑一道；hook 吞掉非零 exit。外加防恆真格：全綠時 hook 不擋正常 commit</td><td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">14</td><td>八道閘接上自動執行點：本地入口 <code>工具/驗全部.py</code>（跑完每一道才回報，<b>不在第一個紅就停</b>）、pre-commit hook、CI required check，三處共讀同一份宣告清單<span class="dep">先紅證據：在拋棄式複本上同時弄壞三樣東西，git commit 仍 exit 0</span></td>
+<td class="neg">入口第一紅就停；入口永遠回零；CI 漏跑一道；hook 吞掉非零 exit。外加防恆真格：全綠時 hook 不擋正常 commit</td><td><span class="chip chip-wait">未交付</span><br><span class="note-in">`工具/跑驗收.py` 實跑仍回 `UNSUPPORTED_CLAIM_EXECUTION`。這是接線那一步，18 份 claim 至今零執行。</span></td></tr>
 <tr><td class="mono">15</td><td>把「跑一批指定突變」包成有測試的工具：逐條套用事前命名的突變、比對宣告，<b>沒有百分比</b><span class="dep">先紅證據：ModuleNotFoundError: 工具.跑指定突變</span></td>
-<td class="neg">宣告殺掉卻存活；宣告存活卻被殺；目標字串不存在時必須明講而不是當成通過。防恆真格：跑完工作樹與跑前逐位元組相同</td><td><span class="chip chip-ok">綠</span></td></tr>
+<td class="neg">宣告殺掉卻存活；宣告存活卻被殺；目標字串不存在時必須明講而不是當成通過。防恆真格：跑完工作樹與跑前逐位元組相同</td><td><span class="chip chip-wait">未交付</span><br><span class="note-in">依賴 Task 12。</span></td></tr>
+</tbody></table></div>
+
+<h3 class="ph-h">01C　開發期工坊（四個 task 全數交付）</h3>
+<p class="lede">把派工的固定損耗從人手挪到機械。<b>開發期基礎設施，不是產品功能</b>——
+帶明文退役條件，產品的 Work 派工與 backend 註冊入口都落地那天整包刪除。</p>
+<div class="tw"><table>
+<thead><tr><th>Task</th><th>交付</th><th>固定負控（實跑）</th><th>狀態</th></tr></thead>
+<tbody>
+<tr><td class="mono">1</td><td><b>讓 <code>工坊/</code> 成為受管轄的頂層</b>：六件同交——
+<code>[[top_level]]</code>＋<code>[[placement]] glob</code>＋types argv＋<code>gates.yml</code>＋
+計畫 01 的 Plan Exit Gate＋說明副本改為指向權威。</td>
+<td>先跑到指定失敗：只加 <code>[[top_level]]</code> 時逐字報「宣告有而掃不到 <code>['工坊']</code>」
+——<b>只加宣告是裝飾</b>，<code>top_level</code> 在 checker 裡一次都沒被載入。
+三件漏交各自被不同的格接住。</td>
+<td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">2</td><td><b>出工單與獨立驗工入口</b>：工單綁來源 task 區段的位元組摘要
+與工作樹基準，消費時四驗；驗工入口非 LLM，逐條記 argv 與 exit，全部 0 才 green。</td>
+<td>手改一字紅在 <code>work_order_tampered</code>、舊工單打新樹紅在 <code>stale_base_commit</code>。
+<b>「全綠才 green」那格繞了三版才脫離恆真</b>——fail-fast 讓「中段失敗而末條成功」不可能存在，
+能區分兩種實作的是未執行那條的處置（<code>None</code> 不是 0）。</td>
+<td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">3</td><td><b>三個角色薄殼</b>：backend／model／sid／grant 分欄不混串；
+executable 先 PATH resolve、缺席恰回 127、resolve 後以絕對路徑執行並記 digest。
+薄度 AST 格禁 sleep／遞迴／迴圈體內呼叫後端。</td>
+<td>冒煙格<b>不用 <code>--help</code></b>——殼自己的 help 完全不碰後端 PATH，那條路徑綠了也是假綠。
+正面格真的經 PATH 找到假後端、核對 exact argv 與 stdin 工單、要求原樣帶回 sentinel。</td>
+<td><span class="chip chip-ok">綠</span></td></tr>
+<tr><td class="mono">4</td><td><b>退役機制</b>：退役是<b>六處原子動作</b>不是刪目錄一件事；
+清冊記兩個哨兵（自計畫 Create 清單逐字轉錄）；checker 住在 <code>架構/</code> 不是 <code>工坊/</code>
+——住在裡面會跟著被刪。</td>
+<td><b>退役清冊排除格是雙漏洞唯一接得住的</b>：造出「宣稱已退役但兩處宣告都還在」時，
+相等格＋子集格＋逐字有序格＋CI 格四格全綠，只有它紅。
+刻意不驗「每個頂層都實存」——<code>前端/</code> 是已宣告但尚未建立的頂層，那條會誤殺它。</td>
+<td><span class="chip chip-ok">綠</span></td></tr>
 </tbody></table></div>
 <div class="note"><b>三筆欠帳的現況</b>　① <code>mypy</code> 的 <code>strict=true</code> 已接上閘，
 範圍**逐字取自計畫 01 的 Plan Exit Gate**（權威在那裡；這裡不複述字面，複述就是又一份會漂的副本）——不是全 repo，<code>docs/</code> 與 fixtures 不在裡面。
