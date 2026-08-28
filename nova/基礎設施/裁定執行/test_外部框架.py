@@ -24,7 +24,7 @@ from nova.基礎設施.裁定執行.外部測試框架 import (
     證據行,
     轉譯,
 )
-from nova.基礎設施.裁定執行.案例執行 import CaseResult, CaseTerminal
+from nova.基礎設施.裁定執行.案例執行 import CaseResult, CaseTerminal, 比對
 from nova.核心.錯誤 import CaseFailureKind
 from 工具.跑驗收 import 跑驗收, 跑驗收結果
 
@@ -89,6 +89,19 @@ def test_案例識別的三種形狀() -> None:
     assert 案例識別("a.b", {"kind": "ACTUAL", "case_id": "actual"}) == "a.b::actual"
     assert 案例識別("a.b", {"kind": "POSITIVE", "case_id": "p1"}) == "a.b::positive::p1"
     assert 案例識別("a.b", {"kind": "NEGATIVE", "case_id": "n1"}) == "a.b::negative::n1"
+
+
+def test_比對支援_not_in_not_contains_disjoint() -> None:
+    assert 比對("甲", "NOT_IN", ["乙", "丙"]) is True, "NOT_IN 正例應為 True"
+    assert 比對("甲", "NOT_IN", ["甲", "乙"]) is False, "NOT_IN 反例應為 False"
+    assert 比對("甲乙", "NOT_CONTAINS", "丙") is True, "NOT_CONTAINS 正例應為 True"
+    assert 比對("甲乙", "NOT_CONTAINS", "乙") is False, "NOT_CONTAINS 反例應為 False"
+    assert 比對({"甲"}, "DISJOINT", {"乙"}) is True, "DISJOINT 正例應為 True"
+    assert 比對({"甲"}, "DISJOINT", {"甲"}) is False, "DISJOINT 反例應為 False"
+    assert 比對("甲", "NOT_IN", 1) is False, "NOT_IN 右側非容器不得通過"
+    assert 比對(1, "NOT_CONTAINS", "甲") is False, "NOT_CONTAINS 左側非字串／集合不得通過"
+    assert 比對({"甲"}, "DISJOINT", "乙") is False, "DISJOINT 兩側非集合不得通過"
+    assert 比對("甲", "SOUNDS_LIKE", "乙") is False, "未知運算必須 fail closed"
 
 
 def 寫計畫(根: Path, 正常: bool = True, 負控狀況: str | None = None) -> Path:
@@ -163,7 +176,8 @@ def test_runner_cli_可重複指定_claim_與_binding(tmp_path: Path) -> None:
         catalog=目錄,
     )
     assert 結果.exit_code == 1
-    assert 結果.code == "UNSUPPORTED_CLAIM_EXECUTION"
+    assert 結果.code == "UNKNOWN_BINDING_ID"
+    assert 結果.細節 == "b1"
 
     目錄_缺一 = 已知目錄({"claim.one": 檔1, "claim.two": tmp_path / "deleted.claim.json"})
     結果_缺 = 跑驗收(["--claim", "claim.one", "--claim", "claim.two"], catalog=目錄_缺一)
@@ -175,13 +189,13 @@ def test_runner_cli_可重複指定_claim_與_binding(tmp_path: Path) -> None:
     assert 結果_未知.code == "UNKNOWN_CLAIM_ID"
 
 
-def test_合法_claim_回_unsupported_claim_execution_且_零呼叫_subprocess(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_合法_claim_會編譯計畫並呼叫_subprocess(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """必加測試格 1：合法 id 回精確 UNSUPPORTED_CLAIM_EXECUTION，spy 證明 subprocess 零呼叫。"""
-    檔 = tmp_path / "c1.claim.json"
-    檔.write_text("{}", encoding="utf-8")
-    目錄 = 已知目錄({"claim.one": 檔})
+    """接通後合法 id 必須走 --claim-plan 呼叫外框架。"""
+    根 = Path(__file__).resolve().parents[3]
+    檔 = 根 / "規格" / "判準" / "保證" / "執行鏈可執行.claim.json"
+    目錄 = 已知目錄({"claimspec.execution.chain-is-runnable": 檔})
 
     呼叫次數 = 0
 
@@ -192,10 +206,10 @@ def test_合法_claim_回_unsupported_claim_execution_且_零呼叫_subprocess(
 
     monkeypatch.setattr(subprocess, "run", 假_subprocess_run)
 
-    結果 = 跑驗收(["--claim", "claim.one"], catalog=目錄)
-    assert 結果.exit_code == 1
-    assert 結果.code == "UNSUPPORTED_CLAIM_EXECUTION"
-    assert 呼叫次數 == 0
+    結果 = 跑驗收(["--claim", "claimspec.execution.chain-is-runnable"], catalog=目錄)
+    assert 結果.exit_code == 0
+    assert 結果.code == "OK"
+    assert 呼叫次數 == 1
 
 
 def test_合法與查無混用_不被提前掩蓋_回_unknown_claim_id(tmp_path: Path) -> None:
@@ -232,26 +246,41 @@ def test_合法與缺檔混用_不被提前掩蓋_回_claim_file_missing(tmp_pat
 
 
 def test_負控_舊版把_claim_json_當_positional_傳給_pytest_必被抓到(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """必加測試格 5：負控 claim-json-as-pytest-positional 證明壞變體必被特定斷言抓到。"""
-    檔 = tmp_path / "valid.claim.json"
-    檔.write_text("{}", encoding="utf-8")
-    目錄 = 已知目錄({"valid.claim": 檔})
+    根 = Path(__file__).resolve().parents[3]
+    檔 = 根 / "規格" / "判準" / "保證" / "執行鏈可執行.claim.json"
+    目錄 = 已知目錄({"claimspec.execution.chain-is-runnable": 檔})
 
     呼叫次數 = 0
+    實際指令: list[str] = []
 
     def 假_subprocess_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
         nonlocal 呼叫次數
         呼叫次數 += 1
+        實際指令.extend(args[0])  # type: ignore[arg-type]
         return subprocess.CompletedProcess(args=[], returncode=4)
 
     monkeypatch.setattr(subprocess, "run", 假_subprocess_run)
 
-    結果 = 跑驗收(["--claim", "valid.claim"], catalog=目錄)
+    結果 = 跑驗收(["--claim", "claimspec.execution.chain-is-runnable"], catalog=目錄)
 
-    assert 結果.code == "UNSUPPORTED_CLAIM_EXECUTION"
-    assert 呼叫次數 == 0
+    assert 結果.code == "FAIL"
+    assert 呼叫次數 == 1
+    assert "--claim-plan" in 實際指令
+    assert str(檔) not in 實際指令
+
+
+def test_合法_claim_接通後不得再回_unsupported() -> None:
+    """合法 claim 必須進入執行鏈，不得停在尚未接線。"""
+    根 = Path(__file__).resolve().parents[3]
+    檔 = 根 / "規格" / "判準" / "保證" / "執行鏈可執行.claim.json"
+    目錄 = 已知目錄({"claimspec.execution.chain-is-runnable": 檔})
+
+    結果 = 跑驗收(["--claim", "claimspec.execution.chain-is-runnable"], catalog=目錄)
+
+    assert 結果.code != "UNSUPPORTED_CLAIM_EXECUTION"
 
 
 def test_claim_catalog_生產綁定掃描與測試注入() -> None:

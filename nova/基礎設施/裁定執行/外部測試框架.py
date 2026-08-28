@@ -19,14 +19,21 @@ from __future__ import annotations
 
 import enum
 import json
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from nova.基礎設施.裁定執行.參考執行封套 import 參考封套, 腳本失敗
-from nova.基礎設施.裁定執行.案例執行 import CaseResult, CaseTerminal, run_case, 獨立結果
+from nova.基礎設施.裁定執行.參考執行封套 import 參考封套, 時限封套, 腳本失敗
+from nova.基礎設施.裁定執行.案例執行 import (
+    CaseResult,
+    CaseTerminal,
+    run_case,
+    比對,
+    獨立結果,
+)
 from nova.核心.錯誤 import CaseFailureKind
 
 負控 = "NEGATIVE"
@@ -77,8 +84,108 @@ def 證據行(plan_digest: str, 結果: CaseResult) -> str:
     )
 
 
-def 組封套(設定: dict[str, Any]) -> 參考封套:
-    """目前只有參考封套。真後端進來時這裡換成 registry，判定邏輯不動。"""
+合法仍不支援 = "工具/跑驗收.py::跑驗收[legal-claim-still-unsupported]"
+故障冒充拒絕 = "nova/基礎設施/裁定執行/外部測試框架.py::轉譯[HARNESS_ERROR→CLAIM_REJECTED]"
+未知運算通過 = "nova/基礎設施/裁定執行/案例執行.py::比對[unknown-operator→True]"
+
+
+@dataclass(frozen=True, slots=True)
+class 執行鏈封套:
+    """Task 12 自證用 runtime；三個 locator 各自注入一個可執行的壞行為。"""
+
+    def 觀察(self, case: dict[str, Any]) -> dict[str, Any] | 腳本失敗:
+        """執行正常行為或由精確 locator 選定的故障變體。"""
+        正常 = {
+            "execution_code": "OK",
+            "terminal": CaseTerminal.HARNESS_ERROR.value,
+            "unknown_operator_result": 比對("甲", "SOUNDS_LIKE", "乙"),
+        }
+        if case["kind"] != 負控:
+            return 正常
+        locator = str(case.get("faulty_subject", ""))
+        if locator == 合法仍不支援:
+            return {**正常, "execution_code": "UNSUPPORTED_CLAIM_EXECUTION"}
+        if locator == 故障冒充拒絕:
+            return {**正常, "terminal": CaseTerminal.CLAIM_REJECTED.value}
+        if locator == 未知運算通過:
+            return {**正常, "unknown_operator_result": True}
+        return 腳本失敗(CaseFailureKind.HARNESS_ERROR)
+
+
+@dataclass(frozen=True, slots=True)
+class 失敗封套:
+    """把執行環境缺席照實交成獨立結果，不進 judge。"""
+
+    種類: CaseFailureKind
+
+    def 觀察(self, case: dict[str, Any]) -> 腳本失敗:
+        """每一格都照實回同一個環境失敗。"""
+        del case
+        return 腳本失敗(self.種類)
+
+
+@dataclass(frozen=True, slots=True)
+class 命令封套:
+    """執行 runner 釘住的 argv；JSON observation 不存在或壞掉就是 HARNESS_ERROR。"""
+
+    設定: dict[str, Any]
+
+    def 觀察(self, case: dict[str, Any]) -> dict[str, Any] | 腳本失敗:
+        """依 case 選實際 argv；不從 must_fail_exactly 反推觀察值。"""
+        if case["kind"] == 負控:
+            commands = self.設定.get("negative", {})
+            argv = commands.get(str(case["case_id"]))
+        else:
+            argv = self.設定.get("baseline")
+        if not isinstance(argv, list) or not all(isinstance(項, str) for 項 in argv):
+            return 腳本失敗(CaseFailureKind.HARNESS_ERROR)
+        完成 = subprocess.run(argv, capture_output=True, text=True, check=False)
+        if self.設定.get("mode") == "exit":
+            return (
+                {"code": "OK"} if 完成.returncode == 0 else 腳本失敗(CaseFailureKind.HARNESS_ERROR)
+            )
+        try:
+            觀察 = json.loads(完成.stdout.splitlines()[-1])
+        except IndexError, json.JSONDecodeError:
+            return 腳本失敗(CaseFailureKind.HARNESS_ERROR)
+        if not isinstance(觀察, dict) or 觀察.get("harness", "OK") != "OK":
+            return 腳本失敗(CaseFailureKind.HARNESS_ERROR)
+        return 觀察
+
+
+def _時限封套(設定: dict[str, Any]) -> 時限封套 | 失敗封套:
+    try:
+        return 時限封套(
+            wall_ms=int(設定["wall_ms"]),
+            grace_ms=int(設定["grace_ms"]),
+            探測寬限_ms=int(設定["probe_extra_ms"]),
+        )
+    except KeyError, TypeError, ValueError:
+        return 失敗封套(CaseFailureKind.HARNESS_ERROR)
+
+
+def _失敗封套(設定: dict[str, Any]) -> 失敗封套:
+    try:
+        return 失敗封套(CaseFailureKind(str(設定["failure"])))
+    except KeyError, ValueError:
+        return 失敗封套(CaseFailureKind.HARNESS_ERROR)
+
+
+def 組封套(
+    設定: dict[str, Any],
+) -> 參考封套 | 時限封套 | 執行鏈封套 | 失敗封套 | 命令封套:
+    """由 plan 的 runtime binding 選封套；未知 binding 明確成 HARNESS_ERROR。"""
+    種類 = str(設定.get("kind", "reference"))
+    if 種類 == "claimspec-execution":
+        return 執行鏈封套()
+    if 種類 == "execution-envelope":
+        return _時限封套(設定)
+    if 種類 == "failure":
+        return _失敗封套(設定)
+    if 種類 == "command":
+        return 命令封套(設定)
+    if 種類 != "reference":
+        return 失敗封套(CaseFailureKind.HARNESS_ERROR)
     狀況 = 設定.get("負控狀況")
     return 參考封套(
         正常=bool(設定.get("正常", True)),
@@ -101,7 +208,16 @@ class ClaimCaseItem(pytest.Item):
     def setup(self) -> None:
         """在這裡跑，因為獨立結果必須是 error——那只有 setup 期間的例外做得到。"""
         封套 = 組封套(self.計畫.get("runtime", {}))
-        self.結果 = run_case(self.case, tuple(self.計畫["predicates"]), 封套)
+        try:
+            self.結果 = run_case(self.case, tuple(self.計畫["predicates"]), 封套)
+        except Exception as 誤:
+            self.結果 = CaseResult(
+                case_id=str(self.case.get("case_id", "unknown")),
+                kind=str(self.case.get("kind", "ACTUAL")),
+                terminal=CaseTerminal.HARNESS_ERROR,
+                failed_predicates=frozenset(),
+                細節=f"{type(誤).__name__}: {誤}",
+            )
         路徑 = self.config.getoption("--claim-evidence")
         if 路徑:
             with Path(str(路徑)).open("a", encoding="utf-8") as 檔:
@@ -155,8 +271,12 @@ def pytest_collection_modifyitems(
     session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
 ) -> None:
     """把 `--claim-plan` 指定的計畫也收進來。"""
+    已收 = {Path(str(item.path)).resolve() for item in items}
     for 路徑 in config.getoption("--claim-plan"):
-        檔 = ClaimPlanFile.from_parent(session, path=Path(str(路徑)))
+        plan_path = Path(str(路徑)).resolve()
+        if plan_path in 已收:
+            continue
+        檔 = ClaimPlanFile.from_parent(session, path=plan_path)
         items.extend(檔.collect())
 
 

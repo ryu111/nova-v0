@@ -1,0 +1,123 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "claimspec.execution.chain-is-runnable",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "合法 ClaimSpec 必須能由 claim_id 經目錄解析、編譯為 TestPlan，再逐格交給執行環境產生 CaseResult 與 evidence；合法 claim 不得停在 UNSUPPORTED_CLAIM_EXECUTION。harness fault 是獨立結果，不得冒充 CLAIM_REJECTED；未知運算必須 fail closed 回 false。",
+  "sources": [
+    {
+      "source_id": "plan.01.task.12",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-12"
+    }
+  ],
+  "primitive_catalog": {
+    "catalog_id": "claimspec-execution.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "claimspec-execution.v1",
+    "operation": "run-chain",
+    "binding_slot": "claimspec-execution.pytest"
+  },
+  "parameters": {},
+  "setup": [],
+  "stimulus": [
+    {
+      "primitive": "claimspec.execute",
+      "arguments": {
+        "claim": "$SUBJECT_CLAIM"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "execution_code",
+      "source": "STIMULUS_RESULT",
+      "path": "execution_code",
+      "type": "STRING"
+    },
+    {
+      "observation_id": "terminal",
+      "source": "STIMULUS_RESULT",
+      "path": "terminal",
+      "type": "STRING"
+    },
+    {
+      "observation_id": "unknown_operator_result",
+      "source": "STIMULUS_RESULT",
+      "path": "unknown_operator_result",
+      "type": "BOOLEAN"
+    }
+  ],
+  "judge": {
+    "all_of": [
+      {
+        "predicate_id": "legal_claim_is_executable",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "execution_code"},
+        "right": {"const": "UNSUPPORTED_CLAIM_EXECUTION"}
+      },
+      {
+        "predicate_id": "harness_fault_is_not_a_verdict",
+        "operator": "NOT_EQUALS",
+        "left": {"observation": "terminal"},
+        "right": {"const": "CLAIM_REJECTED"}
+      },
+      {
+        "predicate_id": "unknown_operator_is_fail_closed",
+        "operator": "EQUALS",
+        "left": {"observation": "unknown_operator_result"},
+        "right": {"const": false}
+      }
+    ]
+  },
+  "controls": {
+    "positive": [
+      {
+        "control_id": "connected-execution-chain",
+        "subject_binding": "CLAIMSPEC_EXECUTION_PYTEST",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
+    "negative": [
+      {
+        "control_id": "legal-claim-still-unsupported",
+        "faulty_subject": "工具/跑驗收.py::跑驗收[legal-claim-still-unsupported]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": ["legal_claim_is_executable"]
+      },
+      {
+        "control_id": "fault-counted-as-rejection",
+        "faulty_subject": "nova/基礎設施/裁定執行/外部測試框架.py::轉譯[HARNESS_ERROR→CLAIM_REJECTED]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": ["harness_fault_is_not_a_verdict"]
+      },
+      {
+        "control_id": "unknown-operator-passes",
+        "faulty_subject": "nova/基礎設施/裁定執行/案例執行.py::比對[unknown-operator→True]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": ["unknown_operator_is_fail_closed"]
+      }
+    ]
+  },
+  "run_limits": {
+    "wall_ms": 300000,
+    "max_output_bytes": 4194304
+  },
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {
+    "retain": [
+      "execution_code",
+      "terminal",
+      "unknown_operator_result"
+    ],
+    "record_kind": "CLAIMSPEC_EXECUTION_CHAIN"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
+  "cleanup": []
+}
