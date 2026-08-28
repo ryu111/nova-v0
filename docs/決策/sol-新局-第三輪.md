@@ -249,7 +249,7 @@ GraphIR + locale catalog
 ```text
 event_id              UUIDv7，重送去重鍵
 global_seq            state owner 單調配置的 uint64，唯一游標
-event_kind            TRANSITION | OBSERVATION | LEDGER | EFFECT
+event_kind            TRANSITION | INTENT | LEDGER   ← 2026-08-28 取代原四成員
 event_type/version     語義事件型別與 schema version
 aggregate_type/id/seq  aggregate 內 optimistic ordering
 work_id/pursuit_id/execution_id  可空的因果 lineage，不是 UI join 欄位
