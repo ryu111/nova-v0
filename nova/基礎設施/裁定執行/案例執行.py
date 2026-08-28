@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import enum
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -57,15 +58,59 @@ class CaseResult:
     細節: str = ""
 
 
+def _less_than(左: object, 右: object) -> bool:
+    return isinstance(左, int) and isinstance(右, int) and 左 < 右
+
+
+def _not_in(左: object, 右: object) -> bool:
+    if not isinstance(右, (str, list, tuple, set, frozenset, dict)):
+        return False
+    try:
+        return 左 not in 右
+    except TypeError:
+        return False
+
+
+def _not_contains(左: object, 右: object) -> bool:
+    if isinstance(左, str):
+        return isinstance(右, str) and 右 not in 左
+    if not isinstance(左, (list, tuple, set, frozenset)):
+        return False
+    try:
+        return 右 not in 左
+    except TypeError:
+        return False
+
+
+def _disjoint(左: object, 右: object) -> bool:
+    if not isinstance(左, (list, tuple, set, frozenset)) or not isinstance(
+        右, (list, tuple, set, frozenset)
+    ):
+        return False
+    try:
+        return set(左).isdisjoint(右)
+    except TypeError:
+        return False
+
+
+def _不支援(左: object, 右: object) -> bool:
+    del 左, 右
+    return False
+
+
+比對器: dict[str, Callable[[object, object], bool]] = {
+    "EQUALS": lambda 左, 右: 左 == 右,
+    "NOT_EQUALS": lambda 左, 右: 左 != 右,
+    "LESS_THAN": _less_than,
+    "NOT_IN": _not_in,
+    "NOT_CONTAINS": _not_contains,
+    "DISJOINT": _disjoint,
+}
+
+
 def 比對(左: object, 運算: str, 右: object) -> bool:
     """封閉的運算集合。未知運算回 False 而不是當成通過。"""
-    if 運算 == "EQUALS":
-        return 左 == 右
-    if 運算 == "NOT_EQUALS":
-        return 左 != 右
-    if 運算 == "LESS_THAN":
-        return isinstance(左, int) and isinstance(右, int) and 左 < 右
-    return False
+    return 比對器.get(運算, _不支援)(左, 右)
 
 
 def 取值(邊: dict[str, Any], 觀察: dict[str, Any]) -> object:
