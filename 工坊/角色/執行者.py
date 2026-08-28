@@ -21,6 +21,7 @@ from 工坊.角色 import 薄度
 角色名 = "執行者"
 碼_授權不合法 = "GRANT_NOT_IN_BINARY_CAPABILITY_SET"
 碼_授權未生效 = "GRANT_NOT_EFFECTIVE"
+碼_已凍結 = "WORKSHOP_FROZEN"
 # 【實測】`edit` 不是 agy 的合法 action——整場派工無寫檔權而無人知，燒掉一整輪。
 合法授權 = frozenset({"write_file", "read_file", "command", "list_directory"})
 
@@ -46,6 +47,10 @@ def 派工(
 
     `sid` 缺省即 fresh session——執行者永遠缺省，續存是控制端自用。
     """
+    if (Path(__file__).resolve().parent.parent / "凍結.md").is_file():
+        # **凍結檢查不能只在生成器**：凍結前生成的舊工單，凍結後照樣可派
+        # ——fable 覆蓋審抓到。三殼各自認旗標。
+        raise 不得派工(f"workshop_frozen：{碼_已凍結}：工坊已凍結，改走產品介面")
     for g in 工單.get("grant", []):
         if g not in 合法授權:
             raise 不得派工(f"grant_not_in_binary_capability_set：{碼_授權不合法}：{g}")

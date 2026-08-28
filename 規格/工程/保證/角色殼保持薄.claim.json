@@ -1,0 +1,120 @@
+{
+  "$schema": "../../語言/ClaimSpec.schema.json",
+  "claimspec_version": "0.2.0",
+  "claim_id": "workshop.shell.stays-thin",
+  "revision": 1,
+  "supersedes": null,
+  "statement": "角色殼不得長出 dispatch 邏輯：禁 import 凍結名單、禁 sleep、禁遞迴、禁迴圈體內呼叫後端（含經本檔 helper 的傳遞閉包）；輸出一律 observation。",
+  "sources": [
+    {
+      "source_id": "plan.01.task.3",
+      "kind": "PLAN_TASK",
+      "locator": "docs/計畫/01-可執行保證語言.md#task-3-建立唯一落點依賴與規模閘"
+    },
+    {
+      "source_id": "plan.00.day-one-placement",
+      "kind": "PLAN_CONSTRAINT",
+      "locator": "docs/計畫/00-總覽.md#66-day-one工程規範與資料夾落點已裁定"
+    }
+  ],
+  "primitive_catalog": {
+    "catalog_id": "architecture-checker.v1",
+    "digest": null
+  },
+  "subject": {
+    "contract": "workshop-shell.v1",
+    "operation": "check-thinness",
+    "binding_slot": "workshop-shell.repository"
+  },
+  "parameters": {
+    "rules_path": "架構/目錄規則.toml",
+    "module_logical_lines": 400,
+    "class_logical_lines": 250,
+    "function_logical_lines": 60
+  },
+  "setup": [],
+  "stimulus": [
+    {
+      "primitive": "workshop.check_shell_thinness",
+      "arguments": {
+        "shell": "$SUBJECT_SHELL"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "observation_id": "code",
+      "source": "STIMULUS_RESULT",
+      "path": "code",
+      "type": "STRING"
+    }
+  ],
+  "judge": {
+    "all_of": [
+      {
+        "predicate_id": "no_dispatch_logic",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "SHELL_GREW_DISPATCH_LOGIC"
+        }
+      },
+      {
+        "predicate_id": "output_is_observation",
+        "operator": "NOT_EQUALS",
+        "left": {
+          "observation": "code"
+        },
+        "right": {
+          "const": "SHELL_CLAIMED_ACCEPTANCE"
+        }
+      }
+    ]
+  },
+  "controls": {
+    "positive": [
+      {
+        "control_id": "current-shells",
+        "subject_binding": "WORKSHOP_SHELL_REPOSITORY",
+        "expected_terminal": "ACCEPT"
+      }
+    ],
+    "negative": [
+      {
+        "control_id": "loop-calls-backend",
+        "faulty_subject": "工坊/角色/執行者.py::派工[迴圈內經 helper 呼叫後端]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "no_dispatch_logic"
+        ]
+      },
+      {
+        "control_id": "shell-claims-acceptance",
+        "faulty_subject": "工坊/角色/執行者.py::派工[kind=ACCEPTANCE]",
+        "expected_terminal": "CLAIM_REJECTED",
+        "must_fail_exactly": [
+          "output_is_observation"
+        ]
+      }
+    ]
+  },
+  "run_limits": {
+    "wall_ms": 60000,
+    "max_output_bytes": 1048576
+  },
+  "isolation": "COOPERATIVE_PROCESS",
+  "effect_delivery": null,
+  "evidence": {
+    "retain": [
+      "code",
+      "detail"
+    ],
+    "record_kind": "WORKSHOP_SHELL_VERDICT"
+  },
+  "feedback": {
+    "to_candidate": "NONE"
+  },
+  "cleanup": []
+}

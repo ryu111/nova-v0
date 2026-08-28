@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,7 @@ SCHEMA_REVISION = 1
 碼_綱要未知 = "UNKNOWN_SCHEMA_REVISION"
 碼_範圍重疊 = "FILES_SCOPE_OVERLAP_IN_BATCH"
 碼_已凍結 = "WORKSHOP_FROZEN"
+碼_工單被改 = "WORK_ORDER_TAMPERED"
 通過 = "OK"
 專案根 = Path(__file__).resolve().parent.parent
 計畫目錄 = 專案根 / "docs" / "計畫"
@@ -65,7 +67,7 @@ def 生成(
     if (Path(__file__).resolve().parent / "凍結.md").is_file():
         raise 工單不可用(f"workshop_frozen：{碼_已凍結}：工坊已凍結，改走產品介面")
     區段文, 標題 = _區段(計畫, task)
-    return {
+    單 = {
         "schema_revision": SCHEMA_REVISION,
         "計畫": 計畫,
         "task": task,
@@ -73,13 +75,30 @@ def 生成(
         "來源摘要": _摘要(區段文),
         "base_commit_sha": 基準,
         "files_scope": files_scope or [],
+        "grant": [],
     }
+    單["整單摘要"] = _整單摘要(單)
+    return 單
+
+
+def _整單摘要(單: dict[str, Any]) -> str:
+    """對工單**自身全部欄位**取摘要（摘要欄自己除外）。
+
+    **為什麼要有這個**：`來源摘要` 只綁計畫的 task 區段，**不綁工單自身欄位**
+    ——實測生成後事後塞 `grant=["command"]`、把 `files_scope` 放大成
+    `["nova/**"]`，消費**照樣接受**。而 `grant` 正是殼的授權輸入，
+    「工單封閉」對最要緊的那一欄不成立。fable 覆蓋審 M4 抓到。
+    """
+    料 = {k: v for k, v in sorted(單.items()) if k != "整單摘要"}
+    return hashlib.sha256(json.dumps(料, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
 def 消費(單: dict[str, Any], *, 工作樹基準: str) -> dict[str, Any]:
-    """三驗：綱要版本、重讀重算摘要、工作樹基準。任一不符 typed 拒。"""
+    """四驗：綱要版本、工單自身未被改、重讀重算來源摘要、工作樹基準。"""
     if 單.get("schema_revision") != SCHEMA_REVISION:
         raise 工單不可用(f"unknown_schema_revision：{碼_綱要未知}：{單.get('schema_revision')}")
+    if 單.get("整單摘要") != _整單摘要(單):
+        raise 工單不可用(f"work_order_tampered：{碼_工單被改}——工單自身欄位被改過")
     區段文, 標題 = _區段(str(單["計畫"]), int(單["task"]))
     if _摘要(區段文) != 單.get("來源摘要") or 標題 != 單.get("標題"):
         raise 工單不可用(f"work_order_digest_mismatch：{碼_摘要不符}——工單與來源區段對不上")
