@@ -336,14 +336,20 @@ def _有產生者(碼: str, 根: pathlib.Path) -> bool:
     要求前面緊接 `"` 或 `'` 就把註解與 markdown 反引號排除掉，
     而探針真正的 `return "CODE:..."`／`return f"CODE:..."` 兩種都收得到。
 
-    **仍是寬鬆方向**：字面值存在不等於真的可達。可達性要等 01 Task 12
+    **語料隔離**：偵測器自己的實作、docstring、註解與負控都在本檔，故本檔整份
+    排除於 producer corpus。只靠引號樣式仍不夠——說明文字或本格 fixture 一樣可以
+    寫出 quoted literal，再次把偵測器餵飽。
+
+    **仍是寬鬆方向**：其他 production/test 字面值存在不等於真的可達。可達性要等 01 Task 12
     接線後由執行器本身驗——那時 `must_fail_exactly` 才第一次被實際執行。
     """
     樣式 = re.compile(r"[\"']" + re.escape(碼))
+    偵測器檔 = pathlib.Path(__file__).resolve()
     return any(
         樣式.search(檔.read_text(encoding="utf-8"))
         for 目錄 in 產生者根
         for 檔 in (根 / 目錄).rglob("*.py")
+        if 檔.resolve() != 偵測器檔
     )
 
 
@@ -448,3 +454,10 @@ def 測試_未知碼不得靜默通過() -> None:
     模 = _載入探針()
     assert 模.分面(["SOMETHING_NOBODY_MAPPED:x"])["harness"] == "HARNESS_ERROR"
     assert 模.分面([])["harness"] == "OK"
+
+
+def 測試_偵測器說明與被掃語料隔離() -> None:
+    """本檔的 quoted literal 不能反過來成為 producer；真正 producer 仍須看得到。"""
+    根 = pathlib.Path(__file__).resolve().parents[2]
+    assert not _有產生者("DETECTOR_EXPLANATION_ONLY", 根)
+    assert _有產生者("INVALID_SEMANTIC_ID", 根)
