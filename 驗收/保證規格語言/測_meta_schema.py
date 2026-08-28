@@ -288,7 +288,9 @@ def 測試_claim_id_不合語義識別規則會紅(最小_claim: dict[str, Any])
 # `MUTATION_TESTS_NOT_COPIED`，而探針實吐 `MUTATION_TESTS_NOT_COPIED:also_copy`
 # ——差一個後綴，NOT_EQUALS 永遠成立。兩個負控宣告的那格都不可能紅。
 #
-# 這不是一份 claim 的問題：**十四份裡七份有孤兒常數**。它們今天不紅，因為
+# 這不是一份 claim 的問題：**十四份裡八份有孤兒常數**。它們今天不紅，因為
+# （這行原本寫「七份」——那是原型跑出來的數字，名單長到八份後我沒更新，
+# sol 2026-08-28 抓到。**數字寫進散文就會過期，權威是下面那份凍名單**。）
 # `工具/跑驗收.py` 回 `UNSUPPORTED_CLAIM_EXECUTION`（01 Task 12 未接線）
 # ——**`must_fail_exactly` 從來沒有被執行過**。等接線那天會一次全爆。
 #
@@ -367,7 +369,10 @@ def 測試_債名單只准縮() -> None:
 
 
 def 測試_乾淨的保證不被誤殺_防恆真() -> None:
-    """七份乾淨的 claim 必須不在髒集合裡——否則上面兩格都會恆真。"""
+    """乾淨的 claim 必須不在髒集合裡——否則上面兩格都會恆真。
+
+    **不寫份數**：份數是 14 減掉凍名單長度，會隨棘輪縮動而變。
+    """
     根 = pathlib.Path(__file__).resolve().parents[2]
     髒 = _髒的保證()
     assert "engineering.placement.exactly-one-owner" not in 髒
