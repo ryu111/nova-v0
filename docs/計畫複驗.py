@@ -6,7 +6,9 @@
 確認不變式成立。此後任何人改計畫（含插入 01B、擴充 05/07/13/14/20）都必須讓它們
 仍然成立——讀不出來的東西，算得出來。
 
-十一項不變式（下面逐條列出；I6 的說明在負控段）：
+不變式（下面逐條列出；I6 的說明在負控段）。**這裡不寫項數**——
+I13 加進來時三處手寫的「十一項」全部沒更新，數字一離開產生它的規則就會漂。
+要數量就看本檔跑完印的那行列舉，那是唯一來源：
   I1 檔案所有權   同一路徑不得被兩份計畫 Create；Modify 的對象必須有人 Create。
   I2 依賴無環     Dependency Gate 構成的圖不得有多節點 SCC。
   I3 編號即拓撲序 沒有計畫依賴編號比自己大的計畫（否則照編號執行會違反依賴閘）。
@@ -480,6 +482,57 @@ def i4_任務完整(檔):
     return 總
 
 
+def i12_旗標必須先宣告(檔):
+    """nova 自有工具（`工具/`）被消費的旗標，必須有 `- Produces:` 宣告過。
+
+    存在理由（fable 2026-08-27 人工 grep，claude 機械化後全 22 份掃出十四個）：
+    工具本身都有 Create，**壞的是旗標面**——宣告了一個介面、消費另一個。
+    兩個最能說明「這病不是忘記、是每次停在第一層」的實例：
+
+        建規格目錄.py  宣告 `--check`(20:117)  卻消費未宣告的 `--write`(20:152)
+        驗全系統.py    宣告 `--quick`／`--release`(20:779-780)
+                       卻消費未宣告的 `--self-test-failure-propagation`(20:823)
+
+    **外部工具（pytest／uv／codex／mutmut）的旗標不算幽靈**——它們的宣告在別人的
+    repo。判定「自有」的方式：該旗標所在那一段命令裡出現 `工具/`。
+
+    **既有債用凍住的名單當基線，不用數字。** 第一版設計寫「未宣告基線 11，只准降
+    不准升」，那是 2026-08-28 才剛被判違規的形狀——當天 sol 採納的量詞紀律逐字是
+    「帳面上出現量詞而無名單，一律視同未列舉；量詞只能證明基數，不能證明成員身分」。
+    一個數字擋不住「修掉一個舊的、加進一個新的」，名單擋得住。
+    （同一條紀律當天抓到 fable 的「v1 五成員」與 claude 的「整組」，都被 RETURN。）
+
+    棘輪方向：名單只准縮不准長。修掉一個就從名單刪一個——**名單沒刪會紅**，
+    所以不會有人修完債卻留著洞。
+    """
+    債 = {
+        '--profile', '--tx-per-second', '--verify-reproducible', '--write', '--all',
+        '--duration', '--seconds', '--tail-read-ms', '--minutes', '--events-per-tx',
+        '--self-test-failure-propagation',
+    }
+    旗標 = re.compile(r'(?<![\w-])--[a-z][a-z0-9-]{2,}')
+    消費, 宣告 = {}, set()
+    for f in 檔:
+        在fence = False
+        for 號, 行 in enumerate(open(f, encoding='utf-8').read().splitlines(), 1):
+            if 行.lstrip().startswith('```'):
+                在fence = not 在fence; continue
+            if 行.lstrip().startswith('- Produces:'):
+                宣告.update(旗標.findall(行))
+            elif (行.startswith('Run:') or 在fence) and '工具/' in 行:
+                for x in 旗標.findall(行):
+                    消費.setdefault(x, f'{編號(f)}:{號}')
+    幽靈 = {x: 處 for x, 處 in 消費.items() if x not in 宣告}
+    for x in sorted(幽靈):
+        if x not in 債:
+            失敗.append(f'I12 消費了未宣告的旗標 `{x}`（首見 {幽靈[x]}）'
+                        f'——工具的旗標面要有 `- Produces:` 宣告')
+    for x in sorted(債 - set(幽靈)):
+        失敗.append(f'I12 基線名單有 `{x}`，但它已經不是幽靈了'
+                    f'——棘輪只准縮，請從 i12 的「債」名單刪掉它')
+    return len(債)
+
+
 def 自測():
     """對 docs/計畫複驗自測/<情境>/ 逐一跑本執法器，斷言非零且輸出含 預期.txt 的字串。
 
@@ -521,16 +574,23 @@ def main():
     i8_命名可通過(檔)
     i9_訊息用中文(檔)
     i13_task引用可解析(檔)
+    債數 = i12_旗標必須先宣告(檔)
     未遷移, 綁定 = i10_宣告與落點一對一(檔, 邊)
     實存claim = i11_檔內id相符(綁定)
-    print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個 · ClaimSpec 落點未遷移 {未遷移} 個 · 實存 claim 檔 {實存claim} 份')
+    print(f'計畫 {len(檔)} 份 · Create 路徑 {建數} 個 · task {任務數} 個 · '
+          f'ClaimSpec 落點未遷移 {未遷移} 個 · 實存 claim 檔 {實存claim} 份 · 旗標債 {債數} 個')
+    # 給程式讀的一行。散文那行是給人看的，**不要拿去 parse**：
+    # 2026-08-28 工程板資料.py 用 `\d+` 掃散文行，我加了「I12 旗標債」之後
+    # 標籤裡的 12 被當成一個數字，整排位移。key=value 之後加新統計不會再位移。
+    print(f'統計 計畫={len(檔)} 建={建數} task={任務數} '
+          f'未遷移={未遷移} claim={實存claim} 旗標債={債數}')
     for n in sorted(邊):
         print(f'  {n} ← {邊[n] or "（無前置）"}')
     if 失敗:
         print(f'\n不變式不成立（{len(失敗)}）：')
         for x in 失敗: print(f'  ✗ {x}')
         return 1
-    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過 · I9 訊息用中文 · I10 宣告與落點一對一 · I11 檔內id相符 · I13 task引用可解析　全部成立')
+    print('\nI1 檔案所有權 · I2 依賴無環 · I3 編號即拓撲序 · I4 任務完整 · I5 修改方向 · I6 任務口徑 · I7 引用可解析 · I8 命名可通過 · I9 訊息用中文 · I10 宣告與落點一對一 · I11 檔內id相符 · I12 旗標必須先宣告 · I13 task引用可解析　全部成立')
     return 0
 
 
