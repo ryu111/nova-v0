@@ -45,9 +45,18 @@ def 跑執法器() -> tuple[dict[str, int], str]:
             "不變式沒過，拒絕產生工程板資料——板上的數字宣稱計畫是自洽的，"
             f"那句話現在是假的：\n{出.stdout}\n{出.stderr}"
         )
-    統計 = next(l for l in 出.stdout.splitlines() if l.startswith("計畫 "))
-    鍵 = ["計畫", "建", "task", "未遷移", "claim"]
-    return dict(zip(鍵, (int(n) for n in re.findall(r"\d+", 統計)), strict=True)), 出.stdout
+    統計行 = next(l for l in 出.stdout.splitlines() if l.startswith("統計 "))
+    # 讀 key=value 的機器行，**不掃散文**。原本掃散文的 `\d+` 會被標籤裡的數字
+    # 騙走（「I12 旗標債」的 12），整排位移一格——每個數字都錯、都合理、
+    # 板上沒有任何跡象。改成具名之後，加新統計不會動到既有欄位。
+    統計 = {}
+    for 段 in 統計行.removeprefix("統計 ").split():
+        鍵名, _, 值 = 段.partition("=")
+        統計[鍵名] = int(值)
+    缺 = {"計畫", "建", "task", "未遷移", "claim"} - 統計.keys()
+    if 缺:
+        raise SystemExit(f"統計行缺欄位 {sorted(缺)}——計畫複驗.py 改了輸出格式")
+    return 統計, 出.stdout
 
 
 def 抽計畫(複驗) -> list[dict]:
