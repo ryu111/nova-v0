@@ -292,8 +292,10 @@ def 測試_claim_id_不合語義識別規則會紅(最小_claim: dict[str, Any])
 # 這不是一份 claim 的問題：**十四份裡八份有孤兒常數**。它們今天不紅，因為
 # （這行原本寫「七份」——那是原型跑出來的數字，名單長到八份後我沒更新，
 # sol 2026-08-28 抓到。**數字寫進散文就會過期，權威是下面那份凍名單**。）
-# `工具/跑驗收.py` 回 `UNSUPPORTED_CLAIM_EXECUTION`（01 Task 12 未接線）
-# ——**`must_fail_exactly` 從來沒有被執行過**。等接線那天會一次全爆。
+# 【已發生】T12 接通後（2026-08-28）一次全爆：10 份 claim 的負控終止在
+# `HARNESS_ERROR`（`跑驗收.py` 的 `runtime_設定` 沒有那些 binding_slot 的
+# provider），3 份 `UNBOUND_SUBJECT`。`must_fail_exactly` 仍然沒被執行過，
+# 但理由從「沒接線」變成「負控具現化不出來」。
 #
 # 棘輪用**凍住的名單**不是數字（sol 2026-08-28 採納的量詞紀律：
 # 量詞只能證明基數，不能證明成員身分）。名單只准縮：修好一份就從名單刪一份，
@@ -395,7 +397,7 @@ def 測試_乾淨的保證不被誤殺_防恆真() -> None:
 # 這格是整個 R14-01 缺陷的機械化。revision 1 的兩個負控都宣告
 # `mutation_tests_are_copied`，而那格對兩個 faulty subject 都**不會紅**
 # ——沒有人算過「宣告組」與「實際會紅組」是不是同一組，因為
-# `工具/跑驗收.py` 回 `UNSUPPORTED_CLAIM_EXECUTION`（01 Task 12 未接線）。
+# 那時 `工具/跑驗收.py` 回 `UNSUPPORTED_CLAIM_EXECUTION`（01 Task 12 未接線）。
 #
 # 這格不等執行鏈：直接拿探針的分面函式算出 faulty subject 的觀察，
 # 套 claim 自己的 judge，比對 `must_fail_exactly`。**算出來，不是推出來。**

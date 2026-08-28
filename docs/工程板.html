@@ -214,7 +214,7 @@ footer{border-top:1px solid var(--線);color:var(--次);font-size:12.5px;
 <tr><td class="mono">13</td><td>補跑 Tasks 1–4 的工程 ClaimSpec 閘：四份分兩批——兩份接線即跑，兩份待 Task 12 補齊運算。<b>「待」只是排序不是豁免</b>，本 task 不得以兩份 evidence 完成<span class="dep">拆分自原 Task 12 的 evidence-only 那一半</span></td>
 <td class="neg">把 <code>engineering.rules.day-one-enforced</code> 的四項 <code>must_fail_exactly</code> 縮成一項；negative control 回 HARNESS_ERROR 而非 CLAIM_REJECTED</td><td><span class="chip chip-wait">未開始</span></td></tr>
 <tr><td class="mono">14</td><td>八道閘接上自動執行點：本地入口 <code>工具/驗全部.py</code>（跑完每一道才回報，<b>不在第一個紅就停</b>）、pre-commit hook、CI required check，三處共讀同一份宣告清單<span class="dep">先紅證據：在拋棄式複本上同時弄壞三樣東西，git commit 仍 exit 0</span></td>
-<td class="neg">入口第一紅就停；入口永遠回零；CI 漏跑一道；hook 吞掉非零 exit。外加防恆真格：全綠時 hook 不擋正常 commit</td><td><span class="chip chip-wait">未交付</span><br><span class="note-in">`工具/跑驗收.py` 實跑仍回 `UNSUPPORTED_CLAIM_EXECUTION`。這是接線那一步，18 份 claim 至今零執行。</span></td></tr>
+<td class="neg">入口第一紅就停；入口永遠回零；CI 漏跑一道；hook 吞掉非零 exit。外加防恆真格：全綠時 hook 不擋正常 commit</td><td><span class="chip chip-wait">未交付</span><br><span class="note-in">01 T12 已接通執行鏈（PR #80）。實跑 19 份：4 綠、10 份負控終止在 `HARNESS_ERROR`、3 份 `UNBOUND_SUBJECT`、1 份 `UNKNOWN_OBSERVATION_TYPE`、1 份 `CLAIM_REJECTED` 但集合不符。本條的四格負控在那 10 份裡。</span></td></tr>
 <tr><td class="mono">15</td><td>把「跑一批指定突變」包成有測試的工具：逐條套用事前命名的突變、比對宣告，<b>沒有百分比</b><span class="dep">先紅證據：ModuleNotFoundError: 工具.跑指定突變</span></td>
 <td class="neg">宣告殺掉卻存活；宣告存活卻被殺；目標字串不存在時必須明講而不是當成通過。防恆真格：跑完工作樹與跑前逐位元組相同</td><td><span class="chip chip-wait">未交付</span><br><span class="note-in">依賴 Task 12。</span></td></tr>
 </tbody></table></div>
