@@ -11,7 +11,7 @@
 真正被檢查的位置在別的檔案裡，兩份可以無聲不一致）。
 
 **不變式紅就不出資料。** 這不是保守，是這支存在的意義：板上的數字宣稱
-「計畫是自洽的」，若 I1–I14 沒過，那句話就是假的，寧可不出。
+「計畫是自洽的」，若 I1-I14 沒過，那句話就是假的，寧可不出。
 """
 
 from __future__ import annotations
@@ -22,12 +22,110 @@ import pathlib
 import re
 import subprocess
 import sys
+import types
 
 根 = pathlib.Path(__file__).resolve().parent.parent
 
+# 橫軸是圖的架構策展，數字不是。每條規則只描述一格包哪些 Create 路徑；
+# 總數、已建數、建立計畫與顯示狀態全由下方的封閉分類算出。`*` 是本層剩餘路徑。
+分層模組規則: dict[str, dict[str, tuple[str, ...]]] = {
+    "介面": {
+        "命令列": ("nova/介面/命令列/",),
+        "程式介面": ("nova/介面/程式介面/",),
+        "HTTP": ("nova/介面/HTTP/",),
+        "MCP": ("nova/介面/MCP/",),
+    },
+    "應用": {
+        "處理（CommandBus）": (
+            "nova/應用/處理/",
+            "nova/應用/命令.py",
+            "nova/應用/登錄.py",
+            "nova/應用/邊界.py",
+            "nova/應用/test_邊界.py",
+        ),
+        "工作單元": ("*",),
+    },
+    "領域": {
+        "工作": ("nova/領域/工作/",),
+        "追求": ("nova/領域/追求/",),
+        "執行": ("nova/領域/執行/",),
+        "提示": ("nova/領域/提示/",),
+    },
+    "權威": {
+        "判準": ("nova/權威/判準/",),
+        "資源": ("nova/權威/資源/",),
+        "效果": ("nova/權威/效果/",),
+        "知識": ("nova/權威/知識/",),
+        "評測": ("nova/權威/評測/",),
+    },
+    "維護": {
+        "複雜度訊號": ("nova/維護/複雜度訊號.py", "nova/維護/test_訊號與提案.py"),
+        "審查提案": ("nova/維護/審查提案.py",),
+    },
+    "狀態機": {
+        "編譯": tuple(
+            f"nova/狀態機/{x}"
+            for x in (
+                "編譯.py",
+                "載入.py",
+                "模型.py",
+                "檢查.py",
+                "test_檢查.py",
+                "遷移.py",
+                "決策表.py",
+            )
+        ),
+        "轉移目錄": tuple(
+            f"nova/狀態機/{x}" for x in ("目錄.py", "test_目錄.py", "執行.py", "test_執行.py")
+        ),
+        "GraphIR": ("nova/狀態機/組圖.py",),
+    },
+    "約束": {
+        "公開契約": ("nova/約束/公開契約.py",),
+        "載入": ("nova/約束/載入.py",),
+        "範圍": ("nova/約束/範圍.py",),
+        "編譯": ("nova/約束/編譯.py", "nova/約束/test_語言.py"),
+    },
+    "介接": {
+        "執行者後端": ("nova/介接/執行者後端/",),
+        "效果端點": ("nova/介接/效果端點/",),
+    },
+    "基礎設施": {
+        名: (f"nova/基礎設施/{名}/",)
+        for 名 in (
+            "狀態庫",
+            "事件流",
+            "內容庫",
+            "知識索引",
+            "排程",
+            "效果轉送",
+            "備份",
+            "裁定執行",
+            "系統",
+        )
+    },
+    "內容庫": {
+        "參照": ("nova/內容庫/參照.py", "nova/內容庫/test_契約.py"),
+        "端口": ("nova/內容庫/端口.py",),
+    },
+    "證據庫": {
+        "紀錄": ("nova/證據庫/紀錄.py", "nova/證據庫/test_不可覆寫.py"),
+        "端口": ("nova/證據庫/端口.py",),
+    },
+    "核心": {
+        "識別": ("nova/核心/識別.py", "nova/核心/test_值型別.py"),
+        "摘要": ("nova/核心/摘要.py",),
+        "時間": ("nova/核心/時間.py",),
+        "錯誤": ("nova/核心/錯誤.py",),
+        "工具鏈守衛": ("nova/核心/工具鏈守衛.py",),
+        "事件": ("nova/核心/事件.py",),
+    },
+    "啟動": {"組裝根": ("*",), "規格目錄": ()},
+}
 
-def 載入複驗():
-    """import 執法器本身，讓「哪些檔算計畫」只有一個定義。"""
+
+def 載入複驗() -> types.ModuleType:
+    """Import 執法器本身，讓「哪些檔算計畫」只有一個定義。"""
     規 = importlib.util.spec_from_file_location("計畫複驗", 根 / "docs/計畫複驗.py")
     模 = importlib.util.module_from_spec(規)
     assert 規.loader is not None
@@ -45,7 +143,7 @@ def 跑執法器() -> tuple[dict[str, int], str]:
             "不變式沒過，拒絕產生工程板資料——板上的數字宣稱計畫是自洽的，"
             f"那句話現在是假的：\n{出.stdout}\n{出.stderr}"
         )
-    統計行 = next(l for l in 出.stdout.splitlines() if l.startswith("統計 "))
+    統計行 = next(行 for 行 in 出.stdout.splitlines() if 行.startswith("統計 "))
     # 讀 key=value 的機器行，**不掃散文**。原本掃散文的 `\d+` 會被標籤裡的數字
     # 騙走（「I12 旗標債」的 12），整排位移一格——每個數字都錯、都合理、
     # 板上沒有任何跡象。改成具名之後，加新統計不會動到既有欄位。
@@ -59,7 +157,7 @@ def 跑執法器() -> tuple[dict[str, int], str]:
     return 統計, 出.stdout
 
 
-def 抽計畫(複驗) -> list[dict]:
+def 抽計畫(複驗: types.ModuleType) -> list[dict]:
     """逐份計畫抽 task、步驟、負控與交付狀態。
 
     **這裡算的是 `files_present`，不是驗收。** 兩者不可互相冒充——
@@ -91,7 +189,11 @@ def 抽計畫(複驗) -> list[dict]:
                     "t": (標[1] if len(標) > 1 else 標[0]).strip(),
                     "have": 有,
                     "need": len(建),
-                    "st": "done" if 建 and 有 == len(建) else ("part" if 有 else "todo"),
+                    "st": (
+                        "na"
+                        if not 建
+                        else ("done" if 有 == len(建) else ("part" if 有 else "todo"))
+                    ),
                 }
             )
         出.append(
@@ -112,15 +214,28 @@ def 抽計畫(複驗) -> list[dict]:
 def 抽決議() -> list[dict]:
     """從決議帳本的表格列抽三方迴圈的票。帳本是資料，這裡只讀不解釋。"""
     帳 = (根 / "docs/決策/計畫修訂決議.md").read_text(encoding="utf-8")
-    樣 = r"\| (R\d+-\d+)\(\w+\)([^|]*)\|\s*(APPROVE|REJECT)\s*\|\s*(APPROVE|REJECT)\s*\|\s*\*?\*?(\w+)"
+    樣 = (
+        r"\| (R\d+-\d+)\(\w+\)([^|]*)\|\s*(APPROVE|REJECT)\s*\|"
+        r"\s*(APPROVE|REJECT)\s*\|\s*\*?\*?(\w+)"
+    )
     return [
         {"id": m[0], "t": m[1].strip().strip("|").strip(), "c": m[2], "s": m[3], "r": m[4]}
         for m in re.findall(樣, 帳)
     ]
 
 
-def 抽層() -> dict[str, str]:
-    """每個 nova 第一層目錄的「已建／宣告要建」。
+def 範圍說明(層: str, 規則: tuple[str, ...]) -> str:
+    """把模組分類規則轉成 tooltip 的人可讀範圍；數字不從這句話解析。"""
+    if not 規則:
+        return "沒有對應的 nova/ 檔"
+    if 規則 == ("*",):
+        return "該層其餘檔案"
+    前綴 = f"nova/{層}/"
+    return "、".join(x.removeprefix(前綴) for x in 規則)
+
+
+def 抽層() -> dict[str, dict]:
+    """每個 nova 第一層目錄與子模組的「已建／宣告要建」。
 
     **為什麼要機械算**：分層圖的 `0/N` 原本是手寫的，沒有任何程式在管。
     2026-08-28 對照發現四層過期，其中兩層是**已建的檔沒被算進去**
@@ -128,18 +243,59 @@ def 抽層() -> dict[str, str]:
     板面把已完成的工作顯示成沒做。
 
     分母是計畫的 `Create:` 條目數，分子是那些路徑目前真的存在。
-    直接列舉 `nova/` 開頭的 Create 條目，不從別的型別推。
+    直接列舉 `nova/` 開頭的 Create 條目，不從別的型別推。橫軸每條路徑也必須
+    恰好落在一個模組；漏分、重複分類或圖漏一層都拒絕出資料。
     """
-    建: list[str] = []
+    建: list[tuple[str, str]] = []
     for f in sorted((根 / "docs" / "計畫").glob("*.md")):
-        建 += re.findall(r"^- Create: `(nova/[^`]+)`", f.read_text(encoding="utf-8"), re.M)
-    層: dict[str, list[str]] = {}
-    for 路徑 in 建:
-        層.setdefault(路徑.split("/")[1], []).append(路徑)
-    return {名: f"{sum(1 for x in 們 if (根 / x).exists())}/{len(們)}" for 名, 們 in 層.items()}
+        編 = f.name.split("-", 1)[0]
+        建 += [(編, x) for x in re.findall(r"^- Create: `(nova/[^`]+)`", f.read_text(), re.M)]
+    層們 = {x.split("/")[1] for _, x in 建}
+    if 層們 != set(分層模組規則):
+        raise SystemExit(
+            f"分層圖與 Create 層集合不符：漏 {sorted(層們 - 分層模組規則.keys())}、"
+            f"多 {sorted(分層模組規則.keys() - 層們)}"
+        )
+    出: dict[str, dict] = {}
+    for 層, 模規則 in 分層模組規則.items():
+        本層 = {p: pid for pid, p in 建 if p.split("/")[1] == 層}
+        未分 = set(本層)
+        模們: dict[str, dict] = {}
+        for 模名, 規則 in 模規則.items():
+            if 規則 == ("*",):
+                命中 = sorted(未分)
+            else:
+                命中 = sorted(
+                    p
+                    for p in 本層
+                    if any(p.startswith(x) if x.endswith("/") else p == x for x in 規則)
+                )
+            重 = set(命中) - 未分
+            if 重:
+                raise SystemExit(f"分層圖 {層}／{模名} 重複分到 {sorted(重)}")
+            if 規則 and not 命中:
+                raise SystemExit(f"分層圖 {層}／{模名} 的分類規則沒有對應 Create 路徑")
+            未分 -= set(命中)
+            已 = sum((根 / p).exists() for p in 命中)
+            模們[模名] = {
+                "have": 已,
+                "need": len(命中),
+                "plans": sorted({本層[p] for p in 命中}),
+                "scope": 範圍說明(層, 規則),
+            }
+        if 未分:
+            raise SystemExit(f"分層圖 {層} 有未分入模組的 Create 路徑：{sorted(未分)}")
+        出[層] = {
+            "have": sum(x["have"] for x in 模們.values()),
+            "need": sum(x["need"] for x in 模們.values()),
+            "plans": sorted(set(本層.values())),
+            "modules": 模們,
+        }
+    return 出
 
 
 def 主() -> None:
+    """組合所有資料，以單一 JSON 物件輸出給注入器。"""
     複驗 = 載入複驗()
     統計, _ = 跑執法器()
     計畫 = 抽計畫(複驗)

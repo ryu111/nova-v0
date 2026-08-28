@@ -5,11 +5,13 @@
 （頁首寫 188 任務、計畫 01 寫 18 task、閘列成 Task 13、缺新 Task 12），
 而八道閘全綠，沒有任何機制會說。
 
-**這支只換算得出來的數字**：頁首、統計卡八格、Phase 小計與 chip 分母、
-各計畫列、22 張詳細卡的 `pmeta`。
+**這支只換可機械導出的事實**：頁首與統計、Phase／計畫列、計畫卡的
+名稱／前置／goal／task 標題／檔案存在狀態，以及分層圖的 tooltip、
+子模組數字與狀態、進度條。
 
-**它明講不碰的**：各 task 的精選敘述與負控文字是**策展**不是全集——
-它挑重點講、不逐條列，改號時要人自己同步。這句寫在這裡是因為漏報比誤報糟。
+**它明講不碰的**：「計畫 01／01C 實作紀錄」裡的精選交付敘述與負控散文，
+以及審查發現／決策說明，仍是**策展**不是全集。這些文字沒有執法器，
+改號或改口徑時仍要人工審閱。這句寫在這裡是因為漏報比誤報糟。
 
 ## 這支自己踩過的三個坑，都寫成了機制
 
@@ -33,10 +35,12 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 根 = Path(__file__).resolve().parent.parent
@@ -74,6 +78,14 @@ def 換一次(樣式: str, 新: str, 文: str, 誰: str) -> str:
     if 命中 != 1:
         raise SystemExit(f"{誰}：錨命中 {命中} 次（應為 1）——板面結構或格式不符，拒絕注入")
     return re.sub(樣式, 新, 文, count=1)
+
+
+def 換一次算(樣式: str, 算: Callable[[re.Match[str]], str], 文: str, 誰: str) -> str:
+    """需要保留幾何屬性或插入 HTML 值時的函式版 `換一次`。"""
+    命中 = len(re.findall(樣式, 文, flags=re.S))
+    if 命中 != 1:
+        raise SystemExit(f"{誰}：錨命中 {命中} 次（應為 1）——板面結構或格式不符，拒絕注入")
+    return re.sub(樣式, 算, 文, count=1, flags=re.S)
 
 
 def 驗集合(實: list[str], 期: set[str], 誰: str) -> None:
@@ -144,22 +156,92 @@ def 階段涵蓋全部計畫(表: dict) -> None:
         )
 
 
-def 換分層進度(文: str, 層: dict) -> str:
-    """分層圖每一層的 `已建/宣告`。
+def 狀態字(已: int, 需: int) -> str:
+    """檔案存在進度的三態。零分母是策展佔位格，不冒充完成。"""
+    if 需 == 0:
+        return "none"
+    if 已 == 0:
+        return "wait"
+    return "done" if 已 == 需 else "ing"
+
+
+def 進度條寬(已: int, 需: int) -> str:
+    """將比例映射到 98px，固定兩位小數後去掉無意義的零。"""
+    值 = 0 if not 需 else round(98 * 已 / 需, 2)
+    return f"{值:.2f}".rstrip("0").rstrip(".")
+
+
+def 換分層模組(文: str, 層名: str, 模名: str, 模: dict) -> str:
+    """替換一格子模組的 tooltip、邊框狀態與可選數字。"""
+    樣 = (
+        rf'(<rect class=")([^"]+)("[^>]*><title>){re.escape(層名)}／{re.escape(模名)}：'
+        r'.*?</title></rect>(.*?)(?=<rect class=|<text class="lbl-s")'
+    )
+    態 = 狀態字(模["have"], 模["need"])
+
+    def 算(m: re.Match) -> str:
+        基 = " ".join(x for x in m.group(2).split() if not x.startswith("mod-"))
+        類 = f"{基} mod-{態}"
+        題 = (
+            f"{層名}／{模名}：計畫宣告 {模['need']} 個檔，已建立 {模['have']} 個 · "
+            f"對應 {模['scope']}"
+        )
+        頭 = f"{m.group(1)}{類}{m.group(3)}{題}</title></rect>"
+        尾 = m.group(4)
+        if 'class="lay-n"' in 尾:
+            色 = "var(--綠)" if 態 == "done" else ("var(--琥)" if 態 == "ing" else "currentColor")
+            尾 = re.sub(
+                r'(<text class="lay-n"[^>]*fill=")[^"]+("[^>]*>).*?(</text>)',
+                rf"\g<1>{色}\g<2>{模['have']}/{模['need']}\g<3>",
+                尾,
+                count=1,
+            )
+        return 頭 + 尾
+
+    return 換一次算(樣, 算, 文, f"分層模組：{層名}／{模名}")
+
+
+def 換分層圖(文: str, 層們: dict) -> str:
+    """分層圖的所有可機械導出事實，不只換左側 `已建/宣告`。
 
     **這張圖原本沒有任何程式在管**。2026-08-28 對照發現四層過期，其中兩層是
     **已建的檔沒被算進去**（權威板上 1/44 而實際 4/52、基礎設施 0/45 而實際 5/46）
     ——板面把已完成的工作顯示成沒做。手寫的東西會漂，這是第 N 次。
 
-    錨是「層標籤 `<text>` 緊接著一個 `N/M` 的 `<text>`」，每層斷言恰命中一次。
+    tooltip、子模組、邊框、進度條與全體小計全部同源；任一錨消失就拒絕。
     """
-    for 名, 值 in 層.items():
+    總已 = sum(x["have"] for x in 層們.values())
+    總需 = sum(x["need"] for x in 層們.values())
+    文 = 換一次(r"全體 <b>\d+／\d+</b>", f"全體 <b>{總已}／{總需}</b>", 文, "分層全體小計")
+    for 名, 層 in 層們.items():
+        態 = 狀態字(層["have"], 層["need"])
+        色 = "var(--綠)" if 態 == "done" else ("var(--琥)" if 態 == "ing" else "currentColor")
+        計畫 = " ".join(層["plans"])
+        題 = f"{名}：計畫宣告 {層['need']} 個檔，已建立 {層['have']} 個 · 由計畫 {計畫} 建立"
         文 = 換一次(
-            rf"(<text[^>]*>{名}</text>\s*<text[^>]*>)\d+/\d+(</text>)",
-            rf"\g<1>{值}\g<2>",
+            rf'<rect class="lay-(?:wait|ing|done)" data-layer="{re.escape(名)}"'
+            r"([^>]*)><title>.*?</title></rect>",
+            rf'<rect class="lay-{態}" data-layer="{名}"\g<1>><title>{題}</title></rect>',
+            文,
+            f"分層 tooltip：{名}",
+        )
+        文 = 換一次(
+            rf'(<text class="lbl-b"[^>]*fill=")[^"]+("[^>]*>{re.escape(名)}</text>\s*'
+            r'<text class="lay-n"[^>]*fill=")[^"]+("[^>]*>)\d+/\d+(</text>)',
+            rf"\g<1>{色}\g<2>{色}\g<3>{層['have']}/{層['need']}\g<4>",
             文,
             f"分層進度：{名}",
         )
+        寬 = 進度條寬(層["have"], 層["need"])
+        文 = 換一次(
+            rf'<rect class="bar-progress bar-(?:wait|ing|done)" data-for="{re.escape(名)}"'
+            r'([^>]*)width="[^"]+"([^>]*)/>',
+            rf'<rect class="bar-progress bar-{態}" data-for="{名}"\g<1>width="{寬}"\g<2>/>',
+            文,
+            f"分層進度條：{名}",
+        )
+        for 模名, 模 in 層["modules"].items():
+            文 = 換分層模組(文, 名, 模名, 模)
     return 文
 
 
@@ -187,43 +269,67 @@ def 換統計卡(文: str, 統: dict) -> str:
     return 文
 
 
+def 檔齊狀態(齊: int, 總: int) -> tuple[str, str]:
+    """這只報 Create 檔案是否全在，不取得 ClaimSpec 的驗收權。"""
+    if 齊 == 0:
+        return "wait", f"宣告檔齊 0／{總}"
+    if 齊 == 總:
+        return "ok", f"宣告檔齊 {齊}／{總}"
+    return "ind", f"宣告檔齊 {齊}／{總}"
+
+
 def 換階段列(列: str, 表: dict) -> str:
-    """Phase 小計與 chip 分母。**以整列為界**——全域錨會跨列覆蓋。"""
+    """Phase 小計與檔齊狀態。**以整列為界**——全域錨會跨列覆蓋。"""
     名 = re.search(r'<td class="ph">(Phase [A-D])</td>', 列)
     if not 名 or 名.group(1) not in 階段成員:
         return 列
     成員 = 階段成員[名.group(1)]
     t = sum(len(表[i]["tasks"]) for i in 成員)
     b = sum(表[i]["步"] for i in 成員)
+    d = sum(表[i]["done"] for i in 成員)
     列 = 換一次(
         r'<td class="num">\d+</td><td class="num">\d+</td>',
         f'<td class="num">{t}</td><td class="num">{b}</td>',
         列,
         f"{名.group(1)} 小計",
     )
-    # **只有進行中的 phase 有 chip 分母**——B／C／D 是「未開始」。
-    # 第一版對所有 phase 列無條件斷言 chip 命中一次，嚴格化之後立刻紅在 Phase B
-    # ——**那正是斷言該做的事**：它證明我對板面結構的假設是錯的。
-    if "進行中" not in 列:
-        return 列
-    return 換一次(r"(進行中 \d+／)\d+", rf"\g<1>{t}", 列, f"{名.group(1)} chip")
+    類, 字 = 檔齊狀態(d, t)
+    return 換一次(
+        r'<span class="chip chip-(?:ok|ind|wait)">.*?</span>',
+        f'<span class="chip chip-{類}">{字}</span>',
+        列,
+        f"{名.group(1)} chip",
+    )
 
 
 def 換計畫列(列: str, 表: dict) -> str:
-    """進度表的計畫列。**以整列為界**，理由同上。"""
+    """進度表的計畫列：名稱、前置、小計與檔齊狀態全部同源。"""
     pid = re.search(r'<td class="pid2">([0-9]{2}[A-Z]?)</td>', 列)
     if not pid or pid.group(1) not in 表:
         return 列
     p = 表[pid.group(1)]
+    列 = 換一次算(
+        rf'(<td class="pid2">{re.escape(pid.group(1))}</td><td>)'
+        r'.*?(<span class="dep">).*?(</span></td>)',
+        lambda m: (
+            f"{m.group(1)}{html.escape(p['name'])}{m.group(2)}{html.escape(p['dep'])}{m.group(3)}"
+        ),
+        列,
+        f"計畫 {pid.group(1)} 名稱與前置",
+    )
     列 = 換一次(
         r'<td class="num">\d+</td><td class="num">\d+</td>',
         f'<td class="num">{len(p["tasks"])}</td><td class="num">{p["步"]}</td>',
         列,
         f"計畫 {pid.group(1)} 列",
     )
-    if "進行中" not in 列:
-        return 列
-    return 換一次(r"(進行中 \d+／)\d+", rf"\g<1>{len(p['tasks'])}", 列, f"計畫 {pid.group(1)} chip")
+    類, 字 = 檔齊狀態(p["done"], len(p["tasks"]))
+    return 換一次(
+        r'<span class="chip chip-(?:ok|ind|wait)">.*?</span>',
+        f'<span class="chip chip-{類}">{字}</span>',
+        列,
+        f"計畫 {pid.group(1)} chip",
+    )
 
 
 def 換卡(卡: str, 表: dict, 見過: set[str]) -> str:
@@ -240,12 +346,49 @@ def 換卡(卡: str, 表: dict, 見過: set[str]) -> str:
         raise SystemExit(f"卡上的計畫 {pid} 不在資料裡——結構不符，拒絕注入")
     p = 表[pid]
     # **錨在、內容格式壞掉也要紅**——只驗「`pmeta` 出現一次」不夠。
-    return 換一次(
+    卡 = 換一次(
         片樣式,
         f'<span class="pmeta"><b>{len(p["tasks"])}</b> task · '
         f"<b>{p['步']}</b> step · <b>{p['neg']}</b> 負控</span>",
         卡,
         f"計畫 {pid} 的 pmeta",
+    )
+    卡 = 換一次算(
+        r'(<span class="pname">).*?(</span>)',
+        lambda m: f"{m.group(1)}{html.escape(p['name'])}{m.group(2)}",
+        卡,
+        f"計畫 {pid} 名稱",
+    )
+    卡 = 換一次算(
+        r'(<p class="goal">).*?(</p>)',
+        lambda m: f"{m.group(1)}{html.escape(p['goal'])}{m.group(2)}",
+        卡,
+        f"計畫 {pid} goal",
+    )
+    卡 = 換一次算(
+        r'(<p class="deps">前置計畫　<code>).*?(</code></p>)',
+        lambda m: f"{m.group(1)}{html.escape(p['dep'])}{m.group(2)}",
+        卡,
+        f"計畫 {pid} 前置",
+    )
+    列們 = []
+    for t in p["tasks"]:
+        類 = "ok" if t["st"] == "done" else ("ind" if t["st"] == "part" else "wait")
+        if t["st"] == "na":
+            字, 數 = "無 Create 宣告", ""
+        else:
+            字 = (
+                "宣告檔齊"
+                if t["st"] == "done"
+                else ("部分已建" if t["st"] == "part" else "尚未建立")
+            )
+            數 = f" {t['have']}／{t['need']}"
+        列們.append(f'<li>{html.escape(t["t"])} <span class="chip chip-{類}">{字}{數}</span></li>')
+    return 換一次算(
+        r'<ol class="tasks">.*?</ol>',
+        lambda _: f'<ol class="tasks">{"".join(列們)}</ol>',
+        卡,
+        f"計畫 {pid} task 列表",
     )
 
 
@@ -279,10 +422,18 @@ def 注入(文: str, 料: dict) -> str:
     )
     if len(卡們) != len(表):
         raise SystemExit(f"工程板有 {len(卡們)} 張計畫卡，資料有 {len(表)} 份——結構不符，拒絕注入")
+    驗集合(re.findall(r'data-layer="([^"]+)"', 文), set(料["層"]), "分層圖的層")
+    驗集合(
+        re.findall(r'class="bar-progress [^"]+" data-for="([^"]+)"', 文),
+        set(料["層"]),
+        "分層圖進度條",
+    )
+    模期 = {f"{層}／{模}" for 層, d in 料["層"].items() for 模 in d["modules"]}
+    驗集合(re.findall(r"<title>([^<：]+／[^<：]+)：", 文), 模期, "分層圖子模組")
 
     文 = 換頁首(文, 料["統"])
     階段涵蓋全部計畫({p["id"]: p for p in 料["計畫"]})
-    文 = 換分層進度(文, 料["層"])
+    文 = 換分層圖(文, 料["層"])
     文 = 換統計卡(文, 料["統"])
     文 = re.sub(
         r'<tr class="phase-row">.*?</tr>', lambda m: 換階段列(m.group(0), 表), 文, flags=re.S
